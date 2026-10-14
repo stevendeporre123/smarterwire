@@ -8,6 +8,7 @@ import { CATALOG, FUNC_ORDER, symbolEntry, symbolGeom, symbolMarkup, splitType, 
 import { FURNITURE, CABLE_STYLES, DEFAULT_PLAN_M, dist, projectOnSeg, nearestWall, snapToWallSurface, renderFloor, wallPts, type Pt } from '../domain/floorplan';
 import { editCircuit } from './circuits';
 import { getSetting, setSetting } from '../domain/settings';
+import { schemaLoadsOf, type SchemaLoad } from '../domain/loads';
 
 const LS = (pid: string) => `smarterwire.plan.${pid}`;
 const SYM_SIZE = 0.022; // basisgrootte van symbolen als fractie van de plan-breedte
@@ -48,7 +49,10 @@ export async function renderPlan(root: HTMLElement, project: Project) {
 
   let planId = localStorage.getItem(LS(project.id)); if (!plans.find((p) => p.id === planId)) planId = plans[0].id;
   const plan = plans.find((p) => p.id === planId)!;
-  const [symbols, shapes, circuits, boards] = await Promise.all([symbolsOf(plan.id), shapesOf(plan.id), circuitsOf(project.id), boardsOf(project.id)]);
+  const [symbols, shapes, circuits, boards, pending] = await Promise.all([symbolsOf(plan.id), shapesOf(plan.id), circuitsOf(project.id), boardsOf(project.id), schemaLoadsOf(project.id)]);
+  // onderdelen die op het eendraadschema aan een kring hangen maar nog niet op een plan staan
+  const pendingLoad = (id: string) => pending.find((l) => l.id === id);
+  const pendingCount = () => pending.reduce((n, l) => n + (l.n || 1), 0);
   const order = circuits.map((c) => c.id);
   // favorieten met sneltoets (blijven bewaard in de database)
   interface Fav { tool: string; key?: string }
@@ -89,6 +93,12 @@ export async function renderPlan(root: HTMLElement, project: Project) {
   const scaleBtn = btn('Schaal', { icon: 'Ruler', variant: 'ghost', onClick: () => { tool = 'scale'; drawing = null; drawPal(); drawSide(); } });
   const updScale = () => { scaleBtn.querySelector('span')!.textContent = plan.scale ? `1 m = ${Math.round(plan.scale)} px` : 'Schaal instellen'; scaleBtn.style.color = plan.scale ? '' : '#b35c00'; };
 
+  const statusChip = h('span', { class: 'hint', style: { fontWeight: '600' } });
+  const updStatus = () => {
+    const un = symbols.filter((x) => !x.circuit_id).length, pc = pendingCount(), bits: string[] = [];
+    if (pc) bits.push(`${pc} nog te plaatsen`); if (un) bits.push(`${un} zonder kring`);
+    statusChip.textContent = bits.join(' · '); (statusChip as HTMLElement).style.color = bits.length ? '#b35c00' : '';
+  };
   const canvas = h('div', { class: 'canvas' }), side = h('div', { class: 'side' }), pal = h('div', { class: 'pal' });
   root.classList.add('page-full');
   root.append(
@@ -111,6 +121,7 @@ export async function renderPlan(root: HTMLElement, project: Project) {
           plan.asset_id = null; await upsert('plan', plan); reload(); } })] : []),
       h('span', { class: 'hint' }, 'Symbool %'), h('input', { type: 'number', value: pct(LS_SIZE), min: 30, max: 300, step: 10, style: { width: '64px' }, onChange: (e: Event) => { localStorage.setItem(LS_SIZE, (e.target as HTMLInputElement).value); S = W * SYM_SIZE * pct(LS_SIZE) / 100; drawSyms(); } }),
       h('span', { class: 'hint' }, 'Label %'), h('input', { type: 'number', value: pct(LS_LABEL), min: 30, max: 300, step: 10, style: { width: '64px' }, onChange: (e: Event) => { localStorage.setItem(LS_LABEL, (e.target as HTMLInputElement).value); LBL = pct(LS_LABEL) / 100; drawSyms(); } }),
+      statusChip,
       h('span', { class: 'hint' }, 'Actieve kring:'), circSel,
       btn('Nieuwe kring', { icon: 'Plus', variant: 'ghost', onClick: () => editCircuit(project, {}, () => reload()) }),
       btn('SVG', { icon: 'Download', variant: 'ghost', title: 'Tekening (zonder foto) exporteren', onClick: exportSvg })),
@@ -238,7 +249,14 @@ export async function renderPlan(root: HTMLElement, project: Project) {
   function drawGhost() {
     ghostG.innerHTML = '';
     const k = scale(), lw = 0.012 * k;
-    if (isLine(tool) && drawing && cursor) {
+    if (tool.startsWith('place:')) {
+      const ld = pendingLoad(tool.slice(6));
+      if (ld && cursor) {
+        const q = placeSym(ld.type, cursor as Pt & { s: number }), kk = S / 10;
+        ghostG.setAttribute('opacity', '0.7');
+        ghostG.innerHTML = `<g transform="translate(${q.x} ${q.y}) rotate(${q.rot ?? 0})">${symbolMarkup(ld.type, 'plan', 0, 0, kk, 0, 2.2, circuitColor(ld.circuit_id, order))}</g>`;
+      }
+    } else if (isLine(tool) && drawing && cursor) {
       let end = cursor;
       if (lenBuf) { const L = NUM(lenBuf) * k, d = dist(drawing, cursor) || 1; end = { x: drawing.x + ((cursor.x - drawing.x) / d) * L, y: drawing.y + ((cursor.y - drawing.y) / d) * L }; }
       ghostG.innerHTML = `<path d="M${drawing.x} ${drawing.y} L${end.x} ${end.y}" stroke="#0066aa" stroke-opacity=".5" stroke-width="${tool === 'wall' ? wallThick * k : 0.04 * k}" stroke-linecap="square"/>
@@ -261,7 +279,7 @@ export async function renderPlan(root: HTMLElement, project: Project) {
     } else if (tool === 'scale' && scaleA && cursor) {
       ghostG.innerHTML = `<path d="M${scaleA.x} ${scaleA.y} L${cursor.x} ${cursor.y}" stroke="#c2185b" stroke-width="${0.03 * k}"/><circle cx="${scaleA.x}" cy="${scaleA.y}" r="${0.06 * k}" fill="#c2185b"/>`;
     } else ghostG.removeAttribute('opacity');
-    if (!(tool === 'window' || tool === 'door' || tool === 'stair' || tool.startsWith('furn:'))) ghostG.removeAttribute('opacity');
+    if (!(tool === 'window' || tool === 'door' || tool === 'stair' || tool.startsWith('furn:') || tool.startsWith('place:'))) ghostG.removeAttribute('opacity');
   }
 
   // ---- handvatten van de geselecteerde muur ----
@@ -330,8 +348,8 @@ export async function renderPlan(root: HTMLElement, project: Project) {
       const e = symbolEntry(sym.type), k = S / 10, geo = e ? symbolGeom(sym.type, 'plan') : null;
       const cx = geo ? geo.w * k * (0.5 - geo.anchor.x) : 0, r = geo ? Math.max(geo.w, geo.h) * k * 0.62 : S * 0.75;
       // krans: zichtbaar als "Cirkels" aan staat (of bij selectie); anders een onzichtbaar klikvlak
-      const ring = showHalo || sym.id === selSym;
-      g.append(svg('circle', { class: 'halo', cx, r, fill: ring ? (sym.id === selSym ? 'rgba(0,102,170,.25)' : '#ffffff99') : '#ffffff01', stroke: ring ? (sym.circuit_id ? col : '#e07800') : 'none', 'stroke-width': sym.id === selSym ? 3 : 1.5, 'stroke-dasharray': sym.circuit_id ? '' : '4 3', 'vector-effect': 'non-scaling-stroke' }));
+      const ring = showHalo || sym.id === selSym || !sym.circuit_id;
+      g.append(svg('circle', { class: 'halo', cx, r, fill: ring ? (sym.id === selSym ? 'rgba(0,102,170,.25)' : '#ffffff99') : '#ffffff01', stroke: ring ? (sym.circuit_id ? col : '#e07800') : 'none', ...(sym.circuit_id ? {} : { 'stroke-dasharray': '4 3' }), 'stroke-width': sym.id === selSym ? 3 : 1.5, 'stroke-dasharray': sym.circuit_id ? '' : '4 3', 'vector-effect': 'non-scaling-stroke' }));
       const inner = svg('g'); inner.innerHTML = e ? symbolMarkup(sym.type, 'plan', 0, 0, k, 0, 2.2, ink) : `<circle r="${S * 0.4}" fill="none" stroke="currentColor"/>`; g.append(inner);
       g.addEventListener('pointerdown', (ev) => startSymDrag(ev as PointerEvent, sym));
       layer.append(g);
@@ -414,6 +432,18 @@ export async function renderPlan(root: HTMLElement, project: Project) {
       const m = NUM(prompt('Hoeveel meter is deze afstand in werkelijkheid?', '3') ?? ''); if (!(m > 0)) return;
       plan.scale = px / m; await upsert('plan', plan); updScale(); toast(`Schaal ingesteld: 1 m = ${Math.round(plan.scale)} px`); setTool('select'); return;
     }
+    if (tool.startsWith('place:')) {
+      const ld = pendingLoad(tool.slice(6)); if (!ld) { setTool('select'); return; }
+      const q = placeSym(ld.type, p, e.shiftKey);
+      const sym = await upsert('symbol', { plan_id: plan.id, type: ld.type, x: q.x / W, y: q.y / H, rot: q.rot ?? 0, circuit_id: ld.circuit_id, label: ld.label ?? null, spos: ld.pos ?? null, sgrp: ld.grp ?? null }) as Symbol_;
+      symbols.push(sym);
+      if ((ld.n || 1) > 1) { ld.n -= 1; await upsert('schema_load', ld); }
+      else { await softDelete('schema_load', ld.id); pending.splice(pending.indexOf(ld), 1); }
+      // verder met het volgende onderdeel van dezelfde kring
+      const nxt = pendingLoad(ld.id) ?? pending.find((l) => l.circuit_id === ld.circuit_id);
+      if (nxt) { tool = `place:${nxt.id}`; drawPalList(); drawGhost(); } else { setTool('select'); selSym = sym.id; }
+      drawSyms(); drawSide(); return;
+    }
     if (tool.startsWith('sym:')) {
       const en = symbolEntry(tool.slice(4)), id = joinType(tool.slice(4), en?.multi ? gang : 1), q = placeSym(id, p, e.shiftKey);
       const sym = await upsert('symbol', { plan_id: plan.id, type: id, x: q.x / W, y: q.y / H, rot: q.rot ?? 0, circuit_id: activeCircuit }) as Symbol_;
@@ -422,8 +452,39 @@ export async function renderPlan(root: HTMLElement, project: Project) {
   });
 
   // ---------- zijpaneel ----------
+  function symIcon(type: string) {
+    const g = symbolGeom(type, 'plan'); if (!g) return icon('Square', 16);
+    const ic = svg('svg', { width: 26, height: 22, viewBox: `0 0 ${g.w + 2} ${g.h + 2}`, preserveAspectRatio: 'xMidYMid meet' });
+    ic.innerHTML = symbolMarkup(type, 'plan', (g.w + 2) * g.anchor.x + (g.anchor.x === 0 ? 1 : 0), (g.h + 2) / 2, 1, 0, 1.6); return ic;
+  }
+  /** Lijst van wat nog moet gebeuren: onderdelen van kringen die nog niet op het plan staan, en symbolen zonder kring. */
+  function pendingPanel() {
+    const unlinked = symbols.filter((x) => !x.circuit_id);
+    const byCirc = new Map<string, SchemaLoad[]>(); for (const l of pending) byCirc.set(l.circuit_id, [...(byCirc.get(l.circuit_id) ?? []), l]);
+    const groups = circuits.filter((c) => byCirc.has(c.id));
+    const sections: HTMLElement[] = [];
+    if (!groups.length && !unlinked.length) {
+      return h('div', null, h('h4', null, 'Te plaatsen'), h('p', { class: 'hint' }, 'Alles wat aan een kring hangt staat op een plan. Onderdelen die je op het eendraadschema toevoegt verschijnen hier om op het plan te zetten.'));
+    }
+    const pick = (c: { id: string }, l: SchemaLoad) => { activeCircuit = c.id; circSel.value = c.id; setTool(`place:${l.id}`); };
+    for (const c of groups) {
+      const ls = byCirc.get(c.id)!;
+      sections.push(h('div', { style: { marginTop: '6px' } },
+        h('div', { style: { display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600', fontSize: '12px' } }, h('i', { style: { width: '10px', height: '10px', borderRadius: '50%', background: circuitColor(c.id, order), display: 'inline-block' } }),
+          `${c.nr ?? ''} ${c.name}`, h('span', { class: 'spacer' }), btn('Alles plaatsen', { variant: 'ghost', title: 'Eén voor één plaatsen, in volgorde van het schema', onClick: () => pick(c, ls[0]) })),
+        ...ls.map((l) => h('button', { class: `pal-item ${tool === `place:${l.id}` ? 'active' : ''}`, title: 'Klik, daarna op het plan klikken om te plaatsen', onClick: () => pick(c, l) },
+          symIcon(l.type), h('span', { style: { flex: '1', textAlign: 'left' } }, symbolEntry(l.type)?.label ?? l.type, l.label ? h('span', { class: 'hint' }, ` · ${l.label}`) : null),
+          (l.n || 1) > 1 ? h('span', { class: 'pal-count' }, `× ${l.n}`) : null))));
+    }
+    return h('div', null, h('h4', null, `Te plaatsen (${pendingCount()})`),
+      pendingCount() ? h('p', { class: 'hint' }, 'Nog niet op een plan: gevonden op het eendraadschema. Staat het op een andere verdieping, schakel dan eerst naar dat plan.') : null,
+      ...sections,
+      unlinked.length ? h('div', { style: { marginTop: '10px' } }, h('h4', { style: { color: '#b35c00' } }, `Zonder kring (${unlinked.length})`), h('p', { class: 'hint' }, 'Gestippelde oranje cirkel op het plan. Klik om te selecteren en een kring te kiezen.'),
+        ...unlinked.map((u) => h('button', { class: 'pal-item', onClick: () => { setTool('select'); selSym = u.id; drawSyms(); drawSide(); } }, symIcon(u.type), h('span', { style: { flex: '1', textAlign: 'left' } }, symbolEntry(u.type)?.label ?? u.type, u.label ? h('span', { class: 'hint' }, ` · ${u.label}`) : null)))) : null);
+  }
+
   function drawSide() {
-    clear(side);
+    clear(side); updStatus();
     const sym = symbols.find((x) => x.id === selSym), sh = shapeById(selShape);
     const k = scale();
     if (sh) {
@@ -479,10 +540,12 @@ export async function renderPlan(root: HTMLElement, project: Project) {
     if (!sym) {
       const t = TOOLS.find((x) => x.id === tool), f = FURNITURE.find((x) => `furn:${x.id}` === tool), cb = CABLE_STYLES.find((x) => `cable:${x.id}` === tool);
       const hint = t ? t.hint : cb ? 'Klik de punten van het leidingtraject. De kleur volgt de actieve kring (bovenaan). Typ een lengte + Enter, Esc = stoppen.' : f ? 'Sleep een rechthoek, of klik voor het standaardformaat.' : tool === 'scale' ? 'Klik twee punten waarvan je de afstand kent (bv. de breedte van een deur of een muur) en geef die in meter in.'
+        : tool.startsWith('place:') ? `Klik op het plan om "${symbolEntry(pendingLoad(tool.slice(6))?.type ?? '')?.label ?? 'het onderdeel'}" te plaatsen. Daarna volgt het volgende onderdeel van dezelfde kring. Esc of rechtsklik = stoppen.`
         : tool.startsWith('sym:') ? `Klik op het plan om "${symbolEntry(tool.slice(4))?.label}" te plaatsen. Stopcontacten klikken vanzelf tegen de dichtstbijzijnde muur (Shift = vrij). Rechtsklik om te stoppen.` : '';
       side.append(h('div', null, h('h4', null, tool === 'select' ? 'Plan' : 'Tekenen'), h('p', { class: 'muted' }, hint || 'Klik een element of symbool aan om het te bewerken, of kies links een tool.'),
         !plan.scale ? h('p', { style: { color: '#b35c00' } }, '⚠ Schaal niet ingesteld: maten zijn een schatting (plan = 15 m breed). Gebruik "Schaal instellen" bovenaan.') : null,
         ...(tool === 'wall' ? [h('p', { class: 'hint' }, 'Tip: typ de lengte (bv. 3,5) en druk Enter om een muur op maat te zetten.')] : [])),
+        pendingPanel(),
         h('div', null, h('h4', null, 'Kringen op dit plan'),
           h('div', { class: 'legend', style: { flexDirection: 'column', gap: '4px' } }, circuits.filter((c) => counts.has(c.id)).map((c) =>
             h('div', null, h('i', { style: { background: circuitColor(c.id, order) } }), `${c.nr ?? ''} ${c.name} — ${counts.get(c.id)}`)),
