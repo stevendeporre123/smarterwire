@@ -98,4 +98,9 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE project ADD COLUMN inspector_info TEXT;        -- adres en contact van de keuringsinstelling
   CREATE TABLE setting (id TEXT PRIMARY KEY, value TEXT, ${SYNC});
   `,
+  // v5: polen = aantal polen (1-4), los van de breedte; 1P+N werd 2P en 3P+N werd 4P
+  `
+  UPDATE device SET poles='2P' WHERE poles='1P+N';
+  UPDATE device SET poles='4P' WHERE poles='3P+N';
+  `,
 ];

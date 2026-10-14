@@ -114,7 +114,7 @@ export async function generateNewBoards(project: Project, opt: GenOptions): Prom
     // kast opbouwen
     const isRoot = src.id === root.id;
     const mainId = uid();
-    if (isRoot) stmts.push(upsertStmt('device', { id: mainId, board_id: nb.id, kind: 'hoofd', label: 'Hoofd', poles: threePhase ? '3P+N' : '2P', rating_a: opt.mainRating, curve: 'B', row_no: 0, pos: 0, modules: threePhase ? 4 : 2 }));
+    if (isRoot) stmts.push(upsertStmt('device', { id: mainId, board_id: nb.id, kind: 'hoofd', label: 'Hoofd', poles: threePhase ? (project.supply === '3x230' ? '3P' : '4P') : '2P', rating_a: opt.mainRating, curve: 'B', row_no: 0, pos: 0, modules: threePhase ? 4 : 2 }));
     const globalLoad: Record<string, number> = Object.fromEntries(phaseNames.map((p) => [p, 0]));
     let row = isRoot ? 1 : 0, n = 1;
     for (const ch of chunks) {
@@ -127,9 +127,9 @@ export async function generateNewBoards(project: Project, opt: GenOptions): Prom
           const devId = uid();
           const rating = (c.section_mm2 && DEFAULT_RATING_FOR_SECTION[c.section_mm2]) || (c.func === 'Verlichting' ? 10 : 16);
           if (!c.section_mm2) warnings.push(`Kring "${c.name}": geen doorsnede, standaardzekering ${rating}A`);
-          let phase: string | null = null, poles = '1P+N', modules = 1;
+          let phase: string | null = null, poles = '2P', modules = 1;
           if (threePhase) {
-            if (is3p(c)) { phase = '3P'; poles = project.supply === '3x230' ? '3P' : '3P+N'; modules = 3; }
+            if (is3p(c)) { phase = '3P'; poles = project.supply === '3x230' ? '3P' : '4P'; modules = project.supply === '3x230' ? 3 : 4; }
             else {
               const cands = phaseNames.filter((p) => !usedInItem.has(p));
               const pool = cands.length ? cands : phaseNames;
@@ -139,7 +139,7 @@ export async function generateNewBoards(project: Project, opt: GenOptions): Prom
             }
             if (phase !== '3P') { diffLoad[phase] += rating; globalLoad[phase] += rating; } else phaseNames.forEach((p) => { diffLoad[p] += rating; globalLoad[p] += rating; });
             phasesUsed.add(phase);
-          } else if (project.supply === '1x230') poles = '1P+N';
+          }
           kids.push(upsertStmt('device', { id: devId, board_id: nb.id, parent_id: diffId, kind: 'automaat', label: c.nr ? `K${c.nr}` : null, poles, phase, rating_a: rating, curve: 'B', row_no: row, pos: pos++, modules }));
           kids.push({ sql: `UPDATE circuit SET new_device_id=?, updated_at=? WHERE id=?`, bind: [devId, now, c.id] });
         }
@@ -147,7 +147,7 @@ export async function generateNewBoards(project: Project, opt: GenOptions): Prom
       const lv = ch.level || '';
       stmts.push(upsertStmt('device', {
         id: diffId, board_id: nb.id, parent_id: isRoot ? mainId : null, kind: 'differentieel', label: `ID${n}`,
-        poles: threePhase ? (project.supply === '3x230' ? '3P' : '3P+N') : '2P', rating_a: opt.diffRating, sens_ma: 30, dtype: 'A',
+        poles: threePhase ? (project.supply === '3x230' ? '3P' : '4P') : '2P', rating_a: opt.diffRating, sens_ma: 30, dtype: 'A',
         row_no: row, pos: 0, modules: threePhase ? 4 : 2, notes: [ch.big ? 'grote verbruiker(s)' : '', lv].filter(Boolean).join(' · ') || null,
       }), ...kids);
       row++; n++; diffCount++;

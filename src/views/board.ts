@@ -1,11 +1,11 @@
 import { h, svg, btn, icon, toast, clear } from '../lib/dom';
-import { buildForm, formModal, panZoom, badge, type FieldDef } from '../lib/ui';
+import { buildForm, formModal, modal, panZoom, badge, type FieldDef } from '../lib/ui';
 import { upsert, softDelete, saveImage, assetUrl, assetSize, upsertStmt } from '../db/repo';
 import { sql } from '../db/client';
 import { boardsOf, devicesOf, circuitsOf, type Board, type Device, type Project, type Circuit } from '../domain/model';
-import { CURVES, DEVICE_KINDS, DIFF_TYPES, deviceTitle, isGroupParent, isFeeder, supplyOf, supplyPhases, supplyPoles, supplyConflict, deviceFieldKeys, defaultModules, polesLabel } from '../domain/devices';
+import { CURVES, DEVICE_KINDS, DIFF_TYPES, deviceTitle, isGroupParent, isFeeder, supplyOf, supplyPhases, supplyPoles, supplyConflict, deviceFieldKeys, defaultModules, normPoles, polesText } from '../domain/devices';
 import { ensureCircuits, unlinkDevice } from '../domain/circuits';
-import { moduleArt, SRC_UNIT } from '../domain/modules';
+import { moduleArt } from '../domain/modules';
 import { generateNewBoards, DEFAULT_GEN } from '../domain/newboard';
 import { editCircuit } from './circuits';
 import { analyzeBoardPhoto, getAiEndpoint, setAiEndpoint } from '../lib/ai';
@@ -112,7 +112,8 @@ export async function renderBoard(root: HTMLElement, project: Project) {
       btn('Ouders afleiden', { icon: 'GitBranch', title: 'Beschermend differentieel automatisch afleiden uit de positie', onClick: async () => {
         const ch = guessParents(devices); await sql.batch(ch.map((d) => upsertStmt('device', d))); toast(`${ch.length} toestel(len) gekoppeld`); refresh(); } }));
   }
-  toolbar.append(btn('+ Toestel', { icon: 'Plus', title: 'Toestel manueel toevoegen (zonder foto)', onClick: () => addDeviceManual() }));
+  toolbar.append(btn('+ Toestel', { icon: 'Plus', title: 'Toestel manueel toevoegen (zonder foto)', onClick: () => addDeviceManual() }),
+    btn('Alles wissen', { icon: 'Trash2', variant: 'ghost', title: 'Alle toestellen van deze kast verwijderen', onClick: () => clearAll() }));
   toolbar.append(btn(board.kind === 'nieuw' ? 'Opnieuw genereren' : 'Nieuwe kast voorstellen', { icon: 'WandSparkles', variant: 'accent', title: 'Voorstel voor alle kasten: elke kring eigen automaat, per 30 mA-differentieel', onClick: genNew }));
 
   // ---------- canvas ----------
@@ -169,7 +170,7 @@ export async function renderBoard(root: HTMLElement, project: Project) {
       const el = drag.el, x = +el.getAttribute('x')!, y = +el.getAttribute('y')!, w = +el.getAttribute('width')!, h_ = +el.getAttribute('height')!;
       drag = null; el.remove();
       if (w < W * 0.008 || h_ < H * 0.008) return;
-      const d = await upsert('device', { board_id: board.id, kind: 'automaat', poles: '1P+N', curve: 'B', breaking_ka: 3, phase: supply === '1x230' ? null : 'L1', modules: Math.max(1, Math.round(w / h_ * 2.2)), row_no: 0, pos: 0, rx: x / W, ry: y / H, rw: w / W, rh: h_ / H });
+      const d = await upsert('device', { board_id: board.id, kind: 'automaat', poles: '2P', curve: 'B', breaking_ka: 3, phase: supply === '1x230' ? null : 'L1', modules: Math.max(1, Math.round(w / h_ * 2.2)), row_no: 0, pos: 0, rx: x / W, ry: y / H, rw: w / W, rh: h_ / H });
       devices = await devicesOf(board.id);
       const ch = recomputeLayout(devices); await sql.batch(ch.map((c) => upsertStmt('device', c)));
       selId = d.id; await refresh();
@@ -211,11 +212,11 @@ export async function renderBoard(root: HTMLElement, project: Project) {
       s.append(svg('rect', { x: PAD - 14, y: y + 66, width: 2000, height: 8, fill: '#b5bdb5' }), svg('text', { x: 6, y: y + 18, 'font-size': 11, fill: '#555e55' }, `R${rk + 1}`));
       for (const d of rows.get(rk)!.sort((a, b) => a.pos - b.pos)) {
         const cs = cByD.get(d.id) ?? [], main = isGroupParent(d.kind), art = moduleArt(d);
-        const k = U / SRC_UNIT, w = art ? art.w * k : Math.max(1, d.modules) * U - 4;
+        const w = Math.max(0.5, d.modules || 1) * U - 4, BOXH = 110;
         const g = svg('g', { style: 'cursor:pointer', onclick: () => { selId = d.id; draw(); drawSide(); } });
         if (art) {
-          const ih = art.h * k, iy = y + (120 - ih) / 2;
-          g.append(svg('image', { href: art.url, x, y: iy, width: w, height: ih }));
+          const ih = BOXH, iy = y + 5;
+          g.append(svg('image', { href: art.url, x, y: iy, width: w, height: ih, preserveAspectRatio: 'none' }));
           if (art.label) {
             const l = art.label, lh = l.h * ih / l.lines.length;
             g.append(svg('rect', { x: x + l.x * w, y: iy + l.y * ih, width: l.w * w, height: l.h * ih, fill: '#e2e2e2' }),
@@ -224,7 +225,7 @@ export async function renderBoard(root: HTMLElement, project: Project) {
           g.append(svg('rect', { x: x - 2, y: iy - 2, width: w + 4, height: ih + 4, rx: 3, fill: 'none', stroke: d.id === selId ? '#0066aa' : 'none', 'stroke-width': 3 }),
             ...(d.phase ? [svg('text', { x: x + w / 2, y: iy + ih + 11, 'text-anchor': 'middle', 'font-size': 9, 'font-weight': 600, fill: '#0066aa' }, d.phase)] : []));
         } else {
-          g.append(svg('rect', { x, y, width: w, height: 120, rx: 4, fill: main ? '#e6f5e6' : '#fff', stroke: d.id === selId ? '#0066aa' : main ? '#008000' : '#555e55', 'stroke-width': d.id === selId ? 3 : 1.5 }),
+          g.append(svg('rect', { x, y: y + 5, width: w, height: BOXH, rx: 2, fill: main ? '#e3f0e3' : '#e6e6e6', stroke: d.id === selId ? '#0066aa' : main ? '#008000' : '#555e55', 'stroke-width': d.id === selId ? 3 : 1.5 }),
             svg('rect', { x: x + w / 2 - 8, y: y + 46, width: 16, height: 26, rx: 3, fill: '#2b312b' }),
             svg('text', { x: x + w / 2, y: y + 22, 'text-anchor': 'middle', 'font-size': 12, 'font-weight': 600 }, `${d.curve ?? ''}${d.rating_a ?? ''}`),
             svg('text', { x: x + w / 2, y: y + 36, 'text-anchor': 'middle', 'font-size': 9, fill: '#555e55' }, d.sens_ma ? `${d.sens_ma}mA` : (DEVICE_KINDS[d.kind]?.short ?? '')),
@@ -258,7 +259,8 @@ export async function renderBoard(root: HTMLElement, project: Project) {
     const parents = devices.filter((x) => isGroupParent(x.kind) && x.id !== d.id);
     const all: Record<string, FieldDef> = {
       label: { key: 'label', label: 'Label / opschrift' },
-      poles: { key: 'poles', label: 'Polen', type: 'select', options: supplyPoles(supply).map((p) => ({ value: p, label: polesLabel(p) === p ? p : `${polesLabel(p)} (${p})` })), allowEmpty: false },
+      poles: { key: 'poles', label: 'Aantal polen', type: 'select', options: supplyPoles(supply).map((p) => ({ value: p, label: polesText(p) })), allowEmpty: false },
+      modules: { key: 'modules', label: 'Breedte (modules)', type: 'number', step: 0.5 },
       rating_a: { key: 'rating_a', label: 'Nominaal (A)', type: 'number' },
       curve: { key: 'curve', label: 'Curve', type: 'select', options: CURVES },
       sens_ma: { key: 'sens_ma', label: 'Gevoeligheid (mA)', type: 'select', options: [10, 30, 100, 300, 500], numeric: true },
@@ -270,12 +272,13 @@ export async function renderBoard(root: HTMLElement, project: Project) {
     };
     const kindField: FieldDef = { key: 'kind', label: 'Type', type: 'select', allowEmpty: false, span: 2, options: Object.entries(DEVICE_KINDS).map(([value, k]) => ({ value, label: k.label })) };
     const fields = [kindField, ...deviceFieldKeys(d.kind, supply).map((k) => all[k])];
-    const form = buildForm(fields, d);
+    const form = buildForm(fields, { ...d, poles: normPoles(d.poles) });
     const conflict = supplyConflict(d, supply);
     const save = async (e?: Event) => {
-      const before = { kind: d.kind, poles: d.poles };
+      const before = { kind: d.kind, poles: normPoles(d.poles), modules: d.modules };
       Object.assign(d, form.read());
-      if (d.poles !== before.poles || d.kind !== before.kind) d.modules = defaultModules(d.kind, d.poles);
+      // breedte volgt de polen enkel zolang ze niet apart is aangepast (een mini-automaat heeft 2 polen op 1 module)
+      if (d.modules == null || (d.modules === before.modules && d.modules === defaultModules(before.kind, before.poles) && d.poles !== before.poles)) d.modules = defaultModules(d.kind, d.poles);
       await upsert('device', d);
       if (d.kind !== before.kind) { await refresh(); return; }   // andere velden na een typewissel
       draw();
@@ -304,7 +307,7 @@ export async function renderBoard(root: HTMLElement, project: Project) {
   async function addDeviceManual() {
     const row = devices.length ? Math.max(...devices.map((d) => d.row_no)) : 0;
     const pos = devices.filter((d) => d.row_no === row).length;
-    const d = await upsert('device', { board_id: board.id, kind: 'automaat', poles: '1P+N', curve: 'B', rating_a: 16, breaking_ka: 3, phase: supply === '1x230' ? null : 'L1', row_no: row, pos, modules: 1 });
+    const d = await upsert('device', { board_id: board.id, kind: 'automaat', poles: '2P', curve: 'B', rating_a: 16, breaking_ka: 3, phase: supply === '1x230' ? null : 'L1', row_no: row, pos, modules: 1 });
     selId = d.id; await refresh();
   }
 
@@ -335,19 +338,51 @@ export async function renderBoard(root: HTMLElement, project: Project) {
       } });
   }
 
+  /** Vraagt tussen meerdere acties; geeft de gekozen sleutel terug, of null bij annuleren. */
+  function choose(title: string, text: string, options: { key: string; label: string; variant: 'primary' | 'danger' | 'secondary' }[]): Promise<string | null> {
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (v: string | null, close: () => void) => { if (done) return; done = true; close(); resolve(v); };
+      modal({ title, body: h('p', null, text), actions: (close) => [
+        h('span', { class: 'spacer' }), btn('Annuleren', { variant: 'ghost', onClick: () => finish(null, close) }),
+        ...options.map((o) => btn(o.label, { variant: o.variant, onClick: () => finish(o.key, close) }))] });
+    });
+  }
+
+  /** Alle toestellen van deze kast verwijderen (lege automatische kringen verdwijnen mee). */
+  async function removeAllDevices() {
+    for (const d of devices) { await softDelete('device', d.id); await unlinkDevice(d.id); }
+    devices = []; selId = null;
+  }
+  async function clearAll() {
+    if (!devices.length) return;
+    if (!confirm(`Alle ${devices.length} toestellen van "${board.name}" verwijderen? Kringen met gegevens blijven bestaan, maar zonder zekering.`)) return;
+    await removeAllDevices(); await refresh(); toast('Toestellen gewist');
+  }
+
   async function runAi() {
     const tip = `Endpoint voor de AI-proxy:`;
     const url = prompt(tip, getAiEndpoint()); if (!url) return; setAiEndpoint(url);
     toast('Foto wordt geanalyseerd…');
     try {
       const prop = await analyzeBoardPhoto(photoUrl!);
-      if (devices.length && !confirm(`${prop.length} toestel(len) gevonden. Toevoegen aan de ${devices.length} bestaande?`)) return;
-      const stmts = prop.map((p) => upsertStmt('device', { id: uid(), board_id: board.id, kind: p.kind in DEVICE_KINDS ? p.kind : 'anders', label: p.label, poles: p.poles, rating_a: p.rating_a, curve: p.curve, sens_ma: p.sens_ma, dtype: p.dtype, modules: p.modules ?? 1, rx: p.rect.x, ry: p.rect.y, rw: p.rect.w, rh: p.rect.h, row_no: 0, pos: 0, notes: p.notes }));
+      let mode: 'add' | 'replace' = 'add';
+      if (devices.length) {
+        const c = await choose(`${prop.length} toestel(len) gevonden`, `Er staan al ${devices.length} toestel(len) in deze kast. Wat wil je met de nieuwe voorstellen doen?`,
+          [{ key: 'replace', label: `Alles vervangen (${devices.length} wissen)`, variant: 'danger' }, { key: 'add', label: 'Toevoegen aan de bestaande', variant: 'primary' }]);
+        if (!c) return;
+        mode = c as 'add' | 'replace';
+      }
+      if (mode === 'replace') await removeAllDevices();
+      const stmts = prop.map((p) => {
+        const kind = p.kind in DEVICE_KINDS ? p.kind : 'anders', poles = p.poles ? normPoles(p.poles) : null;
+        return upsertStmt('device', { id: uid(), board_id: board.id, kind, label: p.label, poles, rating_a: p.rating_a, curve: p.curve, sens_ma: p.sens_ma, dtype: p.dtype, modules: p.modules ?? defaultModules(kind, poles), rx: p.rect.x, ry: p.rect.y, rw: p.rect.w, rh: p.rect.h, row_no: 0, pos: 0, notes: p.notes });
+      });
       await sql.batch(stmts);
       devices = await devicesOf(board.id);
       const ch = recomputeLayout(devices); ch.push(...guessParents(devices));
       await sql.batch(ch.map((c) => upsertStmt('device', c)));
-      toast(`${prop.length} toestellen toegevoegd – controleer ze!`); await refresh();
+      toast(`${prop.length} toestellen ${mode === 'replace' ? 'ingelezen' : 'toegevoegd'} – controleer ze!`); await refresh();
     } catch (e: any) { toast(e.message, 'error'); }
   }
 

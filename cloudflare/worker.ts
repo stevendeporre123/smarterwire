@@ -6,8 +6,10 @@ export interface Env { ANTHROPIC_API_KEY: string; MODEL?: string; ALLOW_ORIGIN?:
 const PROMPT = `Je ziet een foto van een Belgische elektrische zekeringskast (DIN-rail).
 Geef ALLE zichtbare modulaire toestellen terug als JSON, zonder uitleg, in dit formaat:
 {"devices":[{"kind":"hoofd|differentieel|automaat|aardlekautomaat|smelt|overspanning|contactor|schakelaar|trafo|anders",
-"label":"opschrift indien leesbaar","poles":"1P|1P+N|2P|3P|3P+N|4P","rating_a":16,"curve":"B|C|D","sens_ma":30,"dtype":"AC|A|F|B",
+"label":"opschrift indien leesbaar","poles":"1P|2P|3P|4P","rating_a":16,"curve":"B|C|D","sens_ma":30,"dtype":"AC|A|F|B",
 "modules":1,"rect":{"x":0.1,"y":0.2,"w":0.03,"h":0.2},"notes":"onzeker? leg uit"}]}
+poles = aantal polen (1 tot 4), NIET het aantal fases. modules = breedte in DIN-modules van 18 mm (mag 1, 1.5, 2, 3, 4…);
+een 2-polige mini-automaat kan 2 polen op 1 module hebben, dus tel de breedte apart van de polen.
 rect = omkadering van het toestel, genomen als fractie (0..1) van de breedte/hoogte van de foto.
 Laat velden weg die je niet kan aflezen; gok niet. Elke toestel apart, ook naast elkaar.`;
 

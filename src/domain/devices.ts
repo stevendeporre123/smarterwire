@@ -16,9 +16,12 @@ export const isGroupParent = (kind: string) => kind === 'differentieel' || kind 
 export const isFeeder = (kind: string) => kind !== 'differentieel' && kind !== 'hoofd' && kind !== 'overspanning';
 
 export const CURVES = ['B', 'C', 'D'];
-export const POLES = ['1P', '1P+N', '2P', '3P', '3P+N', '4P'];
-/** Schema-notatie: een 1P+N-automaat is een 2P-toestel, 3P+N is 4P. */
-export const polesLabel = (p?: string | null) => (p === '1P+N' ? '2P' : p === '3P+N' ? '4P' : p ?? '');
+// Aantal polen (1 tot 4) staat los van de breedte in modules (een mini-automaat heeft 2 polen op 1 module) en van het aantal fases.
+export const POLES = ['1P', '2P', '3P', '4P'];
+/** Oude waarden (1P+N, 3P+N) zijn gewoon 2 en 4 polen. */
+export const normPoles = (p?: string | null) => (p === '1P+N' ? '2P' : p === '3P+N' ? '4P' : p ?? '');
+export const polesLabel = normPoles;
+export const polesText = (p: string) => `${p.replace('P', '')}-polig`;
 export const DIFF_TYPES = ['AC', 'A', 'F', 'B'];
 export const FUNCTIONS = [
   'Verlichting', 'Stopcontacten', 'Kookplaat', 'Oven', 'Wasmachine', 'Droogkast', 'Vaatwasser',
@@ -36,32 +39,32 @@ export type Supply = '1x230' | '3N400' | '3x230';
 export const supplyOf = (p?: { supply?: string | null } | null): Supply => ((p?.supply as Supply) || '1x230');
 export const isThreePhase = (s: Supply) => s !== '1x230';
 export const supplyPhases = (s: Supply) => (s === '1x230' ? ['L1'] : ['L1', 'L2', 'L3', '3P']);
-export const supplyPoles = (s: Supply) => (s === '1x230' ? ['1P', '1P+N', '2P'] : s === '3x230' ? ['1P', '2P', '3P'] : POLES);
+export const supplyPoles = (s: Supply) => (s === '1x230' ? ['1P', '2P'] : s === '3x230' ? ['1P', '2P', '3P'] : POLES);
 export const supplyVoltages = (s: Supply) => (s === '3N400' ? [230, 400] : [230]);
 export const supplyLabel = (s: Supply) => SUPPLIES.find((x) => x.value === s)?.label ?? s;
 /** Waarschuwing als een toestel niet past bij de voeding (bv. 3P of fase L2 bij monofasig). */
 export function supplyConflict(d: { poles?: string | null; phase?: string | null }, s: Supply): string | null {
   if (isThreePhase(s)) return null;
-  if (d.poles && !supplyPoles(s).includes(d.poles)) return `${polesLabel(d.poles)} kan niet bij een monofasige voeding`;
+  if (d.poles && !supplyPoles(s).includes(normPoles(d.poles))) return `${polesLabel(d.poles)} kan niet bij een monofasige voeding`;
   if (d.phase && d.phase !== 'L1') return `fase ${d.phase} kan niet bij een monofasige voeding`;
   return null;
 }
 
 /** Standaard aantal modules breed voor een toestel (enkel gebruikt als er geen foto-uitsnede is). */
 export const defaultModules = (kind: string, poles?: string | null) =>
-  kind === 'overspanning' ? 2 : ({ '1P': 1, '1P+N': 1, '2P': 2, '3P': 3, '3P+N': 4, '4P': 4 } as Record<string, number>)[poles ?? ''] ?? 1;
+  ({ '1P': 1, '2P': 2, '3P': 3, '4P': 4 } as Record<string, number>)[normPoles(poles)] ?? 1;
 
 /** Alleen de eigenschappen die voor dit soort toestel echt nodig zijn. */
 export function deviceFieldKeys(kind: string, s: Supply): string[] {
   const phase = isThreePhase(s) ? ['phase'] : [];
   switch (kind) {
-    case 'hoofd': return ['label', 'poles', 'rating_a'];
-    case 'differentieel': return ['label', 'poles', 'rating_a', 'sens_ma', 'dtype', 'parent_id'];
-    case 'aardlekautomaat': return ['label', 'poles', 'rating_a', 'curve', 'sens_ma', 'dtype', 'breaking_ka', ...phase, 'parent_id'];
-    case 'automaat': return ['label', 'poles', 'rating_a', 'curve', 'breaking_ka', ...phase, 'parent_id'];
-    case 'smelt': return ['label', 'rating_a', ...phase, 'parent_id'];
-    case 'overspanning': return ['label', 'poles', 'parent_id'];
-    default: return ['label', 'rating_a', ...phase, 'parent_id', 'notes'];
+    case 'hoofd': return ['label', 'poles', 'modules', 'rating_a'];
+    case 'differentieel': return ['label', 'poles', 'modules', 'rating_a', 'sens_ma', 'dtype', 'parent_id'];
+    case 'aardlekautomaat': return ['label', 'poles', 'modules', 'rating_a', 'curve', 'sens_ma', 'dtype', 'breaking_ka', ...phase, 'parent_id'];
+    case 'automaat': return ['label', 'poles', 'modules', 'rating_a', 'curve', 'breaking_ka', ...phase, 'parent_id'];
+    case 'smelt': return ['label', 'modules', 'rating_a', ...phase, 'parent_id'];
+    case 'overspanning': return ['label', 'poles', 'modules', 'parent_id'];
+    default: return ['label', 'modules', 'rating_a', ...phase, 'parent_id', 'notes'];
   }
 }
 export const INSPECTORS = ['AIB-Vinçotte', 'BTV', 'Keurtech', 'Technics', 'SECO', 'Vinçotte'];
