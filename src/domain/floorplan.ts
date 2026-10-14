@@ -53,7 +53,12 @@ export function openingGeom(op: Shape, wall: Shape, scale: number) {
   return { u, n, c, hw: ((op.size ?? 0.9) * scale) / 2, t: (wall.thick ?? 0.2) * scale };
 }
 
-export function renderFloor(shapes: Shape[], o: { scale: number; selId: string | null }): string {
+export const CABLE_STYLES: { id: string; label: string }[] = [
+  { id: 'wand', label: 'Leiding in wand' }, { id: 'opwand', label: 'Leiding op wand' }, { id: 'buis', label: 'Leiding in buis' },
+  { id: 'lucht', label: 'Luchtleiding' }, { id: 'grond', label: 'Ondergrondse leiding' },
+];
+
+export function renderFloor(shapes: Shape[], o: { scale: number; selId: string | null; cableColor?: (circuitId: string | null | undefined) => string }): string {
   const { scale: S, selId } = o;
   const line = 0.012 * S, bold = 0.025 * S;
   const walls = shapes.filter((s) => s.kind === 'wall'), byId = new Map(walls.map((w) => [w.id, w]));
@@ -108,6 +113,24 @@ export function renderFloor(shapes: Shape[], o: { scale: number; selId: string |
       const L = { x: H.x + n.x * side * r, y: H.y + n.y * side * r };
       const cross = (C.x - H.x) * (L.y - H.y) - (C.y - H.y) * (L.x - H.x);
       g.push(`<path d="M${f(H.x)} ${f(H.y)} L${f(L.x)} ${f(L.y)}" stroke="#000" stroke-width="${f(line * 1.3)}"/>`, `<path d="M${f(C.x)} ${f(C.y)} A${f(r)} ${f(r)} 0 0 ${cross > 0 ? 1 : 0} ${f(L.x)} ${f(L.y)}" fill="none" stroke="#000" stroke-width="${f(line)}"/>`);
+    }
+    g.push('</g>'); out.push(g.join(''));
+  }
+
+  // leidingen boven de muren: lijn met kenmerk volgens het type (op wand = streepjes, in buis = bolletjes, lucht = gestippeld, grond = streep-punt)
+  for (const s of shapes) {
+    if (s.kind !== 'cable') continue;
+    const col = sel(s) ? '#0066aa' : (o.cableColor?.(s.ref_id) ?? '#c2185b'), a = { x: s.x1!, y: s.y1! }, b = { x: s.x2!, y: s.y2! }, L = dist(a, b) || 1;
+    const u = { x: (b.x - a.x) / L, y: (b.y - a.y) / L }, n = { x: -u.y, y: u.x }, lw = 0.028 * S;
+    const g = [`<g data-sid="${s.id}" style="cursor:pointer"><path d="M${f(a.x)} ${f(a.y)} L${f(b.x)} ${f(b.y)}" stroke="transparent" stroke-width="${f(0.18 * S)}" fill="none"/>`];
+    const dash = s.sub === 'lucht' ? ` stroke-dasharray="${f(0.25 * S)} ${f(0.15 * S)}"` : s.sub === 'grond' ? ` stroke-dasharray="${f(0.5 * S)} ${f(0.12 * S)} ${f(0.08 * S)} ${f(0.12 * S)}"` : '';
+    g.push(`<path d="M${f(a.x)} ${f(a.y)} L${f(b.x)} ${f(b.y)}" stroke="${col}" stroke-width="${f(lw)}" fill="none"${dash}/>`);
+    const step = 0.6 * S;
+    for (let d = step / 2; d < L - 0.1 * S && (s.sub === 'opwand' || s.sub === 'buis'); d += step) {
+      const c = { x: a.x + u.x * d, y: a.y + u.y * d };
+      g.push(s.sub === 'buis'
+        ? `<circle cx="${f(c.x)}" cy="${f(c.y)}" r="${f(0.055 * S)}" fill="#fff" stroke="${col}" stroke-width="${f(lw * 0.8)}"/>`
+        : `<path d="M${f(c.x - n.x * 0.07 * S)} ${f(c.y - n.y * 0.07 * S)} L${f(c.x + n.x * 0.07 * S)} ${f(c.y + n.y * 0.07 * S)}" stroke="${col}" stroke-width="${f(lw)}"/>`);
     }
     g.push('</g>'); out.push(g.join(''));
   }

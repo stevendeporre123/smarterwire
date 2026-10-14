@@ -4,8 +4,8 @@ import { upsert, softDelete, saveImage, assetUrl, assetSize } from '../db/repo';
 import { sql } from '../db/client';
 import { plansOf, symbolsOf, shapesOf, circuitsOf, boardsOf, type Plan, type Project, type Symbol_, type Shape } from '../domain/model';
 import { circuitColor } from '../domain/symbols';
-import { CATALOG, areiSymbol, areiSize, symbolEntry } from '../domain/areisymbols';
-import { FURNITURE, DEFAULT_PLAN_M, dist, projectOnSeg, nearestWall, snapToWallSurface, renderFloor, wallPts, type Pt } from '../domain/floorplan';
+import { CATALOG, FUNC_ORDER, symbolEntry, symbolGeom, symbolMarkup, splitType, joinType, type SymbolEntry } from '../domain/areisymbols';
+import { FURNITURE, CABLE_STYLES, DEFAULT_PLAN_M, dist, projectOnSeg, nearestWall, snapToWallSurface, renderFloor, wallPts, type Pt } from '../domain/floorplan';
 import { editCircuit } from './circuits';
 
 const LS = (pid: string) => `smarterwire.plan.${pid}`;
@@ -60,7 +60,10 @@ export async function renderPlan(root: HTMLElement, project: Project) {
   let selSym: string | null = null, selShape: string | null = null;
   let activeCircuit: string | null = null;
   let wallThick = Number(localStorage.getItem(`${LS_OPT}.thick`)) || 0.2;
-  let snapOn = opt('snap', true), ortho = opt('ortho', true), grid = opt('grid', true), showBg = opt('bg', true);
+  let snapOn = opt('snap', true), ortho = opt('ortho', true), grid = opt('grid', true), showBg = opt('bg', true), showHalo = opt('halo', true);
+  let gang = 1;                       // aantal (1-4) voor meervoudige stopcontacten en schakelaars
+  let palQuery = '';
+  const isLine = (t: string) => t === 'wall' || t.startsWith('cable:');
   let drawing: Pt | null = null;      // beginpunt van het volgende muursegment
   let lenBuf = '';                    // getypte lengte (m)
   let cursor: Pt | null = null;
@@ -93,6 +96,7 @@ export async function renderPlan(root: HTMLElement, project: Project) {
       check('Magneet', 'snap', () => snapOn, (v) => (snapOn = v), 'Kleven aan raster en muurpunten (Shift = tijdelijk uit)'),
       check('Haaks', 'ortho', () => ortho, (v) => (ortho = v), 'Muren horizontaal/verticaal vergrendelen'),
       check('Raster', 'grid', () => grid, (v) => (grid = v)),
+      check('Cirkels', 'halo', () => showHalo, (v) => (showHalo = v), 'Cirkel (kleur van de kring) rond symbolen tonen'),
       ...(plan.asset_id ? [check('Foto', 'bg', () => showBg, (v) => (showBg = v), 'Achtergrondfoto tonen'),
         h('input', { type: 'range', min: 10, max: 100, value: Math.round((plan.bg_opacity ?? 0.6) * 100), title: 'Doorzichtigheid foto', style: { width: '80px' }, onInput: async (e: Event) => { plan.bg_opacity = Number((e.target as HTMLInputElement).value) / 100; bgImg?.setAttribute('opacity', String(plan.bg_opacity)); }, onChange: () => upsert('plan', plan) }),
         btn('Foto verwijderen', { icon: 'ImageOff', variant: 'ghost', title: 'Achtergrondfoto verwijderen als alle muren getekend zijn', onClick: async () => {
@@ -107,7 +111,7 @@ export async function renderPlan(root: HTMLElement, project: Project) {
   updScale();
 
   // ---------- palet ----------
-  const TOOLS: { id: string; label: string; icon: string; hint: string }[] = [
+  const BUILD: { id: string; label: string; icon: string; hint: string }[] = [
     { id: 'select', label: 'Selecteren', icon: 'MousePointer2', hint: 'Klik om te selecteren en te verslepen.' },
     { id: 'wall', label: 'Muur', icon: 'BrickWall', hint: 'Klik beginpunt, klik volgende punten. Typ een lengte in meter + Enter. Dubbelklik, Enter of Esc = stoppen.' },
     { id: 'window', label: 'Raam', icon: 'PanelTop', hint: 'Klik op een muur om een raam te plaatsen.' },
@@ -115,21 +119,50 @@ export async function renderPlan(root: HTMLElement, project: Project) {
     { id: 'stair', label: 'Trap', icon: 'Footprints', hint: 'Sleep een rechthoek, of klik voor een standaardtrap.' },
     { id: 'text', label: 'Tekst', icon: 'Type', hint: 'Klik om een ruimtenaam of opmerking te plaatsen.' },
   ];
+  const TOOLS = BUILD;
+  interface PalItem { tool: string; label: string; group: string; icon: () => Element; entry?: SymbolEntry }
+  const norm = (x: string) => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const items: PalItem[] = [
+    ...BUILD.map((t) => ({ tool: t.id, label: t.label, group: 'Bouw', icon: () => icon(t.icon, 18) })),
+    ...FURNITURE.map((f) => ({ tool: `furn:${f.id}`, label: f.label, group: 'Meubilair', icon: () => icon('Square', 18) })),
+    ...CABLE_STYLES.map((c) => ({ tool: `cable:${c.id}`, label: c.label, group: 'Leidingen', icon: () => icon('Cable', 18) })),
+    ...CATALOG.filter((e) => FUNC_ORDER.includes(e.func)).map((e) => ({ tool: `sym:${e.id}`, label: e.label, group: e.func, entry: e, icon: () => {
+      const g = symbolGeom(e.id, 'plan')!, ic = svg('svg', { width: 26, height: 22, viewBox: `0 0 ${g.w + 2} ${g.h + 2}`, preserveAspectRatio: 'xMidYMid meet' });
+      ic.innerHTML = symbolMarkup(e.id, 'plan', (g.w + 2) * g.anchor.x + (g.anchor.x === 0 ? 1 : 0), (g.h + 2) / 2, 1, 0, 1.6); return ic; } })),
+  ];
+  const GROUPS = ['Bouw', 'Meubilair', 'Leidingen', ...FUNC_ORDER];
+  const closed = new Set<string>(JSON.parse(localStorage.getItem(`${LS_OPT}.closed`) || '[]'));
+  const multiTool = () => { const e = tool.startsWith('sym:') ? symbolEntry(tool.slice(4)) : undefined; return !!e?.multi; };
+
+  const searchInput = h('input', { type: 'search', class: 'table-search', placeholder: 'Zoek symbool of tool…', value: palQuery,
+    onInput: (e: Event) => { palQuery = (e.target as HTMLInputElement).value; drawPalList(); } }) as HTMLInputElement;
+  const palList = h('div');
+  const gangRow = h('div', { class: 'gang-row', title: 'Aantal stopcontacten of schakelaars in één toestel' });
+  function drawGang() {
+    clear(gangRow);
+    gangRow.append(h('span', { class: 'hint' }, 'Aantal:'), ...[1, 2, 3, 4].map((n) => h('button', { class: `gang-btn ${gang === n ? 'active' : ''}`, onClick: () => { gang = n; drawGang(); } }, String(n))));
+    (gangRow as HTMLElement).style.display = multiTool() ? 'flex' : 'none';
+  }
   function drawPal() {
     clear(pal);
-    pal.append(h('h4', null, 'Tekenen'));
-    for (const t of TOOLS) pal.append(h('button', { class: `pal-item ${tool === t.id ? 'active' : ''}`, onClick: () => setTool(t.id) }, icon(t.icon, 18), t.label));
-    pal.append(h('h4', null, 'Meubilair'));
-    for (const f of FURNITURE) pal.append(h('button', { class: `pal-item ${tool === `furn:${f.id}` ? 'active' : ''}`, onClick: () => setTool(`furn:${f.id}`) }, icon('Square', 18), f.label));
-    let g = '';
-    for (const e of CATALOG.filter((x) => x.group !== 'Beschermingstoestellen')) {
-      if (e.group !== g) { g = e.group; pal.append(h('h4', null, g)); }
-      const sz = areiSize(e.planFile)!, ic = svg('svg', { width: 26, height: 22, viewBox: `0 0 ${sz.w + 2} ${sz.h + 2}`, preserveAspectRatio: 'xMidYMid meet' });
-      ic.innerHTML = areiSymbol(e.planFile, (sz.w + 2) / 2, (sz.h + 2) / 2, 1, 0, { x: 0.5, y: 0.5 }, 1.6);
-      pal.append(h('button', { class: `pal-item ${tool === `sym:${e.id}` ? 'active' : ''}`, title: e.label, onClick: () => setTool(`sym:${e.id}`) }, ic, e.label));
-    }
+    pal.append(searchInput, gangRow); drawGang(); drawPalList();
   }
-  function setTool(t: Tool) { tool = t; drawing = null; lenBuf = ''; selSym = null; if (t !== 'select') selShape = null; drawPal(); drawAll(); drawSide(); }
+  function drawPalList() {
+    clear(palList);
+    const q = norm(palQuery.trim());
+    for (const g of GROUPS) {
+      const its = items.filter((i) => i.group === g && (!q || norm(i.label).includes(q) || norm(g).includes(q)));
+      if (!its.length) continue;
+      const det = h('details', { class: 'pal-group', open: q ? true : !closed.has(g) },
+        h('summary', null, g, h('span', { class: 'pal-count' }, String(its.length))),
+        ...its.map((i) => h('button', { class: `pal-item ${tool === i.tool ? 'active' : ''}`, title: i.label, onClick: () => setTool(i.tool) }, i.icon(), i.label)));
+      det.addEventListener('toggle', () => { if (q) return; if ((det as HTMLDetailsElement).open) closed.delete(g); else closed.add(g); localStorage.setItem(`${LS_OPT}.closed`, JSON.stringify([...closed])); });
+      palList.append(det);
+    }
+    if (!palList.children.length) palList.append(h('p', { class: 'hint', style: { padding: '8px' } }, 'Niets gevonden.'));
+    pal.append(palList);
+  }
+  function setTool(t: Tool) { tool = t; drawing = null; lenBuf = ''; selSym = null; if (t !== 'select') selShape = null; drawGang(); drawPalList(); drawAll(); drawSide(); }
 
   // ---------- canvas ----------
   const s = svg('svg', { preserveAspectRatio: 'xMidYMid meet' }) as SVGSVGElement;
@@ -152,7 +185,7 @@ export async function renderPlan(root: HTMLElement, project: Project) {
     bgImg?.setAttribute('visibility', showBg ? 'visible' : 'hidden');
     drawShapes(); drawSyms(); drawGhost();
   }
-  function drawShapes() { shapesG.innerHTML = renderFloor(shapes, { scale: scale(), selId: selShape }); drawHandles(); }
+  function drawShapes() { shapesG.innerHTML = renderFloor(shapes, { scale: scale(), selId: selShape, cableColor: (id) => circuitColor(id, order) }); drawHandles(); }
 
   /** Na het verplaatsen of verkorten van een muur: ramen en deuren blijven binnen de muur. */
   async function clampOpenings(wall: Shape) {
@@ -185,13 +218,13 @@ export async function renderPlan(root: HTMLElement, project: Project) {
   function drawGhost() {
     ghostG.innerHTML = '';
     const k = scale(), lw = 0.012 * k;
-    if (tool === 'wall' && drawing && cursor) {
+    if (isLine(tool) && drawing && cursor) {
       let end = cursor;
       if (lenBuf) { const L = NUM(lenBuf) * k, d = dist(drawing, cursor) || 1; end = { x: drawing.x + ((cursor.x - drawing.x) / d) * L, y: drawing.y + ((cursor.y - drawing.y) / d) * L }; }
-      ghostG.innerHTML = `<path d="M${drawing.x} ${drawing.y} L${end.x} ${end.y}" stroke="#0066aa" stroke-opacity=".5" stroke-width="${wallThick * k}" stroke-linecap="square"/>
+      ghostG.innerHTML = `<path d="M${drawing.x} ${drawing.y} L${end.x} ${end.y}" stroke="#0066aa" stroke-opacity=".5" stroke-width="${tool === 'wall' ? wallThick * k : 0.04 * k}" stroke-linecap="square"/>
         <circle cx="${drawing.x}" cy="${drawing.y}" r="${0.06 * k}" fill="#0066aa"/>
         <text x="${(drawing.x + end.x) / 2}" y="${(drawing.y + end.y) / 2 - wallThick * k}" text-anchor="middle" font-size="${0.28 * k}" font-family="Arial" font-weight="700" fill="#0066aa" stroke="#fff" stroke-width="${0.05 * k}" paint-order="stroke">${lenBuf ? lenBuf + ' m' : fm(dist(drawing, end)) + ' m'}</text>`;
-    } else if (tool === 'wall' && cursor) {
+    } else if (isLine(tool) && cursor) {
       ghostG.innerHTML = `<circle cx="${cursor.x}" cy="${cursor.y}" r="${0.07 * k}" fill="#0066aa" fill-opacity=".6"/>`;
     } else if ((tool === 'window' || tool === 'door') && cursor) {
       const hit = nearestWall(walls(), cursor, wallThick * k + 20 / (pz.toSvg(0, 0).s || 1));
@@ -214,7 +247,7 @@ export async function renderPlan(root: HTMLElement, project: Project) {
   // ---- handvatten van de geselecteerde muur ----
   function drawHandles() {
     clear(handleG);
-    const w = shapeById(selShape); if (!w || w.kind !== 'wall' || tool !== 'select') return;
+    const w = shapeById(selShape); if (!w || (w.kind !== 'wall' && w.kind !== 'cable') || tool !== 'select') return;
     const r = 0.09 * scale();
     for (const end of [1, 2] as const) {
       const c = svg('circle', { cx: end === 1 ? w.x1! : w.x2!, cy: end === 1 ? w.y1! : w.y2!, r, fill: '#fff', stroke: '#0066aa', 'stroke-width': r * 0.35, style: 'cursor:crosshair' });
@@ -272,19 +305,21 @@ export async function renderPlan(root: HTMLElement, project: Project) {
   function drawSyms() {
     clear(layer);
     for (const sym of symbols) {
-      const col = circuitColor(sym.circuit_id, order);
-      const g = svg('g', { transform: `translate(${sym.x * W} ${sym.y * H}) rotate(${sym.rot})`, style: `color:${col};cursor:pointer` });
-      const e = symbolEntry(sym.type), k = S / 10, sz = e && areiSize(e.planFile);
-      const cx = e && sz ? sz.w * k * (0.5 - e.anchor.x) : 0, r = sz ? Math.max(sz.w, sz.h) * k * 0.62 : S * 0.75;
-      g.append(svg('circle', { class: 'halo', cx, r, fill: sym.id === selSym ? 'rgba(0,102,170,.25)' : '#ffffff99', stroke: sym.circuit_id ? col : '#e07800', 'stroke-width': sym.id === selSym ? 3 : 1.5, 'stroke-dasharray': sym.circuit_id ? '' : '4 3', 'vector-effect': 'non-scaling-stroke' }));
-      const inner = svg('g'); inner.innerHTML = e ? areiSymbol(e.planFile, 0, 0, k, 0, e.anchor, 2.2) : `<circle r="${S * 0.4}" fill="none" stroke="currentColor"/>`; g.append(inner);
+      const col = circuitColor(sym.circuit_id, order), ink = sym.id === selSym ? '#0066aa' : sym.circuit_id ? col : '#000000';
+      const g = svg('g', { transform: `translate(${sym.x * W} ${sym.y * H}) rotate(${sym.rot})`, style: `cursor:pointer` });
+      const e = symbolEntry(sym.type), k = S / 10, geo = e ? symbolGeom(sym.type, 'plan') : null;
+      const cx = geo ? geo.w * k * (0.5 - geo.anchor.x) : 0, r = geo ? Math.max(geo.w, geo.h) * k * 0.62 : S * 0.75;
+      // krans: zichtbaar als "Cirkels" aan staat (of bij selectie); anders een onzichtbaar klikvlak
+      const ring = showHalo || sym.id === selSym;
+      g.append(svg('circle', { class: 'halo', cx, r, fill: ring ? (sym.id === selSym ? 'rgba(0,102,170,.25)' : '#ffffff99') : '#ffffff01', stroke: ring ? (sym.circuit_id ? col : '#e07800') : 'none', 'stroke-width': sym.id === selSym ? 3 : 1.5, 'stroke-dasharray': sym.circuit_id ? '' : '4 3', 'vector-effect': 'non-scaling-stroke' }));
+      const inner = svg('g'); inner.innerHTML = e ? symbolMarkup(sym.type, 'plan', 0, 0, k, 0, 2.2, ink) : `<circle r="${S * 0.4}" fill="none" stroke="currentColor"/>`; g.append(inner);
       g.addEventListener('pointerdown', (ev) => startSymDrag(ev as PointerEvent, sym));
       layer.append(g);
       if (sym.label) layer.append(svg('text', { x: sym.x * W + S * 0.9, y: sym.y * H + 4, 'font-size': S * 0.55 * LBL, 'font-weight': 600, fill: col, stroke: '#fff', 'stroke-width': 3, 'paint-order': 'stroke' }, sym.label));
     }
   }
   function startSymDrag(e: PointerEvent, sym: Symbol_) {
-    if (e.button !== 0 || s.classList.contains('panning')) return;
+    if (e.button !== 0 || s.classList.contains('panning') || tool !== 'select') return;   // met een tekentool actief klik je dóór het symbool
     e.stopPropagation(); selSym = sym.id; selShape = null; tool = 'select'; drawPal(); drawSide(); drawSyms(); drawShapes();
     const start = toPlan(e), ox = sym.x, oy = sym.y; let moved = false;
     const move = (ev: PointerEvent) => {
@@ -298,30 +333,33 @@ export async function renderPlan(root: HTMLElement, project: Project) {
   }
 
   // ---- klikken met een tekentool ----
+  const lineProps = (a: Pt, b: Pt): Partial<Shape> => tool === 'wall'
+    ? { kind: 'wall', x1: a.x, y1: a.y, x2: b.x, y2: b.y, thick: wallThick }
+    : { kind: 'cable', x1: a.x, y1: a.y, x2: b.x, y2: b.y, sub: tool.slice(6), ref_id: activeCircuit };
   async function addShape(o: Partial<Shape>) { const sh = await upsert('shape', { plan_id: plan.id, flip: 0, rot: 0, ...o }) as Shape; shapes.push(sh); return sh; }
 
   s.addEventListener('pointermove', (e) => {
     cursor = toPlan(e);
-    if (tool === 'wall') cursor = snapPt(cursor as Pt & { s: number }, drawing, e.shiftKey);
+    if (isLine(tool)) cursor = snapPt(cursor as Pt & { s: number }, drawing, e.shiftKey);
     else if (rectDrag) rectDrag.b = snapPt(cursor as Pt & { s: number }, null, e.shiftKey);
     else if (tool === 'scale') cursor = snapPt(cursor as Pt & { s: number }, scaleA, e.shiftKey);
     if (tool !== 'select' && !tool.startsWith('sym:')) drawGhost();
   });
   s.addEventListener('pointerleave', () => { cursor = null; drawGhost(); });
   s.addEventListener('contextmenu', (e) => { e.preventDefault(); if (drawing || scaleA) { drawing = null; scaleA = null; lenBuf = ''; drawGhost(); } else setTool('select'); });
-  s.addEventListener('dblclick', () => { if (tool === 'wall') { drawing = null; lenBuf = ''; drawGhost(); } });
+  s.addEventListener('dblclick', () => { if (isLine(tool)) { drawing = null; lenBuf = ''; drawGhost(); } });
 
   s.addEventListener('pointerdown', async (e) => {
     if (e.button !== 0 || s.classList.contains('panning')) return;
     const p = toPlan(e), k = scale();
     if (tool === 'select') { if (selShape || selSym) { selShape = null; selSym = null; drawShapes(); drawSyms(); drawSide(); } return; }
-    if (tool === 'wall') {
+    if (isLine(tool)) {
       const q = snapPt(p, drawing, e.shiftKey);
       if (!drawing) { drawing = q; drawGhost(); return; }
       let end = q;
       if (lenBuf) { const L = NUM(lenBuf) * k, d = dist(drawing, q) || 1; end = { x: drawing.x + ((q.x - drawing.x) / d) * L, y: drawing.y + ((q.y - drawing.y) / d) * L }; lenBuf = ''; }
       if (dist(drawing, end) < 0.05 * k) return;
-      await addShape({ kind: 'wall', x1: drawing.x, y1: drawing.y, x2: end.x, y2: end.y, thick: wallThick });
+      await addShape(lineProps(drawing, end));
       drawing = end; drawShapes(); drawGhost(); return;
     }
     if (tool === 'window' || tool === 'door') {
@@ -357,7 +395,7 @@ export async function renderPlan(root: HTMLElement, project: Project) {
       plan.scale = px / m; await upsert('plan', plan); updScale(); toast(`Schaal ingesteld: 1 m = ${Math.round(plan.scale)} px`); setTool('select'); return;
     }
     if (tool.startsWith('sym:')) {
-      const id = tool.slice(4), q = placeSym(id, p, e.shiftKey);
+      const en = symbolEntry(tool.slice(4)), id = joinType(tool.slice(4), en?.multi ? gang : 1), q = placeSym(id, p, e.shiftKey);
       const sym = await upsert('symbol', { plan_id: plan.id, type: id, x: q.x / W, y: q.y / H, rot: q.rot ?? 0, circuit_id: activeCircuit }) as Symbol_;
       symbols.push(sym); selSym = sym.id; drawSyms(); drawSide();
     }
@@ -371,7 +409,11 @@ export async function renderPlan(root: HTMLElement, project: Project) {
     if (sh) {
       const fields: FieldDef[] = [], vals: Record<string, any> = { ...sh };
       let title = '';
-      if (sh.kind === 'wall') {
+      if (sh.kind === 'cable') {
+        title = 'Leiding'; vals.len = +(dist(...wallPts(sh)) / k).toFixed(3); vals.circ = sh.ref_id; vals.style = sh.sub;
+        fields.push({ key: 'len', label: 'Lengte (m)', type: 'number', step: 0.01 }, { key: 'style', label: 'Soort', type: 'select', options: CABLE_STYLES.map((c) => ({ value: c.id, label: c.label })), allowEmpty: false },
+          { key: 'circ', label: 'Kring', type: 'select', span: 2, options: circuits.map((c) => ({ value: c.id, label: `${c.nr ?? ''} ${c.name}` })) });
+      } else if (sh.kind === 'wall') {
         title = 'Muur'; vals.len = +(dist(...wallPts(sh)) / k).toFixed(3);
         fields.push({ key: 'len', label: 'Lengte (m)', type: 'number', step: 0.01 }, { key: 'thick', label: 'Dikte (m)', type: 'select', options: THICKS, numeric: true, allowEmpty: false });
       } else if (sh.kind === 'window' || sh.kind === 'door') {
@@ -389,7 +431,8 @@ export async function renderPlan(root: HTMLElement, project: Project) {
       const form = buildForm(fields, vals);
       Object.values(form.inputs).forEach((i) => i.addEventListener('change', async () => {
         const v = form.read();
-        if (sh.kind === 'wall') {
+        if (sh.kind === 'cable') { sh.sub = v.style; sh.ref_id = v.circ; }
+        if (sh.kind === 'wall' || sh.kind === 'cable') {
           if (v.len && v.len > 0) { // lengte aanpassen: tweede eindpunt schuift mee (met aansluitende muren)
             const [a, b] = wallPts(sh), d = dist(a, b) || 1, nb = { x: a.x + ((b.x - a.x) / d) * v.len * k, y: a.y + ((b.y - a.y) / d) * v.len * k };
             const linked = walls().filter((x) => x !== sh && (dist({ x: x.x1!, y: x.y1! }, b) < 2 || dist({ x: x.x2!, y: x.y2! }, b) < 2));
@@ -397,7 +440,7 @@ export async function renderPlan(root: HTMLElement, project: Project) {
             sh.x2 = nb.x; sh.y2 = nb.y;
             await upsert('shape', sh); for (const x of [sh, ...linked]) await clampOpenings(x);
           }
-          sh.thick = v.thick ?? 0.2;
+          if (sh.kind === 'wall') sh.thick = v.thick ?? 0.2;
         } else if (sh.kind === 'window' || sh.kind === 'door') {
           sh.size = v.size || sh.size; if (sh.kind === 'door') sh.flip = (v.swing ? 1 : 0) | (v.hinge ? 2 : 0);
         } else if (sh.kind === 'stair' || sh.kind === 'furniture') {
@@ -414,8 +457,8 @@ export async function renderPlan(root: HTMLElement, project: Project) {
     const counts = new Map<string, number>(); for (const x of symbols) if (x.circuit_id) counts.set(x.circuit_id, (counts.get(x.circuit_id) ?? 0) + 1);
     const unlinked = symbols.filter((x) => !x.circuit_id).length;
     if (!sym) {
-      const t = TOOLS.find((x) => x.id === tool), f = FURNITURE.find((x) => `furn:${x.id}` === tool);
-      const hint = t ? t.hint : f ? 'Sleep een rechthoek, of klik voor het standaardformaat.' : tool === 'scale' ? 'Klik twee punten waarvan je de afstand kent (bv. de breedte van een deur of een muur) en geef die in meter in.'
+      const t = TOOLS.find((x) => x.id === tool), f = FURNITURE.find((x) => `furn:${x.id}` === tool), cb = CABLE_STYLES.find((x) => `cable:${x.id}` === tool);
+      const hint = t ? t.hint : cb ? 'Klik de punten van het leidingtraject. De kleur volgt de actieve kring (bovenaan). Typ een lengte + Enter, Esc = stoppen.' : f ? 'Sleep een rechthoek, of klik voor het standaardformaat.' : tool === 'scale' ? 'Klik twee punten waarvan je de afstand kent (bv. de breedte van een deur of een muur) en geef die in meter in.'
         : tool.startsWith('sym:') ? `Klik op het plan om "${symbolEntry(tool.slice(4))?.label}" te plaatsen. Stopcontacten klikken vanzelf tegen de dichtstbijzijnde muur (Shift = vrij). Rechtsklik om te stoppen.` : '';
       side.append(h('div', null, h('h4', null, tool === 'select' ? 'Plan' : 'Tekenen'), h('p', { class: 'muted' }, hint || 'Klik een element of symbool aan om het te bewerken, of kies links een tool.'),
         !plan.scale ? h('p', { style: { color: '#b35c00' } }, '⚠ Schaal niet ingesteld: maten zijn een schatting (plan = 15 m breed). Gebruik "Schaal instellen" bovenaan.') : null,
@@ -430,12 +473,14 @@ export async function renderPlan(root: HTMLElement, project: Project) {
       { key: 'type', label: 'Symbool', type: 'select', allowEmpty: false, span: 2, options: CATALOG.map((x) => ({ value: x.id, label: x.label })) },
       { key: 'circuit_id', label: 'Kring', type: 'select', span: 2, options: circuits.map((c) => ({ value: c.id, label: `${c.nr ?? ''} ${c.name}` })) },
       ...(symbolEntry(sym.type)?.id === 'Verdeelkast' ? [{ key: 'board_id', label: 'Kast / onderverdeler', type: 'select' as const, span: 2 as const, options: boards.filter((b) => b.kind === 'bestaand').map((b) => ({ value: b.id, label: b.name })) }] : []),
+      ...(symbolEntry(sym.type)?.multi ? [{ key: 'gang', label: 'Aantal (1-4)', type: 'select' as const, options: [1, 2, 3, 4], numeric: true, allowEmpty: false }] : []),
       { key: 'label', label: 'Label' }, { key: 'rot', label: 'Rotatie (°)', type: 'number' },
       { key: 'notes', label: 'Notities', type: 'textarea', span: 2 },
     ];
-    const form = buildForm(fields, { ...sym, type: symbolEntry(sym.type)?.id ?? sym.type });
+    const form = buildForm(fields, { ...sym, type: symbolEntry(sym.type)?.id ?? sym.type, gang: splitType(sym.type).n });
     Object.values(form.inputs).forEach((i) => i.addEventListener('change', async () => {
-      const v = form.read(); Object.assign(sym, v, { rot: v.rot ?? 0 }); await upsert('symbol', sym); drawSyms();
+      const v = form.read(), en = symbolEntry(v.type); delete (v as any).gang;
+      Object.assign(sym, v, { rot: v.rot ?? 0, type: joinType(v.type, en?.multi ? (form.inputs.gang ? Number((form.inputs.gang as HTMLSelectElement).value) : 1) : 1) }); await upsert('symbol', sym); drawSyms();
     }));
     side.append(h('div', { style: { display: 'flex', alignItems: 'center' } }, h('h3', null, symbolEntry(sym.type)?.label ?? sym.type), h('span', { class: 'spacer' }), btn('', { icon: 'X', variant: 'ghost', onClick: () => { selSym = null; drawSyms(); drawSide(); } })),
       form.el,
@@ -459,14 +504,14 @@ export async function renderPlan(root: HTMLElement, project: Project) {
   window.addEventListener('keydown', async function onKey(e) {
     if (!root.isConnected) { window.removeEventListener('keydown', onKey); return; }
     if ((e.target as HTMLElement).matches?.('input,textarea,select')) return;
-    if (tool === 'wall' && drawing) {
+    if (isLine(tool) && drawing) {
       if (/^[0-9.,]$/.test(e.key)) { lenBuf += e.key; drawGhost(); e.preventDefault(); return; }
       if (e.key === 'Backspace' && lenBuf) { lenBuf = lenBuf.slice(0, -1); drawGhost(); e.preventDefault(); return; }
       if (e.key === 'Enter') {
         if (lenBuf && cursor) {
           const k = scale(), L = NUM(lenBuf) * k, d = dist(drawing, cursor) || 1;
           const end = { x: drawing.x + ((cursor.x - drawing.x) / d) * L, y: drawing.y + ((cursor.y - drawing.y) / d) * L };
-          if (L > 0) { await addShape({ kind: 'wall', x1: drawing.x, y1: drawing.y, x2: end.x, y2: end.y, thick: wallThick }); drawing = end; cursor = end; }
+          if (L > 0) { await addShape(lineProps(drawing, end)); drawing = end; cursor = end; }
           lenBuf = ''; drawShapes();
         } else drawing = null;
         drawGhost(); return;

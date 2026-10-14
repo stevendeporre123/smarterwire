@@ -1,6 +1,6 @@
 import type { Board, Circuit, Device } from './model';
 import { cableLabel, deviceTitle, isGroupParent, isFeeder, polesLabel, supplyLabel, isThreePhase, type Supply } from './devices';
-import { areiSymbol, hasAreiSymbol, symbolEntry } from './areisymbols';
+import { symbolGeom, symbolMarkup } from './areisymbols';
 import { esc } from '../lib/dom';
 
 export interface DiagramBoard { board: Board; devices: Device[] }
@@ -176,11 +176,11 @@ export function buildSingleLineSvg(opts: {
     l.forEach((ld, i) => {
       const ry = y0 - CABLE_TOP - i * ROW - 10;
       parts.push(`<text x="${x - 8}" y="${ry + 3}" class="t-s" text-anchor="end">${i + 1}</text>`, `<path d="M${x} ${ry} H${x + 15}" class="ln"/>`);
-      const file = symbolEntry(ld.type)?.schemaFile;
-      if (file && hasAreiSymbol(file)) parts.push(areiSymbol(file, x + 15 + 14, ry, 2.6));
+      const geo = symbolGeom(ld.type, 'schema'), sc = 2.6, gw = geo ? geo.w * sc : 20;
+      if (geo) parts.push(symbolMarkup(ld.type, 'schema', x + 15 + gw / 2, ry, sc));
       else parts.push(`<circle cx="${x + 29}" cy="${ry}" r="9" class="box"/>`, `<text x="${x + 29}" y="${ry + 3}" class="t-s" text-anchor="middle">?</text>`);
       const txt = [ld.n > 1 ? `${ld.n}×` : '', ld.label].filter(Boolean).join(' ');
-      if (txt) parts.push(`<text x="${x + 48}" y="${ry + 3}" class="t-s">${esc(clip(txt, 13))}</text>`);
+      if (txt) parts.push(`<text x="${x + Math.max(48, 15 + gw + 6)}" y="${ry + 3}" class="t-s">${esc(clip(txt, 13))}</text>`);
     });
     if (name) parts.push(vtext(x + 4, topY - 8, clip(name, 24), 't-c'));
     else if (!l.length) parts.push(vtext(x + 4, topY - 8, '', 't-c'));

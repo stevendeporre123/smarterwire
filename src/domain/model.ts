@@ -16,7 +16,7 @@ export interface Circuit {
 }
 export interface Plan { id: string; project_id: string; name: string; level?: string | null; asset_id?: string | null; w?: number | null; h?: number | null; scale?: number | null; bg_opacity?: number | null }
 export interface Shape {
-  id: string; plan_id: string; kind: 'wall' | 'window' | 'door' | 'stair' | 'furniture' | 'text';
+  id: string; plan_id: string; kind: 'wall' | 'window' | 'door' | 'stair' | 'furniture' | 'text' | 'cable';
   x1?: number | null; y1?: number | null; x2?: number | null; y2?: number | null; ref_id?: string | null; pos?: number | null; size?: number | null; thick?: number | null;
   flip?: number | null; rot?: number | null; label?: string | null; sub?: string | null;
 }

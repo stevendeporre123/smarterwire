@@ -66,5 +66,16 @@ try {
   await click(900, 400);   // tussenmuur selecteren → zijpaneel met lengte
   const len = root.querySelector('.side input[type=number]') as HTMLInputElement; len.value = '2,5'.replace(',', '.'); len.dispatchEvent(new Event('change', { bubbles: true })); await sleep(300);
   }
+  if (!PHOTO) {
+    const gangBtn = (n: number) => { (document.querySelectorAll('.gang-btn')[n - 1] as HTMLElement).click(); };
+    await tool('Stopcontact'); gangBtn(2); await click(1480, 950 - 140); gangBtn(3); await click(330, 1000); gangBtn(4); await click(1000, 1185 - 0);
+    await tool('Schakelaar algemeen symbool'); gangBtn(1); await click(600, 330); gangBtn(2); await click(800, 330); gangBtn(3); await click(1100, 330); gangBtn(4); await click(1250, 330);
+    await tool('Tweepolige schakelaar'); gangBtn(3); await click(700, 600);
+    await tool('Leiding in wand'); await click(700, 700); await click(700, 900); await click(1000, 900); key('Escape'); await sleep(50);
+    await tool('Leiding in buis'); await click(1100, 600); await click(1400, 600); key('Escape'); await sleep(50);
+    await tool('Selecteren');
+    if (location.search.includes('nohalo')) { [...root.querySelectorAll('label')].find((x) => x.textContent?.includes('Cirkels'))!.querySelector('input')!.click(); await sleep(100); }
+    if (location.search.includes('q=')) { const inp = root.querySelector('.pal input[type=search]') as HTMLInputElement; inp.value = 'schak'; inp.dispatchEvent(new Event('input', { bubbles: true })); await sleep(100); }
+  }
   log('klaar ' + svgEl.querySelectorAll('[data-sid]').length + ' shapes');
 } catch (e: any) { log('FOUT ' + (e?.stack ?? e)); }
