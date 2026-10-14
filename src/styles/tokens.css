@@ -1,0 +1,180 @@
+/* smartervans/style — colors & type tokens */
+:root {
+  /* --- Primary Green Scale --- */
+  --color-green-900: #003300;
+  --color-green-800: #004d00;
+  --color-green-700: #006600;
+  --color-green-600: #007500;
+  --color-green-500: #008000;   /* Brand primary */
+  --color-green-400: #1a9a1a;
+  --color-green-300: #33b333;
+  --color-green-200: #80cc80;
+  --color-green-100: #b3e0b3;
+  --color-green-50:  #e6f5e6;
+
+  /* --- Neutral Scale --- */
+  --color-neutral-950: #0d0f0d;
+  --color-neutral-900: #1a1e1a;
+  --color-neutral-800: #2b312b;
+  --color-neutral-700: #3d453d;
+  --color-neutral-600: #555e55;
+  --color-neutral-500: #6e796e;
+  --color-neutral-400: #8f9a8f;
+  --color-neutral-300: #b5bdb5;
+  --color-neutral-200: #d4d9d4;
+  --color-neutral-100: #eaecea;
+  --color-neutral-50:  #f5f6f5;
+
+  /* --- Accent: Amber (for alerts, CTAs) --- */
+  --color-amber-700: #b35c00;
+  --color-amber-500: #e07800;
+  --color-amber-300: #f5b84d;
+  --color-amber-100: #fff3e0;
+
+  /* --- Semantic Colors --- */
+  --color-bg:           #ffffff;
+  --color-bg-subtle:    var(--color-neutral-50);
+  --color-bg-muted:     var(--color-green-50);
+  --color-surface:      #ffffff;
+  --color-surface-raised: #ffffff;
+
+  --color-border:       var(--color-neutral-200);
+  --color-border-strong: var(--color-neutral-300);
+
+  --color-fg:           var(--color-neutral-900);
+  --color-fg-muted:     var(--color-neutral-600);
+  --color-fg-subtle:    var(--color-neutral-400);
+  --color-fg-inverse:   #ffffff;
+
+  --color-primary:      var(--color-green-500);
+  --color-primary-hover: var(--color-green-600);
+  --color-primary-active: var(--color-green-700);
+  --color-primary-subtle: var(--color-green-50);
+  --color-primary-text: #ffffff;
+
+  --color-success:      var(--color-green-500);
+  --color-warning:      var(--color-amber-500);
+  --color-error:        #cc2200;
+  --color-info:         #0066aa;
+
+  --color-link:         var(--color-green-600);
+  --color-link-hover:   var(--color-green-700);
+}
+
+/* ============================================
+   TYPOGRAPHY TOKENS
+   ============================================ */
+:root {
+  /* Font families */
+  --font-sans:    'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono:    'Courier New', Courier, monospace;
+
+  /* Font weights */
+  --font-light:    300;
+  --font-regular:  400;
+  --font-medium:   500;
+  --font-semibold: 600;
+  --font-bold:     700;
+  --font-extrabold: 800;
+
+  /* Type scale (rem) */
+  --text-xs:   0.75rem;    /* 12px */
+  --text-sm:   0.875rem;   /* 14px */
+  --text-base: 1rem;       /* 16px */
+  --text-lg:   1.125rem;   /* 18px */
+  --text-xl:   1.25rem;    /* 20px */
+  --text-2xl:  1.5rem;     /* 24px */
+  --text-3xl:  1.875rem;   /* 30px */
+  --text-4xl:  2.25rem;    /* 36px */
+  --text-5xl:  3rem;       /* 48px */
+  --text-6xl:  3.75rem;    /* 60px */
+
+  /* Line heights */
+  --leading-tight:  1.25;
+  --leading-snug:   1.375;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.625;
+  --leading-loose:  2;
+
+  /* Letter spacing */
+  --tracking-tight: -0.025em;
+  --tracking-normal: 0;
+  --tracking-wide:  0.025em;
+  --tracking-wider: 0.05em;
+  --tracking-widest: 0.1em;
+}
+
+/* ============================================
+   SEMANTIC TYPE STYLES
+   ============================================ */
+:root {
+  /* Display */
+  --type-display-xl: var(--font-extrabold) var(--text-6xl)/var(--leading-tight) var(--font-sans);
+  --type-display-lg: var(--font-bold) var(--text-5xl)/var(--leading-tight) var(--font-sans);
+  --type-display:    var(--font-bold) var(--text-4xl)/var(--leading-tight) var(--font-sans);
+
+  /* Headings */
+  --type-h1: var(--font-bold) var(--text-3xl)/var(--leading-snug) var(--font-sans);
+  --type-h2: var(--font-semibold) var(--text-2xl)/var(--leading-snug) var(--font-sans);
+  --type-h3: var(--font-semibold) var(--text-xl)/var(--leading-snug) var(--font-sans);
+  --type-h4: var(--font-semibold) var(--text-lg)/var(--leading-snug) var(--font-sans);
+  --type-h5: var(--font-medium) var(--text-base)/var(--leading-normal) var(--font-sans);
+
+  /* Body */
+  --type-body-lg: var(--font-regular) var(--text-lg)/var(--leading-relaxed) var(--font-sans);
+  --type-body:    var(--font-regular) var(--text-base)/var(--leading-relaxed) var(--font-sans);
+  --type-body-sm: var(--font-regular) var(--text-sm)/var(--leading-relaxed) var(--font-sans);
+
+  /* UI */
+  --type-label:   var(--font-medium) var(--text-sm)/var(--leading-normal) var(--font-sans);
+  --type-caption: var(--font-regular) var(--text-xs)/var(--leading-normal) var(--font-sans);
+  --type-overline: var(--font-semibold) var(--text-xs)/var(--leading-normal) var(--font-sans);
+  --type-code:    1rem/1.6 var(--font-mono);
+}
+
+/* ============================================
+   SPACING TOKENS
+   ============================================ */
+:root {
+  --space-0:   0;
+  --space-1:   0.25rem;   /* 4px */
+  --space-2:   0.5rem;    /* 8px */
+  --space-3:   0.75rem;   /* 12px */
+  --space-4:   1rem;      /* 16px */
+  --space-5:   1.25rem;   /* 20px */
+  --space-6:   1.5rem;    /* 24px */
+  --space-8:   2rem;      /* 32px */
+  --space-10:  2.5rem;    /* 40px */
+  --space-12:  3rem;      /* 48px */
+  --space-16:  4rem;      /* 64px */
+  --space-20:  5rem;      /* 80px */
+  --space-24:  6rem;      /* 96px */
+  --space-32:  8rem;      /* 128px */
+}
+
+/* ============================================
+   BORDER RADIUS
+   ============================================ */
+:root {
+  --radius-none:  0;
+  --radius-sm:    0.25rem;   /* 4px */
+  --radius-md:    0.5rem;    /* 8px */
+  --radius-lg:    0.75rem;   /* 12px */
+  --radius-xl:    1rem;      /* 16px */
+  --radius-2xl:   1.5rem;    /* 24px */
+  --radius-full:  9999px;
+}
+
+/* ============================================
+   SHADOW / ELEVATION
+   ============================================ */
+:root {
+  --shadow-xs:  0 1px 2px rgba(0,0,0,0.06);
+  --shadow-sm:  0 2px 6px rgba(0,0,0,0.08);
+  --shadow-md:  0 4px 16px rgba(0,0,0,0.10);
+  --shadow-lg:  0 8px 32px rgba(0,0,0,0.12);
+  --shadow-xl:  0 16px 48px rgba(0,0,0,0.16);
+  --shadow-green: 0 4px 20px rgba(0,128,0,0.20);
+}
+
+/* ============================================
