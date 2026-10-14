@@ -71,7 +71,7 @@ export function modal(opts: { title: string; body: HTMLElement; actions: (close:
 export function formModal(opts: {
   title: string; fields: FieldDef[]; values: Record<string, any>;
   onSave: (v: Record<string, any>) => Promise<void | false> | void | false;
-  onDelete?: () => Promise<void> | void; wide?: boolean; extra?: HTMLElement;
+  onDelete?: () => Promise<void> | void; wide?: boolean; extra?: HTMLElement; saveLabel?: string;
 }) {
   const form = buildForm(opts.fields, opts.values);
   const body = h('div', null, form.el, opts.extra);
@@ -81,7 +81,7 @@ export function formModal(opts: {
       opts.onDelete ? btn('Verwijderen', { icon: 'Trash2', variant: 'danger', onClick: async () => { if (confirm('Zeker verwijderen?')) { await opts.onDelete!(); close(); } } }) : h('span'),
       h('span', { class: 'spacer' }),
       btn('Annuleren', { variant: 'ghost', onClick: close }),
-      btn('Opslaan', { icon: 'Check', variant: 'primary', onClick: async () => { if ((await opts.onSave(form.read())) !== false) close(); } }),
+      btn(opts.saveLabel ?? 'Opslaan', { icon: 'Check', variant: 'primary', onClick: async () => { if ((await opts.onSave(form.read())) !== false) close(); } }),
     ],
   });
   return form;

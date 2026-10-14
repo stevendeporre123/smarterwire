@@ -64,7 +64,16 @@ export function deviceFieldKeys(kind: string, s: Supply): string[] {
     default: return ['label', 'rating_a', ...phase, 'parent_id', 'notes'];
   }
 }
-export const INSPECTORS = ['AIB-Vinçotte', 'BTV', 'Technics', 'SECO', 'Vinçotte'];
+export const INSPECTORS = ['AIB-Vinçotte', 'BTV', 'Keurtech', 'Technics', 'SECO', 'Vinçotte'];
+/** Bekende keuringsinstellingen: gegevens worden voorgesteld als je er geen invult. */
+export const INSPECTOR_PRESETS: Record<string, string> = {
+  Keurtech: 'KEURTECH vzw\nKapelsesteenweg 459\n2180 Ekeren\nBE 0809.589.912\ninfo@keurtech.be\nGSM 0470 50 79 92',
+};
+
+/** Stroomtype zoals op een eendraadschema: "3 x 400V + N ~ 50Hz". */
+export const supplyText = (s: Supply) => (s === '3N400' ? '3 x 400V + N ~ 50Hz' : s === '3x230' ? '3 x 230V ~ 50Hz' : '1 x 230V + N ~ 50Hz');
+/** "20A Voeding - 4 polig" */
+export const supplyExtra = (s: Supply, amp?: number | null) => `${amp ? amp + 'A ' : ''}Voeding - ${s === '3N400' ? 4 : s === '3x230' ? 3 : 2} polig`;
 export const SECTIONS = [1.5, 2.5, 4, 6, 10, 16];
 export const STATUSES = ['onbekend', 'gedocumenteerd', 'gecontroleerd'];
 

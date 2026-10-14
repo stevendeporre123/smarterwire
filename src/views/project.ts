@@ -9,6 +9,7 @@ import { renderBoard } from './board';
 import { renderCircuits } from './circuits';
 import { renderPlan } from './plan';
 import { renderSchema } from './schema';
+import { openPdfExport } from './pdf';
 import { ensureCircuits } from '../domain/circuits';
 import type { Project } from '../domain/model';
 
@@ -27,6 +28,7 @@ export async function renderProject(app: HTMLElement, id: string, tab: string) {
   app.append(h('div', { class: 'shell' }, topbar(project.name),
     h('nav', { class: 'tabs' }, TABS.map((t) => h('a', { class: `tab ${t.id === tab ? 'active' : ''}`, href: `#/p/${id}/${t.id}` }, icon(t.icon, 16), t.label)),
       h('span', { class: 'spacer' }),
+      btn('PDF', { icon: 'FileDown', variant: 'primary', title: 'Eendraadschema, situatieplannen en lijst van de kringen als PDF', onClick: () => openPdfExport(project) }),
       btn('Projectgegevens', { icon: 'FileText', variant: 'ghost', onClick: () => formModal({ title: 'Projectgegevens', fields: projectFields, values: { ...project, supply: project.supply ?? '1x230' }, wide: true,
         onSave: async (v) => { if (!validateProject(v)) return false; await upsert('project', { ...project, ...v }); location.reload(); } }) })),
     body));

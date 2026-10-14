@@ -5,22 +5,25 @@ import { upsert } from '../db/repo';
 import { topbar } from './shell';
 import type { Project } from '../domain/model';
 
-import { INSPECTORS, SUPPLIES } from '../domain/devices';
+import { INSPECTORS, INSPECTOR_PRESETS, SUPPLIES } from '../domain/devices';
 
 export const projectFields = [
   { key: 'name', label: 'Projectnaam', required: true, span: 2 as const },
-  { key: 'address', label: 'Adres installatie', span: 2 as const },
-  { key: 'owner', label: 'Naam eigenaar' },
+  { key: 'owner', label: 'Naam eigenaar (plaats van de installatie)', span: 2 as const },
+  { key: 'address', label: 'Adres installatie', type: 'textarea' as const, placeholder: 'Straat en nummer\npostcode gemeente', span: 2 as const },
   { key: 'client', label: 'Opdrachtgever' },
   { key: 'ean', label: 'EAN-code meter', placeholder: '18 cijfers (541…)' },
   { key: 'supply', label: 'Voeding *', type: 'select' as const, options: SUPPLIES, allowEmpty: false },
-  { key: 'inspector', label: 'Keuringsinstantie', list: INSPECTORS, span: 2 as const },
+  { key: 'supply_amp', label: 'Voeding (A)', type: 'number' as const, placeholder: 'bv. 20' },
+  { key: 'inspector', label: 'Keuringsinstelling', list: INSPECTORS },
+  { key: 'inspector_info', label: 'Adres en contact keuringsinstelling', type: 'textarea' as const, placeholder: 'Straat en nummer\npostcode gemeente\nondernemingsnummer…', span: 2 as const },
   { key: 'notes', label: 'Notities', type: 'textarea' as const, span: 2 as const },
 ];
 
 /** Valideert EAN en toont fout; geeft false terug als de gebruiker moet bijsturen. */
 export function validateProject(v: Record<string, any>): boolean {
   if (!v.name) return false;
+  if (v.inspector && !v.inspector_info && INSPECTOR_PRESETS[v.inspector]) v.inspector_info = INSPECTOR_PRESETS[v.inspector];
   if (v.ean) { v.ean = String(v.ean).replace(/\s/g, ''); if (!/^\d{18}$/.test(v.ean)) { alert('Een EAN-code bestaat uit 18 cijfers.'); return false; } }
   return true;
 }

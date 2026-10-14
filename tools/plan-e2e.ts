@@ -3,6 +3,10 @@ import '../src/styles/tokens.css';
 import '../src/styles/app.css';
 import { upsert, saveImage } from '../src/db/repo';
 import { renderPlan } from '../src/views/plan';
+import { loadPdfData, openPdfExport } from '../src/views/pdf';
+import { buildPdfPages } from '../src/domain/pdfpages';
+import { setInstaller } from '../src/domain/settings';
+import { ensureCircuits } from '../src/domain/circuits';
 
 const log = (m: string) => { let d = document.getElementById('log'); if (!d) { d = document.createElement('pre'); d.id = 'log'; d.style.cssText = 'position:fixed;right:0;top:0;background:#ffd;margin:0;z-index:9;font-size:11px'; document.body.append(d); } d.textContent += m + ' | '; };
 window.addEventListener('error', (e) => log('ERR ' + e.message));
@@ -76,6 +80,19 @@ try {
     await tool('Selecteren');
     if (location.search.includes('nohalo')) { [...root.querySelectorAll('label')].find((x) => x.textContent?.includes('Cirkels'))!.querySelector('input')!.click(); await sleep(100); }
     if (location.search.includes('q=')) { const inp = root.querySelector('.pal input[type=search]') as HTMLInputElement; inp.value = 'schak'; inp.dispatchEvent(new Event('input', { bubbles: true })); await sleep(100); }
+  }
+  if (location.search.includes('pdf')) {   // echte database → PDF-pagina's
+    await upsert('project', { ...proj, owner: 'Test Eigenaar', address: 'Teststraat 1\n9000 Gent', supply: '3N400', supply_amp: 25, inspector: 'Keurtech' });
+    await setInstaller({ name: 'Smarterhomes', address: 'Petrus De Broestraat 12\n9030 Gent', phone: '0491 59 92 67', email: 'steven@smarterhomes.be', vat: 'BE 0896.971.767', logo: '' });
+    const board: any = await upsert('board', { project_id: proj.id, name: 'Kast 1', kind: 'bestaand' });
+    const d1: any = await upsert('device', { board_id: board.id, kind: 'differentieel', poles: '4P', rating_a: 40, sens_ma: 30, dtype: 'A', row_no: 0, pos: 0, modules: 4 });
+    const d2: any = await upsert('device', { board_id: board.id, kind: 'automaat', poles: '1P+N', curve: 'B', rating_a: 16, parent_id: d1.id, row_no: 1, pos: 0, modules: 1 });
+    await ensureCircuits(proj);
+    const data = await loadPdfData({ ...proj, owner: 'Test Eigenaar', address: 'Teststraat 1\n9000 Gent', supply: '3N400', supply_amp: 25, inspector: 'Keurtech' } as any);
+    const pages = buildPdfPages(data, { states: ['bestaand'], plans: true, photos: false, list: true, photoOnPlans: false });
+    if (location.search.includes('dlg')) { await openPdfExport({ ...proj, supply: '3N400' } as any); await sleep(500); log('dialoog'); } else
+    document.body.innerHTML = '<div id="print-root" style="display:block;background:#888">' + pages.map((p) => `<section class="pdf-page" style="margin:0 auto 8px;background:#fff">${p}</section>`).join('') + '</div>';
+    log(pages.length + ' pagina’s uit de database (' + data.circuits.length + ' kringen, ' + data.symbols.length + ' symbolen)'); void d2;
   }
   log('klaar ' + svgEl.querySelectorAll('[data-sid]').length + ' shapes');
 } catch (e: any) { log('FOUT ' + (e?.stack ?? e)); }

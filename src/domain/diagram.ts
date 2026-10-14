@@ -4,6 +4,11 @@ import { symbolGeom, symbolMarkup } from './areisymbols';
 import { esc } from '../lib/dom';
 
 export interface DiagramBoard { board: Board; devices: Device[] }
+export interface DiagramResult {
+  svg: string; width: number; height: number;
+  /** plaatsen waar het schema netjes kan worden afgebroken (einde van een kring of groep); `hard` = einde van een kast */
+  cuts: { x: number; hard: boolean; depth: number }[];
+}
 export interface DiagramSymbol { circuit_id?: string | null; type: string; label?: string | null }
 
 // ---- maten (px) ----
@@ -18,9 +23,9 @@ const ROW = 38;         // hoogte per verbruiker
 const NAME_LEN = 110;
 
 type Item =
-  | { t: 'circuit'; d: Device; x: number; cs: Circuit[] }
-  | { t: 'spd'; d: Device; x: number }
-  | { t: 'child'; d: Device; stubX: number; bus: Bus };
+  | { t: 'circuit'; d: Device; x: number; cs: Circuit[]; end: number }
+  | { t: 'spd'; d: Device; x: number; end: number }
+  | { t: 'child'; d: Device; stubX: number; bus: Bus; end: number };
 interface Bus { head: Device | null; items: Item[]; level: number; x0: number; x1: number }
 interface Block { board: Board; bus: Bus; fedBy?: Circuit; fedFrom?: Board; x0: number; x1: number }
 
@@ -40,10 +45,12 @@ function breakerSymbol(x: number, y: number, kind: 'automaat' | 'diff' | 'schake
   return p.join('');
 }
 
-export function buildSingleLineSvg(opts: {
+export function buildDiagram(opts: {
   title: string; boards: DiagramBoard[]; circuits: Circuit[]; symbols: DiagramSymbol[]; which: 'bestaand' | 'nieuw';
   supply: Supply; meta?: string[]; ean?: string | null;
-}): string {
+  /** alleen het deel tussen x0 en x1 (voor PDF-pagina's); zonder titel, legende en gegevens */
+  crop?: [number, number];
+}): DiagramResult {
   const { boards, circuits, which, supply } = opts;
   const threePhase = isThreePhase(supply);
   const devId = (c: Circuit) => (which === 'bestaand' ? c.device_id : c.new_device_id);
@@ -68,9 +75,9 @@ export function buildSingleLineSvg(opts: {
 
   // ---- bussen opbouwen ----
   const buildItems = (list: Device[], level: number): Item[] => list.flatMap((d): Item[] => {
-    if (isGroupParent(d.kind)) return [{ t: 'child', d, stubX: 0, bus: { head: d, items: buildItems(kidsOf.get(d.id) ?? [], level + 1), level: level + 1, x0: 0, x1: 0 } }];
-    if (d.kind === 'overspanning') return [{ t: 'spd', d, x: 0 }];
-    return [{ t: 'circuit', d, x: 0, cs: circuitsOf.get(d.id) ?? [] }];
+    if (isGroupParent(d.kind)) return [{ t: 'child', d, stubX: 0, end: 0, bus: { head: d, items: buildItems(kidsOf.get(d.id) ?? [], level + 1), level: level + 1, x0: 0, x1: 0 } }];
+    if (d.kind === 'overspanning') return [{ t: 'spd', d, x: 0, end: 0 }];
+    return [{ t: 'circuit', d, x: 0, end: 0, cs: circuitsOf.get(d.id) ?? [] }];
   });
   const rootBus = (b: DiagramBoard): Bus => {
     const roots = kidsOf.get(`root:${b.board.id}`) ?? [];
@@ -102,6 +109,7 @@ export function buildSingleLineSvg(opts: {
       if (it.t === 'circuit') { it.x = x + SP / 2; x += SP; }
       else if (it.t === 'spd') { it.x = x + SPD_W / 2; x += SPD_W; }
       else { it.stubX = x + 18; it.bus.x0 = it.stubX; x = layout(it.bus, x + STUB_W); it.bus.x1 = Math.max(x - 10, it.stubX); }
+      it.end = x;
     }
     return x;
   };
@@ -115,6 +123,9 @@ export function buildSingleLineSvg(opts: {
     cursor = end + 50;
   }
   const totalW = Math.max(cursor, 640);
+  const cuts: { x: number; hard: boolean; depth: number }[] = [];
+  const collectCuts = (bus: Bus, depth: number) => { for (const it of bus.items) { cuts.push({ x: it.end, hard: false, depth }); if (it.t === 'child') collectCuts(it.bus, depth + 1); } };
+  for (const blk of blocks) { collectCuts(blk.bus, 0); cuts.push({ x: blk.x1 + 25, hard: true, depth: -1 }); }
 
   // ---- hoogtes: bus per niveau, kolomhoogte per kring ----
   const colHeight = (it: Item) => {
@@ -247,9 +258,10 @@ export function buildSingleLineSvg(opts: {
     legend = `<text x="40" y="${y}" class="t-w">Niet gekoppeld aan een zekering:</text>` + unlinked.map((c, i) => `<text x="40" y="${y + 16 * (i + 1)}" class="t-s">• ${esc(c.nr ?? '')} ${esc(c.name)}</text>`).join('');
     H = y + 16 * (unlinked.length + 1) + 10;
   }
-  const meta = (opts.meta ?? []).map((m, i, a) => `<text x="${totalW - 40}" y="${H - 14 - (a.length - 1 - i) * 14}" text-anchor="end" class="t-s">${esc(m)}</text>`).join('');
+  const meta = opts.crop ? '' : (opts.meta ?? []).map((m, i, a) => `<text x="${totalW - 40}" y="${H - 14 - (a.length - 1 - i) * 14}" text-anchor="end" class="t-s">${esc(m)}</text>`).join('');
   void isFeeder;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${totalW} ${H}" width="${totalW}" height="${H}" font-family="Poppins, Arial, sans-serif">
+  const [vx, vw] = opts.crop ? [opts.crop[0], opts.crop[1] - opts.crop[0]] : [0, totalW];
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vx} 0 ${vw} ${H}" width="${vw}" height="${H}" font-family="Poppins, Arial, sans-serif">
 <style>
 .ln{stroke:#000;stroke-width:1.4;fill:none}
 .ln-thick{stroke:#000;stroke-width:3.2;fill:none}
@@ -265,10 +277,13 @@ export function buildSingleLineSvg(opts: {
 .t-h{font-size:16px;font-weight:700;fill:#000}
 .t-h2{font-size:12px;font-weight:700;fill:#000}
 </style>
-<rect width="100%" height="100%" fill="#fff"/>
-<text x="40" y="30" class="t-h">${esc(opts.title)}</text>
-${parts.join('\n')}
-${legend}
+${opts.crop ? '' : `<rect width="100%" height="100%" fill="#fff"/>
+<text x="40" y="30" class="t-h">${esc(opts.title)}</text>`}
+${parts.join(String.fromCharCode(10))}
+${opts.crop ? '' : legend}
 ${meta}
 </svg>`;
+  return { svg, width: vw, height: H, cuts };
 }
+
+export const buildSingleLineSvg = (o: Parameters<typeof buildDiagram>[0]) => buildDiagram(o).svg;

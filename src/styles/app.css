@@ -132,3 +132,15 @@ input[type=checkbox] { width: auto; }
 .gang-row { display: flex; align-items: center; gap: 6px; padding: 4px 10px 8px; }
 .gang-btn { width: 30px; height: 26px; border: 1px solid #c6cfc6; background: #fff; border-radius: 5px; cursor: pointer; font-weight: 600; }
 .gang-btn.active { background: #008000; color: #fff; border-color: #008000; }
+
+/* PDF-export: pagina's staan verborgen op het scherm en worden enkel afgedrukt */
+#print-root { display: none; }
+.pdf-page { page: pdf; }
+@page pdf { size: A4 landscape; margin: 0; }
+@media print {
+  body.printing > :not(#print-root) { display: none !important; }
+  body.printing #print-root { display: block; }
+  body.printing { background: #fff; }
+  .pdf-page { width: 297mm; height: 210mm; overflow: hidden; break-after: page; page-break-after: always; }
+  .pdf-page svg { display: block; }
+}
