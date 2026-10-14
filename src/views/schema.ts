@@ -48,7 +48,7 @@ export async function renderSchema(root: HTMLElement, project: Project) {
     const bs = boards.filter((b) => b.kind === which);
     const withDevs = bs.map((board) => ({ board, devices: devices.filter((d) => d.board_id === board.id) }));
     current = buildDiagram({
-      title: `Eendraadschema – ${which === 'nieuw' ? 'nieuwe toestand' : 'bestaande toestand'}`, boards: withDevs, circuits, symbols: allLoads(), which, supply: supply(), ean: project.ean,
+      title: `Eendraadschema – ${which === 'nieuw' ? 'nieuwe toestand' : 'bestaande toestand'}`, boards: withDevs, circuits, symbols: allLoads(), which, supply: supply(), ean: project.ean, supplyCable: project.supply_cable,
       selCircuit: sel?.kind === 'circuit' ? sel.id : null, selDevice: sel?.kind === 'device' ? sel.id : null, selSupply: sel?.kind === 'supply', selLoad: sel?.kind === 'load' ? sel.id : null, showSlots: slotMode(),
       meta: [project.name, [project.owner, project.address?.replace(/\n/g, ', ')].filter(Boolean).join(' · '), project.inspector ?? '', new Date().toLocaleDateString('nl-BE')].filter(Boolean) as string[],
     }).svg;
@@ -87,24 +87,42 @@ export async function renderSchema(root: HTMLElement, project: Project) {
   }
 
   // ---------- onderdelen op een kring: plaatsen en verplaatsen ----------
-  /** Zet een nieuw (`newType`) of bestaand (`key`) onderdeel op `circuitId`, vóór het `index`-de onderdeel; de volgorde van de kring wordt hernummerd. */
-  async function placeLoad(what: { key?: string; newType?: string }, circuitId: string, index: number) {
-    const list = allLoads().filter((l) => l.circuit_id === circuitId).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-    const moving = what.key ? allLoads().find((l) => `${l.src}:${l.id}` === what.key) : undefined;
-    const from = moving ? list.findIndex((l) => l.id === moving.id && l.src === moving.src) : -1;
-    const rest = list.filter((l) => !(moving && l.id === moving.id && l.src === moving.src));
-    let at = Math.max(0, Math.min(index, list.length));
-    if (from >= 0 && at > from) at--;                                    // de plek schuift op als het onderdeel er zelf voor stond
-    const seq: { src: 'plan' | 'manual'; id: string; fresh?: boolean }[] = rest.map((l) => ({ src: l.src!, id: l.id! }));
+  type Entry = ReturnType<typeof allLoads>[number];
+  const keyOf = (l: Entry) => `${l.src}:${l.id}`;
+  /** Rijen van een kring: onderdelen met dezelfde `grp` staan naast elkaar (schakelaar gevolgd door lampen). */
+  const rowsOfCircuit = (cid: string): Entry[][] => {
+    const rows: Entry[][] = [];
+    for (const l of allLoads().filter((x) => x.circuit_id === cid).sort((a, b) => (a.order ?? 0) - (b.order ?? 0))) { const last = rows[rows.length - 1]; if (l.grp && last && last[0].grp === l.grp) last.push(l); else rows.push([l]); }
+    return rows;
+  };
+  /**
+   * Zet een nieuw (`newType`) of bestaand (`key`) onderdeel op `circuitId`: op een nieuwe rij vóór rij `index`,
+   * of (chain) achter de laatste van rij `index`. De volgorde en rij-indeling van de kring worden hernummerd.
+   */
+  async function placeLoad(what: { key?: string; newType?: string }, circuitId: string, index: number, chain = false) {
+    const before = rowsOfCircuit(circuitId);
+    const moving = what.key ? allLoads().find((l) => keyOf(l) === what.key) : undefined;
+    const fr = moving ? before.findIndex((r) => r.some((l) => keyOf(l) === what.key)) : -1;
+    const rows = before.map((r) => r.filter((l) => !moving || keyOf(l) !== what.key)).filter((r) => r.length);
+    const rowGone = fr >= 0 && before[fr].length === 1;
+    let at = Math.max(0, Math.min(index, before.length));
+    if (rowGone && fr < at) at--;
+    if (chain && fr === index && !rowGone) return;                          // op de eigen rij laten vallen: niets te doen
     const newId = uid();
-    seq.splice(at, 0, moving ? { src: moving.src!, id: moving.id! } : { src: 'manual', id: newId, fresh: true });
+    const entry: any = moving ?? { src: 'manual', id: newId, fresh: true, type: what.newType, label: null };
+    if (chain && rows.length) { const t = Math.min(at, rows.length - 1); entry.label = entry.label ?? rows[t].map((l) => l.label).find(Boolean) ?? null; rows[t].push(entry); }
+    else rows.splice(Math.min(at, rows.length), 0, [entry]);
     const now = Date.now(), stmts: Stmt[] = [];
-    seq.forEach((it, j) => {
-      const order = (j + 1) * 10;
-      if (it.fresh) stmts.push(upsertStmt('schema_load', { id: it.id, circuit_id: circuitId, type: what.newType, label: null, n: 1, pos: order }));
-      else if (it.src === 'plan') stmts.push({ sql: 'UPDATE symbol SET spos=?, circuit_id=?, updated_at=? WHERE id=?', bind: [order, circuitId, now, it.id] });
-      else stmts.push({ sql: 'UPDATE schema_load SET pos=?, circuit_id=?, updated_at=? WHERE id=?', bind: [order, circuitId, now, it.id] });
-    });
+    let order = 0;
+    for (const row of rows) {
+      const grp = row.length > 1 ? (row.find((l) => l.grp && !(l as any).fresh)?.grp ?? uid()) : null;
+      for (const l of row) {
+        order += 10;
+        if ((l as any).fresh) stmts.push(upsertStmt('schema_load', { id: l.id, circuit_id: circuitId, type: what.newType, label: l.label ?? null, n: 1, pos: order, grp }));
+        else if (l.src === 'plan') stmts.push({ sql: 'UPDATE symbol SET spos=?, sgrp=?, circuit_id=?, updated_at=? WHERE id=?', bind: [order, grp, circuitId, now, l.id] });
+        else stmts.push({ sql: 'UPDATE schema_load SET pos=?, grp=?, circuit_id=?, updated_at=? WHERE id=?', bind: [order, grp, circuitId, now, l.id] });
+      }
+    }
     await sql.batch(stmts);
     if (what.newType) sel = { kind: 'load', id: `manual:${newId}` }; else if (moving) sel = { kind: 'load', id: what.key! };
     await after();
@@ -128,8 +146,8 @@ export async function renderSchema(root: HTMLElement, project: Project) {
       else select(null);
     } else if (tool.startsWith('sym:')) {
       const en = symbolEntry(tool.slice(4)), type = joinType(tool.slice(4), en?.multi ? gang : 1);
-      if (slotEl?.getAttribute('data-slot') === 'load') await placeLoad({ newType: type }, slotEl.getAttribute('data-cid')!, Number(slotEl.getAttribute('data-idx')));
-      else if (cEl) await placeLoad({ newType: type }, cEl.getAttribute('data-cid')!, allLoads().filter((l) => l.circuit_id === cEl.getAttribute('data-cid')).length);
+      if (slotEl && slotEl.getAttribute('data-slot') !== 'bus') await placeLoad({ newType: type }, slotEl.getAttribute('data-cid')!, Number(slotEl.getAttribute('data-idx')), slotEl.getAttribute('data-slot') === 'chain');
+      else if (cEl) await placeLoad({ newType: type }, cEl.getAttribute('data-cid')!, rowsOfCircuit(cEl.getAttribute('data-cid')!).length);
       else toast('Klik op een oranje invoegpunt op een kring', 'error');
     } else if (tool === 'kring' || tool === 'diff' || tool === 'spd') {
       const kind = tool === 'kring' ? 'automaat' : tool === 'diff' ? 'differentieel' : 'overspanning';
@@ -149,9 +167,9 @@ export async function renderSchema(root: HTMLElement, project: Project) {
     const up = async (ev: PointerEvent) => {
       window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); document.body.style.cursor = '';
       if (!dragging) return;
-      const slotEl = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('[data-slot="load"]');
+      const slotEl = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('[data-slot="load"], [data-slot="chain"]');
       dragging = false; justDragged = true; setTimeout(() => { justDragged = false; }, 50);
-      if (slotEl) await placeLoad({ key }, slotEl.getAttribute('data-cid')!, Number(slotEl.getAttribute('data-idx'))); else await draw();
+      if (slotEl) await placeLoad({ key }, slotEl.getAttribute('data-cid')!, Number(slotEl.getAttribute('data-idx')), slotEl.getAttribute('data-slot') === 'chain'); else await draw();
     };
     window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
   });
@@ -243,7 +261,9 @@ export async function renderSchema(root: HTMLElement, project: Project) {
         h('label', { class: 'field span-2' }, h('span', { class: 'field-label' }, 'Adres (ruimte)'), h('input', { value: l.label ?? '', placeholder: 'bv. keuken, living', onChange: (e: Event) => save({ label: (e.target as HTMLInputElement).value || null }) })),
         h('label', { class: 'field span-2' }, h('span', { class: 'field-label' }, 'Kring'), h('select', { onChange: async (e: Event) => { const v = (e.target as HTMLSelectElement).value; if (!v) { await save({ circuit_id: null }); sel = null; drawSide(); } else await placeLoad({ key }, v, 9999); } },
           h('option', { value: '' }, '— niet gekoppeld —'), circuits.map((c) => h('option', { value: c.id, selected: c.id === l.circuit_id }, `${c.nr ?? ''} ${c.name}`))))),
-      h('p', { class: 'hint' }, 'Tip: sleep het onderdeel in het schema naar een oranje invoegpunt om het te verplaatsen.'),
+      ...(() => { const rows = l.circuit_id ? rowsOfCircuit(l.circuit_id) : [], ri = rows.findIndex((r) => r.some((x) => keyOf(x) === key)); return ri >= 0 && rows[ri].length > 1
+        ? [h('p', { class: 'hint' }, `Staat op één rij met ${rows[ri].length - 1} ander(e) onderdeel/onderdelen (bv. lamp achter schakelaar).`), btn('Op een eigen rij zetten', { variant: 'secondary', onClick: () => placeLoad({ key }, l.circuit_id!, ri + 1) })] : []; })(),
+      h('p', { class: 'hint' }, 'Tip: sleep het onderdeel in het schema naar een oranje invoegpunt: op een kring om een nieuwe rij te maken, of achter een onderdeel om op dezelfde rij (bv. lamp achter schakelaar) te komen.'),
       btn(isPlan ? 'Van de kring loskoppelen' : 'Verwijderen', { icon: isPlan ? 'Unlink' : 'Trash2', variant: 'danger', onClick: () => removeLoad(key) }));
     return el;
   }
@@ -287,7 +307,7 @@ export async function renderSchema(root: HTMLElement, project: Project) {
       const proj = project as Record<string, any>;
       if (!proj.supply) proj.supply = '1x230';
       side.append(head('Voeding', 'Net, teller en aansluiting'),
-        autoForm([{ key: 'supply', label: 'Voeding', type: 'select', options: SUPPLIES, allowEmpty: false, span: 2 }, { key: 'supply_amp', label: 'Voeding (A)', type: 'number' }, { key: 'ean', label: 'EAN-code meter', span: 2 }], proj, 'project'));
+        autoForm([{ key: 'supply', label: 'Voeding', type: 'select', options: SUPPLIES, allowEmpty: false, span: 2 }, { key: 'supply_amp', label: 'Voeding (A)', type: 'number' }, { key: 'supply_cable', label: 'Voedingskabel', placeholder: 'bv. XVB Cca 4x10', span: 2 }, { key: 'ean', label: 'EAN-code meter', span: 2 }], proj, 'project'));
       return;
     }
     if (sel.kind === 'device') {

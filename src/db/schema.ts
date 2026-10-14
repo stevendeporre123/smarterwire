@@ -122,4 +122,10 @@ export const MIGRATIONS: string[] = [
   UPDATE circuit SET install='In wand' WHERE install IN ('In muur', 'Op muur');
   UPDATE circuit SET install=NULL WHERE install IN ('In buis', 'Los');
   `,
+  // v8: onderdelen op één rij (schakelaar gevolgd door lampen) en de voedingskabel (bv. XVB Cca 4x10)
+  `
+  ALTER TABLE symbol ADD COLUMN sgrp TEXT;                   -- zelfde waarde = zelfde rij op het eendraadschema
+  ALTER TABLE schema_load ADD COLUMN grp TEXT;
+  ALTER TABLE project ADD COLUMN supply_cable TEXT;
+  `,
 ];

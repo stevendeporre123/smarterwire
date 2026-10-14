@@ -75,7 +75,7 @@ const place = (svg: string, x: number, y: number, w: number, h: number) =>
 function schemaSheets(d: PdfData, which: 'bestaand' | 'nieuw', multi: boolean): Sheet[] {
   const boards = d.boards.filter((b) => b.kind === which).map((board) => ({ board, devices: d.devices.filter((x) => x.board_id === board.id) }));
   if (!boards.length) return [];
-  const base = { title: '', boards, circuits: d.circuits, symbols: d.symbols, which, supply: supplyOf(d.project), ean: d.project.ean };
+  const base = { title: '', boards, circuits: d.circuits, symbols: d.symbols, which, supply: supplyOf(d.project), ean: d.project.ean, supplyCable: d.project.supply_cable };
   const full = buildDiagram(base);
   // pagina-indeling: breek af op het einde van een kring of groep, bij voorkeur tussen groepen (laagste niveau), anders zo ver mogelijk
   const ranges: { x0: number; x1: number; cont: boolean }[] = [];

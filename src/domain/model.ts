@@ -1,7 +1,7 @@
 import { sql } from '../db/client';
 import { list } from '../db/repo';
 
-export interface Project { id: string; name: string; address?: string; client?: string; owner?: string; ean?: string; supply?: string; supply_amp?: number | null; inspector?: string; inspector_info?: string; notes?: string; updated_at: number }
+export interface Project { id: string; name: string; address?: string; client?: string; owner?: string; ean?: string; supply?: string; supply_amp?: number | null; supply_cable?: string | null; inspector?: string; inspector_info?: string; notes?: string; updated_at: number }
 export interface Board { id: string; project_id: string; name: string; kind: 'bestaand' | 'nieuw'; location?: string; asset_id?: string | null; src_board_id?: string | null; notes?: string }
 export interface Device {
   id: string; board_id: string; parent_id?: string | null; kind: string; label?: string | null; poles?: string | null;

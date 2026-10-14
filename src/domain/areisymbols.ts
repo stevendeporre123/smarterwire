@@ -159,3 +159,6 @@ export function symbolMarkup(type: string, mode: Mode, cx: number, cy: number, s
   }
   return areiSymbol(mode === 'plan' ? e.planFile : e.schemaFile, cx, cy, scale, rot, g.anchor, weight, color);
 }
+
+/** Toestellen (wasmachine, boiler, fornuis…) staan op het einde van de kringlijn i.p.v. op een zijtak. */
+export const isApplianceType = (type: string) => symbolEntry(type)?.func === 'Toestellen';

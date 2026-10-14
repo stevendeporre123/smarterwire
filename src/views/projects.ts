@@ -15,6 +15,7 @@ export const projectFields = [
   { key: 'ean', label: 'EAN-code meter', placeholder: '18 cijfers (541…)' },
   { key: 'supply', label: 'Voeding *', type: 'select' as const, options: SUPPLIES, allowEmpty: false },
   { key: 'supply_amp', label: 'Voeding (A)', type: 'number' as const, placeholder: 'bv. 20' },
+  { key: 'supply_cable', label: 'Voedingskabel', placeholder: 'bv. XVB Cca 4x10' },
   { key: 'inspector', label: 'Keuringsinstelling', list: INSPECTORS },
   { key: 'inspector_info', label: 'Adres en contact keuringsinstelling', type: 'textarea' as const, placeholder: 'Straat en nummer\npostcode gemeente\nondernemingsnummer…', span: 2 as const },
   { key: 'notes', label: 'Notities', type: 'textarea' as const, span: 2 as const },
