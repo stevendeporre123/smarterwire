@@ -3,3 +3,6 @@ dist
 .wrangler
 *.sqlite3
 dist-test
+.dev.vars
+.env
+.env.*

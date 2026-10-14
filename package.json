@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "ai": "npx wrangler dev -c cloudflare/wrangler.toml"
   },
   "dependencies": {
     "@fontsource/poppins": "^5.1.0",

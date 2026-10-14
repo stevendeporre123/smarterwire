@@ -1,0 +1,2 @@
+# Lokale sleutel voor de AI-proxy (wrangler dev). Kopieer naar .dev.vars en vul je sleutel in; .dev.vars staat in .gitignore.
+ANTHROPIC_API_KEY=
