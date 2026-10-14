@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:v="http://schemas.microsoft.com/visio/2003/SVGExtensions/" viewBox="622.06 1660.93 371.92 33.88" width="371.92" height="33.88">
+<style type="text/css"><![CDATA[
+		.st4 {fill:none;stroke:none;stroke-linecap:round;stroke-linejoin:round;stroke-width:0.72}
+		.st7 {fill:#ffffff;stroke:#000000;stroke-linecap:round;stroke-linejoin:round;stroke-width:0.72}
+		.st80 {fill:#d9d9d9;stroke:#000000;stroke-linecap:round;stroke-linejoin:round;stroke-width:0.72}
+		.st148 {fill:#ffcc00;stroke:#000000;stroke-linecap:round;stroke-linejoin:round;stroke-width:0.72}
+		.st149 {fill:#000000;font-family:Arial;font-size:1.16666em}
+]]></style>
+<g id="group4062-7747" transform="translate(623.055,45.5381)" v:mID="4062" v:groupContext="group">
+			<title>Sheet.4062</title>
+			<g id="group3990-7748" v:mID="3990" v:groupContext="group">
+				<title>Sheet.3990</title>
+				<g id="shape3991-7749" v:mID="3991" v:groupContext="shape" transform="translate(0,-22.2168)">
+					<title>Sheet.3991</title>
+					<rect x="0" y="1645.17" width="13.3762" height="2.61374" class="st148"/>
+				</g>
+				<g id="shape3992-7751" v:mID="3992" v:groupContext="shape" transform="translate(0.691873,-6.53435)">
+					<title>Sheet.3992</title>
+					<rect x="0" y="1645.17" width="13.3762" height="2.61374" class="st148"/>
+				</g>
+				<g id="shape3993-7753" v:mID="3993" v:groupContext="shape" transform="translate(13.4685,0)">
+					<title>Sheet.3993</title>
+					<rect x="0" y="1616.41" width="19.7414" height="31.3649" class="st80"/>
+				</g>
+				<g id="shape3994-7755" v:mID="3994" v:groupContext="shape" transform="translate(33.2099,0)">
+					<title>Sheet.3994</title>
+					<rect x="0" y="1616.41" width="304.424" height="31.3649" class="st7"/>
+				</g>
+				<g id="shape3995-7757" v:mID="3995" v:groupContext="shape" transform="translate(369.921,3286.41) rotate(180)">
+					<title>Sheet.3995</title>
+					<rect x="0" y="1645.17" width="13.3762" height="2.61374" class="st148"/>
+				</g>
+				<g id="shape3996-7759" v:mID="3996" v:groupContext="shape" transform="translate(369.229,3270.73) rotate(180)">
+					<title>Sheet.3996</title>
+					<rect x="0" y="1645.17" width="13.3762" height="2.61374" class="st148"/>
+				</g>
+				<g id="shape3997-7761" v:mID="3997" v:groupContext="shape" transform="translate(356.453,3264.19) rotate(180)">
+					<title>Sheet.3997</title>
+					<rect x="0" y="1616.41" width="19.7414" height="31.3649" class="st80"/>
+				</g>
+			</g>
+			<g id="shape3998-7763" v:mID="3998" v:groupContext="shape" transform="translate(38.2345,-15.5128)">
+				<title>Sheet.3998</title>
+				<desc>OSRAM 18W/840</desc>
+				<v:textBlock v:margins="rect(4,4,4,4)" v:tabSpace="42.5197"/>
+				<v:textRect cx="89.308" cy="1641.27" width="178.62" height="13.0175"/>
+				<rect x="0" y="1634.76" width="178.616" height="13.0175" class="st4"/>
+				<text x="27.84" y="1645.47" class="st149" v:langID="2067"><v:paragraph v:horizAlign="1"/><v:tabList/>OSRAM    18W/840</text>			</g>
+			<g id="shape3999-7766" v:mID="3999" v:groupContext="shape" transform="translate(69.4488,-0.183792)">
+				<title>Sheet.3999</title>
+				<desc>COOL WHITE</desc>
+				<v:textBlock v:margins="rect(4,4,4,4)" v:tabSpace="42.5197"/>
+				<v:textRect cx="55.599" cy="1641.27" width="111.2" height="13.0175"/>
+				<rect x="0" y="1634.76" width="111.198" height="13.0175" class="st4"/>
+				<text x="11.26" y="1645.47" class="st149" v:langID="2067"><v:paragraph v:horizAlign="1"/><v:tabList/>COOL WHITE</text>			</g>
+		</g>
+</svg>

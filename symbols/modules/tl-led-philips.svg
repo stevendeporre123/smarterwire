@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:v="http://schemas.microsoft.com/visio/2003/SVGExtensions/" viewBox="611.81 1716.49 375.08 34.50" width="375.08" height="34.50">
+<style type="text/css"><![CDATA[
+		.st4 {fill:none;stroke:none;stroke-linecap:round;stroke-linejoin:round;stroke-width:0.72}
+		.st7 {fill:#ffffff;stroke:#000000;stroke-linecap:round;stroke-linejoin:round;stroke-width:0.72}
+		.st14 {fill:#00ff00;stroke:#000000;stroke-linecap:round;stroke-linejoin:round;stroke-width:0.72}
+		.st148 {fill:#ffcc00;stroke:#000000;stroke-linecap:round;stroke-linejoin:round;stroke-width:0.72}
+		.st149 {fill:#000000;font-family:Arial;font-size:1.16666em}
+]]></style>
+<g id="group4061-7725" transform="translate(612.81,102.231)" v:mID="4061" v:groupContext="group">
+			<title>Sheet.4061</title>
+			<g id="group4051-7726" transform="translate(3.15805,0)" v:mID="4051" v:groupContext="group">
+				<title>Sheet.4051</title>
+				<g id="shape4052-7727" v:mID="4052" v:groupContext="shape" transform="translate(0,-22.2168)">
+					<title>Sheet.4052</title>
+					<rect x="0" y="1645.17" width="13.3762" height="2.61374" class="st148"/>
+				</g>
+				<g id="shape4053-7729" v:mID="4053" v:groupContext="shape" transform="translate(0.691873,-6.53435)">
+					<title>Sheet.4053</title>
+					<rect x="0" y="1645.17" width="13.3762" height="2.61374" class="st148"/>
+				</g>
+				<g id="shape4054-7731" v:mID="4054" v:groupContext="shape" transform="translate(13.4685,0)">
+					<title>Sheet.4054</title>
+					<rect x="0" y="1616.41" width="19.7414" height="31.3649" class="st14"/>
+				</g>
+				<g id="shape4055-7733" v:mID="4055" v:groupContext="shape" transform="translate(33.2099,0)">
+					<title>Sheet.4055</title>
+					<rect x="0" y="1616.41" width="304.424" height="31.3649" class="st7"/>
+				</g>
+				<g id="shape4056-7735" v:mID="4056" v:groupContext="shape" transform="translate(369.921,3286.41) rotate(180)">
+					<title>Sheet.4056</title>
+					<rect x="0" y="1645.17" width="13.3762" height="2.61374" class="st148"/>
+				</g>
+				<g id="shape4057-7737" v:mID="4057" v:groupContext="shape" transform="translate(369.229,3270.73) rotate(180)">
+					<title>Sheet.4057</title>
+					<rect x="0" y="1645.17" width="13.3762" height="2.61374" class="st148"/>
+				</g>
+				<g id="shape4058-7739" v:mID="4058" v:groupContext="shape" transform="translate(356.453,3264.19) rotate(180)">
+					<title>Sheet.4058</title>
+					<rect x="0" y="1616.41" width="19.7414" height="31.3649" class="st14"/>
+				</g>
+			</g>
+			<g id="shape4059-7741" v:mID="4059" v:groupContext="shape" transform="translate(37.1406,-17.1917)">
+				<title>Sheet.4059</title>
+				<desc>PHILIPS LEDTUBE 8W</desc>
+				<v:textBlock v:margins="rect(4,4,4,4)" v:tabSpace="42.5197"/>
+				<v:textRect cx="89.308" cy="1641.27" width="178.62" height="13.0175"/>
+				<rect x="0" y="1634.76" width="178.616" height="13.0175" class="st4"/>
+				<text x="13.84" y="1645.47" class="st149" v:langID="2067"><v:paragraph v:horizAlign="1"/><v:tabList/>PHILIPS LEDTUBE  8W</text>			</g>
+			<g id="shape4060-7744" v:mID="4060" v:groupContext="shape" transform="translate(0,-3.01844)">
+				<title>Sheet.4060</title>
+				<desc>MAS Ledtube 600mm HO 8W840 T8</desc>
+				<v:textBlock v:margins="rect(4,4,4,4)" v:tabSpace="42.5197"/>
+				<v:textRect cx="173.237" cy="1641.27" width="346.48" height="13.0175"/>
+				<rect x="0" y="1634.76" width="346.474" height="13.0175" class="st4"/>
+				<text x="49.13" y="1645.47" class="st149" v:langID="2067"><v:paragraph v:horizAlign="1"/><v:tabList/>MAS Ledtube  600mm   HO  8W840  T8</text>			</g>
+		</g>
+</svg>

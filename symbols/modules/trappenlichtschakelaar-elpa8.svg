@@ -1,0 +1,546 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:v="http://schemas.microsoft.com/visio/2003/SVGExtensions/" viewBox="535.46 1488.03 43.24 149.40" width="43.24" height="149.40">
+<style type="text/css"><![CDATA[
+		.st4 {fill:none;stroke:none;stroke-linecap:round;stroke-linejoin:round;stroke-width:0.72}
+		.st7 {fill:#ffffff;stroke:#000000;stroke-linecap:round;stroke-linejoin:round;stroke-width:0.72}
+		.st21 {fill:#ffffff;stroke:#000000;stroke-linecap:round;stroke-linejoin:round;stroke-width:1.2}
+		.st22 {stroke:#000000;stroke-linecap:round;stroke-linejoin:round;stroke-width:1.2}
+		.st23 {stroke:#000000;stroke-linecap:round;stroke-linejoin:round;stroke-width:0.72}
+		.st26 {fill:#000000;font-family:Arial;font-size:0.333344em;font-weight:bold}
+		.st28 {fill:#000000;font-family:Arial;font-size:0.499992em;font-weight:bold}
+		.st29 {fill:#000000;font-family:Arial;font-size:0.416656em;font-weight:bold}
+		.st38 {stroke:#000000;stroke-linecap:round;stroke-linejoin:round;stroke-width:0.24}
+		.st39 {fill:#ffffff;stroke:#000000;stroke-linecap:round;stroke-linejoin:round;stroke-width:0.24}
+		.st45 {stroke:#595959;stroke-linecap:round;stroke-linejoin:round;stroke-width:0.24}
+		.st48 {fill:#262626;stroke:#000000;stroke-linecap:round;stroke-linejoin:round;stroke-width:0.24}
+		.st57 {fill:#ffffff;font-family:Arial;font-size:0.250008em;font-weight:bold}
+		.st66 {fill:#595959;font-family:Arial;font-size:0.416656em;font-weight:bold}
+		.st67 {fill:#3475cd;stroke:#000000;stroke-linecap:round;stroke-linejoin:round;stroke-width:0.24}
+		.st68 {fill:#ffffff;font-family:Arial;font-size:0.416656em;font-weight:bold}
+		.st69 {fill:#595959;font-family:Arial;font-size:0.333344em;font-weight:bold}
+]]></style>
+<g id="group3010-2428" transform="translate(536.459,-11.3386)" v:mID="3010" v:groupContext="group">
+			<title>Sheet.3010</title>
+			<g id="shape3011-2429" v:mID="3011" v:groupContext="shape" transform="translate(-3.59712E-14,-19.9138)">
+				<title>Sheet.3011</title>
+				<desc>18 16 A2</desc>
+				<v:textBlock v:margins="rect(4,4,4,4)" v:tabSpace="42.5197"/>
+				<v:textRect cx="20.2677" cy="1642.31" width="40.54" height="10.9371"/>
+				<rect x="0" y="1636.84" width="40.5354" height="10.9371" class="st4"/>
+				<text x="7.34" y="1643.81" class="st29" v:langID="2067"><v:paragraph v:horizAlign="1"/><v:tabList/>18    16  A2</text>			</g>
+			<g id="shape3012-2432" v:mID="3012" v:groupContext="shape" transform="translate(5.0486,-0.137921)">
+				<title>Sheet.3012</title>
+				<rect x="0" y="1500.52" width="31.1902" height="147.264" class="st21"/>
+			</g>
+			<g id="shape3013-2434" v:mID="3013" v:groupContext="shape" transform="translate(4.96755,-34.0395)">
+				<title>Sheet.3013</title>
+				<rect x="0" y="1573.2" width="31.1902" height="74.5835" class="st21"/>
+			</g>
+			<g id="shape3014-2436" v:mID="3014" v:groupContext="shape" transform="translate(5.0486,-18.2188)">
+				<title>Sheet.3014</title>
+				<path d="M0 1647.78 L31.19 1647.78" class="st22"/>
+			</g>
+			<g id="group3015-2439" transform="translate(1435.67,809.812) rotate(60)" v:mID="3015" v:groupContext="group">
+				<title>Sheet.3015</title>
+				<g id="shape3016-2440" v:mID="3016" v:groupContext="shape">
+					<title>Sheet.3016</title>
+					<ellipse cx="4.00213" cy="1643.77" rx="4.00213" ry="4.0142" class="st7"/>
+				</g>
+				<g id="shape3017-2442" v:mID="3017" v:groupContext="shape" transform="translate(1.58224,-1.68036)">
+					<title>Sheet.3017</title>
+					<path d="M1.95 1644.98 L1.95 1643.11 L2.89 1643.11 L2.89 1644.98 L4.65 1644.98 L4.65 1645.91 L2.89 1645.91 L2.89
+								 1647.78 L1.95 1647.78 L1.95 1645.91 L0 1645.91 L0 1644.98 L1.95 1644.98 Z" class="st7"/>
+				</g>
+			</g>
+			<g id="group3018-2444" transform="translate(1435.67,794.042) rotate(60)" v:mID="3018" v:groupContext="group">
+				<title>Sheet.3018</title>
+				<g id="shape3019-2445" v:mID="3019" v:groupContext="shape">
+					<title>Sheet.3019</title>
+					<ellipse cx="4.00213" cy="1643.77" rx="4.00213" ry="4.0142" class="st7"/>
+				</g>
+				<g id="shape3020-2447" v:mID="3020" v:groupContext="shape" transform="translate(1.58224,-1.68036)">
+					<title>Sheet.3020</title>
+					<path d="M1.95 1644.98 L1.95 1643.11 L2.89 1643.11 L2.89 1644.98 L4.65 1644.98 L4.65 1645.91 L2.89 1645.91 L2.89
+								 1647.78 L1.95 1647.78 L1.95 1645.91 L0 1645.91 L0 1644.98 L1.95 1644.98 Z" class="st7"/>
+				</g>
+			</g>
+			<g id="group3021-2449" transform="translate(1448.61,794.042) rotate(60)" v:mID="3021" v:groupContext="group">
+				<title>Sheet.3021</title>
+				<g id="shape3022-2450" v:mID="3022" v:groupContext="shape">
+					<title>Sheet.3022</title>
+					<ellipse cx="4.00213" cy="1643.77" rx="4.00213" ry="4.0142" class="st7"/>
+				</g>
+				<g id="shape3023-2452" v:mID="3023" v:groupContext="shape" transform="translate(1.58224,-1.68036)">
+					<title>Sheet.3023</title>
+					<path d="M1.95 1644.98 L1.95 1643.11 L2.89 1643.11 L2.89 1644.98 L4.65 1644.98 L4.65 1645.91 L2.89 1645.91 L2.89
+								 1647.78 L1.95 1647.78 L1.95 1645.91 L0 1645.91 L0 1644.98 L1.95 1644.98 Z" class="st7"/>
+				</g>
+			</g>
+			<g id="shape3024-2454" v:mID="3024" v:groupContext="shape" transform="translate(5.66929,-36.8504)">
+				<title>Sheet.3024</title>
+				<desc>Elpa 8</desc>
+				<v:textBlock v:margins="rect(4,4,4,4)" v:tabSpace="42.5197"/>
+				<v:textRect cx="17.5801" cy="1642.31" width="35.17" height="10.9371"/>
+				<rect x="0" y="1636.84" width="35.1602" height="10.9371" class="st4"/>
+				<text x="10.22" y="1643.81" class="st66" v:langID="2067"><v:paragraph v:horizAlign="1"/><v:tabList/>Elpa 8</text>			</g>
+			<g id="shape3025-2457" v:mID="3025" v:groupContext="shape" transform="translate(21.1205,-62.3622)">
+				<title>Sheet.3025</title>
+				<desc>min.</desc>
+				<v:textBlock v:margins="rect(4,4,4,4)" v:tabSpace="42.5197"/>
+				<v:textRect cx="10.0606" cy="1643.76" width="20.13" height="8.04378"/>
+				<rect x="0" y="1639.74" width="20.1212" height="8.04378" class="st4"/>
+				<text x="4.92" y="1645.26" class="st29" v:langID="2067"><v:paragraph v:horizAlign="1"/><v:tabList/>min.</text>			</g>
+			<g id="group3026-2460" transform="translate(1448.61,809.812) rotate(60)" v:mID="3026" v:groupContext="group">
+				<title>Sheet.3026</title>
+				<g id="shape3027-2461" v:mID="3027" v:groupContext="shape">
+					<title>Sheet.3027</title>
+					<ellipse cx="4.00213" cy="1643.77" rx="4.00213" ry="4.0142" class="st7"/>
+				</g>
+				<g id="shape3028-2463" v:mID="3028" v:groupContext="shape" transform="translate(1.58224,-1.68036)">
+					<title>Sheet.3028</title>
+					<path d="M1.95 1644.98 L1.95 1643.11 L2.89 1643.11 L2.89 1644.98 L4.65 1644.98 L4.65 1645.91 L2.89 1645.91 L2.89
+								 1647.78 L1.95 1647.78 L1.95 1645.91 L0 1645.91 L0 1644.98 L1.95 1644.98 Z" class="st7"/>
+				</g>
+			</g>
+			<g id="shape3029-2465" v:mID="3029" v:groupContext="shape" transform="translate(20.2738,-94.0151)">
+				<title>Sheet.3029</title>
+				<rect x="0" y="1636.09" width="14.8548" height="11.6907" class="st67"/>
+			</g>
+			<g id="shape3030-2467" v:mID="3030" v:groupContext="shape" transform="translate(21.6063,-101.629)">
+				<title>Sheet.3030</title>
+				<rect x="0" y="1644.56" width="12.3465" height="3.22296" class="st67"/>
+			</g>
+			<g id="shape3031-2469" v:mID="3031" v:groupContext="shape" transform="translate(20.3429,-106.061)">
+				<title>Sheet.3031</title>
+				<path d="M0 1647.78 L13.7 1647.78" class="st38"/>
+			</g>
+			<g id="group3032-2472" transform="translate(11.1595,-98.4492)" v:mID="3032" v:groupContext="group">
+				<title>Sheet.3032</title>
+			</g>
+			<g id="group3033-2473" transform="translate(17.9036,3195.93) rotate(180)" v:mID="3033" v:groupContext="group">
+				<title>Sheet.3033</title>
+				<g id="group3034-2474" transform="translate(2.22514,0)" v:mID="3034" v:groupContext="group">
+					<title>Sheet.3034</title>
+					<g id="shape3035-2475" v:mID="3035" v:groupContext="shape" transform="translate(1.56467,-1.0529)">
+						<title>Sheet.3035</title>
+						<path d="M0.57 1647.78 L0.62 1647.73 L0.67 1647.04 L0.78 1646.65 L1.32 1645.71 L1.47 1645.36 L1.58 1644.93
+									 L1.58 1644.58 L1.54 1644.23 L1.47 1644 L1.25 1643.65 L1.05 1643.43 L0.67 1643.22 L0.35 1643.1
+									 L0.1 1643.06 L0 1643.06" class="st45"/>
+					</g>
+					<g id="shape3036-2478" v:mID="3036" v:groupContext="shape" transform="translate(1.57671,-1.0529) scale(-1,1)">
+						<title>Sheet.3036</title>
+						<path d="M0.57 1647.78 L0.62 1647.73 L0.67 1647.04 L0.78 1646.65 L1.32 1645.71 L1.47 1645.36 L1.58 1644.93
+									 L1.58 1644.58 L1.54 1644.23 L1.47 1644 L1.25 1643.65 L1.05 1643.43 L0.67 1643.22 L0.35 1643.1
+									 L0.1 1643.06 L0 1643.06" class="st45"/>
+					</g>
+					<g id="shape3037-2481" v:mID="3037" v:groupContext="shape" transform="translate(1.01102,-1.01391)">
+						<title>Sheet.3037</title>
+						<path d="M0 1647.74 L0.22 1647.78 L0.51 1647.78 L0.9 1647.78 L1.12 1647.74" class="st45"/>
+					</g>
+					<g id="shape3038-2484" v:mID="3038" v:groupContext="shape" transform="translate(0.866587,-0.155986)">
+						<title>Sheet.3038</title>
+						<path d="M0.08 1646.88 L0.15 1646.98 L0 1647.08 L0.13 1647.21 L0.04 1647.31 L0.12 1647.39 L0.04 1647.47 L0.35
+									 1647.78 L0.69 1647.78" class="st45"/>
+					</g>
+					<g id="shape3039-2487" v:mID="3039" v:groupContext="shape" transform="translate(2.20258,-0.155986) scale(-1,1)">
+						<title>Sheet.3039</title>
+						<path d="M0.08 1646.88 L0.15 1646.98 L0 1647.08 L0.13 1647.21 L0.04 1647.31 L0.12 1647.39 L0.04 1647.47 L0.35
+									 1647.78 L0.69 1647.78" class="st45"/>
+					</g>
+					<g id="shape3040-2490" v:mID="3040" v:groupContext="shape" transform="translate(1.22766,0)">
+						<title>Sheet.3040</title>
+						<path d="M0 1647.62 L0.14 1647.78 L0.47 1647.78 L0.63 1647.62" class="st45"/>
+					</g>
+					<g id="shape3041-2493" v:mID="3041" v:groupContext="shape" transform="translate(0.908936,-0.389964)">
+						<title>Sheet.3041</title>
+						<path d="M0 1647.7 L0.39 1647.78 L0.79 1647.78 L1.25 1647.7" class="st45"/>
+					</g>
+					<g id="shape3042-2496" v:mID="3042" v:groupContext="shape" transform="translate(0.938803,-0.584946)">
+						<title>Sheet.3042</title>
+						<path d="M0 1647.74 L0.37 1647.78 L0.75 1647.78 L1.19 1647.74" class="st45"/>
+					</g>
+					<g id="shape3043-2499" v:mID="3043" v:groupContext="shape" transform="translate(0.890882,-0.779928)">
+						<title>Sheet.3043</title>
+						<path d="M0 1647.7 L0.41 1647.78 L0.83 1647.78 L1.31 1647.7" class="st45"/>
+					</g>
+					<g id="shape3044-2502" v:mID="3044" v:groupContext="shape" transform="translate(1.15545,-1.01391)">
+						<title>Sheet.3044</title>
+						<path d="M0.07 1647.78 L0 1646.92 a0.361078 0.116989 -180 0 0 0.361078 0.116989 a0.397186 0.116989 -180 0
+									 0 0.397186 -0.116989 L0.65 1647.78" class="st45"/>
+					</g>
+					<g id="shape3045-2505" v:mID="3045" v:groupContext="shape" transform="translate(0.938803,-1.77082)">
+						<title>Sheet.3045</title>
+						<path d="M0.4 1647.78 L0 1645.77 L0.2 1645.98 L0.29 1645.73 L0.36 1646 L0.51 1645.73 L0.61 1646.04 L0.72
+									 1645.73 L0.83 1646.04 L0.94 1645.69 L1.01 1646.04 L1.16 1645.65 L1.16 1646.04 L1.34 1645.73
+									 L0.83 1647.77" class="st45"/>
+					</g>
+				</g>
+				<g id="shape3046-2508" v:mID="3046" v:groupContext="shape" transform="translate(1214.44,525.886) rotate(47.2026)">
+					<title>Sheet.3046</title>
+					<path d="M0 1647.78 L1.16 1647.78" class="st45"/>
+				</g>
+				<g id="shape3047-2511" v:mID="3047" v:groupContext="shape" transform="translate(5.89008,-4.07513)">
+					<title>Sheet.3047</title>
+					<path d="M0 1647.78 L1.57 1647.78" class="st45"/>
+				</g>
+				<g id="shape3048-2514" v:mID="3048" v:groupContext="shape" transform="translate(1349.08,2596.4) rotate(125.46)">
+					<title>Sheet.3048</title>
+					<path d="M0 1647.78 L2.26 1647.78" class="st45"/>
+				</g>
+				<g id="shape3049-2517" v:mID="3049" v:groupContext="shape"
+						transform="translate(-1643.98,1640.03) rotate(-90) scale(-1,1)">
+					<title>Sheet.3049</title>
+					<path d="M0 1647.78 L1.55 1647.78" class="st45"/>
+				</g>
+				<g id="shape3050-2520" v:mID="3050" v:groupContext="shape"
+						transform="translate(-1206.98,525.886) rotate(-47.2026) scale(-1,1)">
+					<title>Sheet.3050</title>
+					<path d="M0 1647.78 L1.16 1647.78" class="st45"/>
+				</g>
+				<g id="shape3051-2523" v:mID="3051" v:groupContext="shape" transform="translate(1.57069,-4.07513) scale(-1,1)">
+					<title>Sheet.3051</title>
+					<path d="M0 1647.78 L1.57 1647.78" class="st45"/>
+				</g>
+				<g id="shape3052-2526" v:mID="3052" v:groupContext="shape"
+						transform="translate(-1341.62,2596.4) rotate(54.5396) scale(1,-1)">
+					<title>Sheet.3052</title>
+					<path d="M0 1647.78 L2.26 1647.78" class="st45"/>
+				</g>
+			</g>
+			<g id="shape3053-2529" v:mID="3053" v:groupContext="shape" transform="translate(8.70406,-17.0079)">
+				<title>Sheet.3053</title>
+				<desc>L</desc>
+				<v:textBlock v:margins="rect(4,4,4,4)" v:tabSpace="42.5197"/>
+				<v:textRect cx="4.57711" cy="1643.76" width="9.16" height="8.04378"/>
+				<rect x="0" y="1639.74" width="9.15421" height="8.04378" class="st4"/>
+				<text x="4" y="1645.56" class="st28" v:langID="2067"><v:paragraph v:horizAlign="1"/><v:tabList/>L</text>			</g>
+			<g id="shape3054-2532" v:mID="3054" v:groupContext="shape" transform="translate(7.93701,0)">
+				<title>Sheet.3054</title>
+				<desc>N</desc>
+				<v:textBlock v:margins="rect(4,4,4,4)" v:tabSpace="42.5197"/>
+				<v:textRect cx="4.57711" cy="1643.76" width="9.16" height="8.04378"/>
+				<rect x="0" y="1639.74" width="9.15421" height="8.04378" class="st4"/>
+				<text x="4" y="1645.56" class="st28" v:langID="2067"><v:paragraph v:horizAlign="1"/><v:tabList/>N</text>			</g>
+			<g id="shape3055-2535" v:mID="3055" v:groupContext="shape" transform="translate(22.1102,-17.0079)">
+				<title>Sheet.3055</title>
+				<desc>3</desc>
+				<v:textBlock v:margins="rect(4,4,4,4)" v:tabSpace="42.5197"/>
+				<v:textRect cx="4.57711" cy="1643.76" width="9.16" height="8.04378"/>
+				<rect x="0" y="1639.74" width="9.15421" height="8.04378" class="st4"/>
+				<text x="4" y="1645.56" class="st28" v:langID="2067"><v:paragraph v:horizAlign="1"/><v:tabList/>3</text>			</g>
+			<g id="shape3056-2538" v:mID="3056" v:groupContext="shape" transform="translate(21.7851,-0.46016)">
+				<title>Sheet.3056</title>
+				<desc>4</desc>
+				<v:textBlock v:margins="rect(4,4,4,4)" v:tabSpace="42.5197"/>
+				<v:textRect cx="4.57711" cy="1643.76" width="9.16" height="8.04378"/>
+				<rect x="0" y="1639.74" width="9.15421" height="8.04378" class="st4"/>
+				<text x="4" y="1645.56" class="st28" v:langID="2067"><v:paragraph v:horizAlign="1"/><v:tabList/>4</text>			</g>
+			<g id="shape3057-2541" v:mID="3057" v:groupContext="shape" transform="translate(19.8425,-104.396)">
+				<title>Sheet.3057</title>
+				<rect x="0" y="1645.31" width="15.874" height="2.47088" class="st67"/>
+			</g>
+			<g id="shape3058-2543" v:mID="3058" v:groupContext="shape" transform="translate(4.96755,-83.9402)">
+				<title>Sheet.3058</title>
+				<path d="M0 1647.78 L15.76 1647.78" class="st38"/>
+			</g>
+			<g id="shape3059-2546" v:mID="3059" v:groupContext="shape" transform="translate(21.1829,-64.9796)">
+				<title>Sheet.3059</title>
+				<path d="M3.2 1645.29 L0 1646.54 L3.2 1647.78" class="st23"/>
+			</g>
+			<g id="shape3060-2549" v:mID="3060" v:groupContext="shape" transform="translate(5.52756,-51.6371)">
+				<title>Sheet.3060</title>
+				<rect x="0" y="1616.92" width="10.5945" height="30.8622" class="st67"/>
+			</g>
+			<g id="shape3061-2551" v:mID="3061" v:groupContext="shape" transform="translate(4.96755,-50.2552)">
+				<title>Sheet.3061</title>
+				<path d="M0 1647.78 L15.76 1647.78" class="st38"/>
+			</g>
+			<g id="group3062-2554" transform="translate(5.52756,-51.1765)" v:mID="3062" v:groupContext="group">
+				<title>Sheet.3062</title>
+				<g id="group3063-2555" transform="translate(-114.094,-19.5002) rotate(-4)" v:mID="3063" v:groupContext="group">
+					<title>Sheet.3063</title>
+					<g id="shape3064-2556" v:mID="3064" v:groupContext="shape" transform="translate(0,-1.12568)">
+						<title>Sheet.3064</title>
+						<path d="M0.24 1646.37 L4.04 1646.37 L3.56 1647.78 L0 1647.78 L0.24 1646.37 Z" class="st67"/>
+					</g>
+					<g id="shape3065-2558" v:mID="3065" v:groupContext="shape" transform="translate(0,3294.43) scale(1,-1)">
+						<title>Sheet.3065</title>
+						<path d="M0.24 1646.65 L4.04 1646.65 L3.56 1647.78 L0 1647.78 L0.24 1646.65 Z" class="st67"/>
+					</g>
+					<g id="shape3066-2560" v:mID="3066" v:groupContext="shape" transform="translate(3.56319,0)">
+						<title>Sheet.3066</title>
+						<path d="M0 1646.65 L0.48 1645.25 L0.48 1647.78 L0 1646.65 Z" class="st67"/>
+					</g>
+				</g>
+				<g id="group3067-2562" transform="translate(-113.577,-8.80599) rotate(-4)" v:mID="3067" v:groupContext="group">
+					<title>Sheet.3067</title>
+					<g id="shape3068-2563" v:mID="3068" v:groupContext="shape" transform="translate(0,-1.30606)">
+						<title>Sheet.3068</title>
+						<path d="M0.25 1646.15 L4.3 1646.15 L3.79 1647.78 L0 1647.78 L0.25 1646.15 Z" class="st67"/>
+					</g>
+					<g id="shape3069-2565" v:mID="3069" v:groupContext="shape" transform="translate(0,3294.25) scale(1,-1)">
+						<title>Sheet.3069</title>
+						<path d="M0.25 1646.47 L4.3 1646.47 L3.79 1647.78 L0 1647.78 L0.25 1646.47 Z" class="st67"/>
+					</g>
+					<g id="shape3070-2567" v:mID="3070" v:groupContext="shape" transform="translate(3.79381,0)">
+						<title>Sheet.3070</title>
+						<path d="M0 1646.47 L0.51 1644.84 L0.51 1647.78 L0 1646.47 Z" class="st67"/>
+					</g>
+				</g>
+				<g id="group3071-2569" transform="translate(-114.169,-0.632826) rotate(-4)" v:mID="3071" v:groupContext="group">
+					<title>Sheet.3071</title>
+					<g id="shape3072-2570" v:mID="3072" v:groupContext="shape" transform="translate(0,-0.556619)">
+						<title>Sheet.3072</title>
+						<path d="M0.24 1647.08 L4.04 1647.08 L3.56 1647.78 L0 1647.78 L0.24 1647.08 Z" class="st67"/>
+					</g>
+					<g id="shape3073-2572" v:mID="3073" v:groupContext="shape" transform="translate(0,3295) scale(1,-1)">
+						<title>Sheet.3073</title>
+						<path d="M0.24 1646.1 L3.97 1646.2 L3.56 1647.78 L0 1647.78 L0.24 1646.1 Z" class="st67"/>
+					</g>
+				</g>
+				<g id="shape3074-2574" v:mID="3074" v:groupContext="shape" transform="translate(4.28846,-3.94187)">
+					<title>Sheet.3074</title>
+					<path d="M0.43 1645.53 L0.57 1647.78 L0 1646.26 L0.43 1645.53 Z" class="st67"/>
+				</g>
+				<g id="shape3075-2576" v:mID="3075" v:groupContext="shape" transform="translate(0.756749,-9.57311)">
+					<title>Sheet.3075</title>
+					<path d="M0.5 1646.65 L0 1647.78 L9.33 1647.22 L9.84 1646.09 L0.5 1646.65 Z" class="st67"/>
+				</g>
+				<g id="shape3076-2578" v:mID="3076" v:groupContext="shape" transform="translate(0.756749,-7.88374)">
+					<title>Sheet.3076</title>
+					<path d="M0 1646.09 L0.5 1647.78 L9.59 1647.22 L9.33 1645.53 L0 1646.09 Z" class="st67"/>
+				</g>
+				<g id="shape3077-2580" v:mID="3077" v:groupContext="shape">
+					<title>Sheet.3077</title>
+					<path d="M0.5 1645.81 L9.08 1645.25 L9.08 1647.22 L0 1647.78 L0.5 1645.81 Z" class="st67"/>
+				</g>
+				<g id="shape3078-2582" v:mID="3078" v:groupContext="shape" transform="translate(1.009,-19.7093)">
+					<title>Sheet.3078</title>
+					<path d="M0.25 1646.65 L9.33 1645.81 L9.08 1647.22 L0 1647.78 L0.25 1646.65 Z" class="st67"/>
+				</g>
+				<g id="shape3079-2584" v:mID="3079" v:groupContext="shape" transform="translate(1.009,-17.7384)">
+					<title>Sheet.3079</title>
+					<path d="M0 1645.81 L0.5 1647.78 L9.59 1646.93 L9.08 1645.25 L0 1645.81 Z" class="st67"/>
+				</g>
+				<g id="shape3080-2586" v:mID="3080" v:groupContext="shape" transform="translate(0.25225,-28.4378)">
+					<title>Sheet.3080</title>
+					<path d="M0 1646.93 L0.25 1647.78 L9.33 1647.22 L8.83 1646.09 L0 1646.93 Z" class="st67"/>
+				</g>
+				<g id="shape3081-2588" v:mID="3081" v:groupContext="shape" transform="translate(0,-26.0435)">
+					<title>Sheet.3081</title>
+					<path d="M9.08 1643.7 L9.33 1642.57 L0 1643.41 L0.92 1647.78" class="st38"/>
+				</g>
+				<g id="shape3082-2591" v:mID="3082" v:groupContext="shape" transform="translate(1648.63,1449.35) rotate(84.0982)">
+					<title>Sheet.3082</title>
+					<path d="M0 1647.78 L7.36 1647.78" class="st38"/>
+				</g>
+				<g id="shape3083-2594" v:mID="3083" v:groupContext="shape" transform="translate(1658.37,1629.2) rotate(90)">
+					<title>Sheet.3083</title>
+					<path d="M0 1647.78 L7.32 1647.78" class="st38"/>
+				</g>
+				<g id="shape3084-2597" v:mID="3084" v:groupContext="shape" transform="translate(9.08099,-2.53406)">
+					<title>Sheet.3084</title>
+					<path d="M1.26 1641.87 L0.76 1647.78 L0 1647.78" class="st38"/>
+				</g>
+				<g id="shape3085-2600" v:mID="3085" v:groupContext="shape" transform="translate(-1545.77,1076.42) rotate(-69.7847)">
+					<title>Sheet.3085</title>
+					<path d="M0 1647.78 L1.66 1647.78" class="st38"/>
+				</g>
+				<g id="shape3086-2603" v:mID="3086" v:groupContext="shape" transform="translate(-1624.28,1370.11) rotate(-80.5067)">
+					<title>Sheet.3086</title>
+					<path d="M0 1647.78 L2.01 1647.78" class="st38"/>
+				</g>
+				<g id="shape3087-2606" v:mID="3087" v:groupContext="shape" transform="translate(-1624.81,1370.49) rotate(-80.6892)">
+					<title>Sheet.3087</title>
+					<path d="M0 1647.78 L2.15 1647.78" class="st38"/>
+				</g>
+				<g id="shape3088-2609" v:mID="3088" v:groupContext="shape" transform="translate(-1644.73,1558.95) rotate(-87.4583)">
+					<title>Sheet.3088</title>
+					<path d="M0 1647.78 L1.99 1647.78" class="st38"/>
+				</g>
+				<g id="shape3089-2612" v:mID="3089" v:groupContext="shape" transform="translate(-1642.67,1739.54) rotate(-93.9183)">
+					<title>Sheet.3089</title>
+					<path d="M0 1647.78 L2.69 1647.78" class="st38"/>
+				</g>
+				<g id="shape3090-2615" v:mID="3090" v:groupContext="shape" transform="translate(9.08099,-0.563124)">
+					<title>Sheet.3090</title>
+					<rect x="0" y="1645.81" width="0.756749" height="1.97093" class="st67"/>
+				</g>
+			</g>
+			<g id="shape3091-2617" v:mID="3091" v:groupContext="shape" transform="translate(8.09491,-61.7368)">
+				<title>Sheet.3091</title>
+				<desc>7</desc>
+				<v:textBlock v:margins="rect(4,4,4,4)" v:tabSpace="42.5197"/>
+				<v:textRect cx="4.57711" cy="1643.76" width="9.16" height="8.04378"/>
+				<rect x="0" y="1639.74" width="9.15421" height="8.04378" class="st4"/>
+				<text x="4" y="1645.26" class="st68" v:langID="2067"><v:paragraph v:horizAlign="1"/><v:tabList/>7</text>			</g>
+			<g id="shape3092-2620" v:mID="3092" v:groupContext="shape" transform="translate(5.63352,-72.1524)">
+				<title>Sheet.3092</title>
+				<desc>6.5</desc>
+				<v:textBlock v:margins="rect(4,4,4,4)" v:tabSpace="42.5197"/>
+				<v:textRect cx="7.54741" cy="1643.76" width="15.1" height="8.04378"/>
+				<rect x="0" y="1639.74" width="15.0948" height="8.04378" class="st4"/>
+				<text x="5.46" y="1644.66" class="st57" v:langID="2067"><v:paragraph v:horizAlign="1"/><v:tabList/>6.5</text>			</g>
+			<g id="shape3093-2623" v:mID="3093" v:groupContext="shape" transform="translate(5.63352,-52.5584)">
+				<title>Sheet.3093</title>
+				<desc>7.5</desc>
+				<v:textBlock v:margins="rect(4,4,4,4)" v:tabSpace="42.5197"/>
+				<v:textRect cx="7.54741" cy="1643.76" width="15.1" height="8.04378"/>
+				<rect x="0" y="1639.74" width="15.0948" height="8.04378" class="st4"/>
+				<text x="5.46" y="1644.66" class="st57" v:langID="2067"><v:paragraph v:horizAlign="1"/><v:tabList/>7.5</text>			</g>
+			<g id="shape3094-2626" v:mID="3094" v:groupContext="shape" transform="translate(9.44291,-121.653)">
+				<title>Sheet.3094</title>
+				<path d="M0 1647.78 L0 1630.74 L5.53 1630.74" class="st23"/>
+			</g>
+			<g id="shape3095-2629" v:mID="3095" v:groupContext="shape" transform="translate(26.4862,-119.35)">
+				<title>Sheet.3095</title>
+				<path d="M0 1627.97 L4.61 1627.97 L4.61 1647.78" class="st23"/>
+			</g>
+			<g id="shape3096-2632" v:mID="3096" v:groupContext="shape" transform="translate(1664.59,1514.61) rotate(90)">
+				<title>Sheet.3096</title>
+				<path d="M0 1647.78 L11.52 1647.78" class="st23"/>
+			</g>
+			<g id="shape3097-2635" v:mID="3097" v:groupContext="shape" transform="translate(1671.96,1522.44) rotate(90)">
+				<title>Sheet.3097</title>
+				<path d="M0 1647.78 L6.45 1647.78" class="st23"/>
+			</g>
+			<g id="shape3098-2638" v:mID="3098" v:groupContext="shape" transform="translate(1671.96,1515.53) rotate(90)">
+				<title>Sheet.3098</title>
+				<path d="M0 1647.78 L3.22 1647.78" class="st23"/>
+			</g>
+			<g id="shape3099-2641" v:mID="3099" v:groupContext="shape" transform="translate(14.9705,-136.393)">
+				<title>Sheet.3099</title>
+				<ellipse cx="2.30315" cy="1645.48" rx="2.30315" ry="2.30315" class="st39"/>
+			</g>
+			<g id="shape3100-2643" v:mID="3100" v:groupContext="shape" transform="translate(21.8799,-136.854)">
+				<title>Sheet.3100</title>
+				<ellipse cx="2.30315" cy="1645.48" rx="2.30315" ry="2.30315" class="st39"/>
+			</g>
+			<g id="shape3101-2645" v:mID="3101" v:groupContext="shape" transform="translate(14.9492,-131.015)">
+				<title>Sheet.3101</title>
+				<ellipse cx="2.30315" cy="1645.48" rx="2.30315" ry="2.30315" class="st39"/>
+			</g>
+			<g id="shape3102-2647" v:mID="3102" v:groupContext="shape" transform="translate(21.8799,-130.865)">
+				<title>Sheet.3102</title>
+				<ellipse cx="2.30315" cy="1645.48" rx="2.30315" ry="2.30315" class="st39"/>
+			</g>
+			<g id="shape3103-2649" v:mID="3103" v:groupContext="shape" transform="translate(29.0197,-125.568)">
+				<title>Sheet.3103</title>
+				<ellipse cx="2.07283" cy="1645.71" rx="2.07283" ry="2.07283" class="st39"/>
+			</g>
+			<g id="group3104-2651" transform="translate(1193.48,354.982) rotate(45)" v:mID="3104" v:groupContext="group">
+				<title>Sheet.3104</title>
+				<g id="shape3105-2652" v:mID="3105" v:groupContext="shape" transform="translate(1649.73,1643.87) rotate(90)">
+					<title>Sheet.3105</title>
+					<path d="M0 1647.78 L3.91 1647.78" class="st38"/>
+				</g>
+				<g id="shape3106-2655" v:mID="3106" v:groupContext="shape" transform="translate(3.90857,3293.6) rotate(180)">
+					<title>Sheet.3106</title>
+					<path d="M0 1647.78 L3.91 1647.78" class="st38"/>
+				</g>
+			</g>
+			<g id="shape3107-2658" v:mID="3107" v:groupContext="shape" transform="translate(1453.01,701.69) rotate(60.2551)">
+				<title>Sheet.3107</title>
+				<path d="M0 1647.78 L3.71 1647.78" class="st23"/>
+			</g>
+			<g id="shape3108-2661" v:mID="3108" v:groupContext="shape" transform="translate(20.498,-127.18)">
+				<title>Sheet.3108</title>
+				<path d="M0 1647.78 L2.63 1647.78" class="st23"/>
+			</g>
+			<g id="shape3109-2664" v:mID="3109" v:groupContext="shape" transform="translate(1668.28,1519.22) rotate(90)">
+				<title>Sheet.3109</title>
+				<path d="M0 1647.78 L2.76 1647.78" class="st23"/>
+			</g>
+			<g id="shape3110-2667" v:mID="3110" v:groupContext="shape" transform="translate(20.498,-128.562)">
+				<title>Sheet.3110</title>
+				<path d="M0 1647.78 L0.51 1647.78" class="st23"/>
+			</g>
+			<g id="shape3111-2670" v:mID="3111" v:groupContext="shape" transform="translate(20.498,-125.799)">
+				<title>Sheet.3111</title>
+				<path d="M0 1647.78 L0.55 1647.78" class="st23"/>
+			</g>
+			<g id="shape3112-2673" v:mID="3112" v:groupContext="shape" transform="translate(12.1683,-134.758)">
+				<title>Sheet.3112</title>
+				<desc>L</desc>
+				<v:textBlock v:margins="rect(4,4,4,4)" v:tabSpace="42.5197"/>
+				<v:textRect cx="4.57711" cy="1643.76" width="9.16" height="8.04378"/>
+				<rect x="0" y="1639.74" width="9.15421" height="8.04378" class="st4"/>
+				<text x="4" y="1644.96" class="st26" v:langID="2067"><v:paragraph v:horizAlign="1"/><v:tabList/>L</text>			</g>
+			<g id="shape3113-2676" v:mID="3113" v:groupContext="shape" transform="translate(11.7869,-129.003)">
+				<title>Sheet.3113</title>
+				<desc>N</desc>
+				<v:textBlock v:margins="rect(4,4,4,4)" v:tabSpace="42.5197"/>
+				<v:textRect cx="4.57711" cy="1643.76" width="9.16" height="8.04378"/>
+				<rect x="0" y="1639.74" width="9.15421" height="8.04378" class="st4"/>
+				<text x="4" y="1644.96" class="st26" v:langID="2067"><v:paragraph v:horizAlign="1"/><v:tabList/>N</text>			</g>
+			<g id="shape3114-2679" v:mID="3114" v:groupContext="shape" transform="translate(19.0194,-134.758)">
+				<title>Sheet.3114</title>
+				<desc>3</desc>
+				<v:textBlock v:margins="rect(4,4,4,4)" v:tabSpace="42.5197"/>
+				<v:textRect cx="4.57711" cy="1643.76" width="9.16" height="8.04378"/>
+				<rect x="0" y="1639.74" width="9.15421" height="8.04378" class="st4"/>
+				<text x="4" y="1644.96" class="st26" v:langID="2067"><v:paragraph v:horizAlign="1"/><v:tabList/>3</text>			</g>
+			<g id="shape3115-2682" v:mID="3115" v:groupContext="shape" transform="translate(18.3991,-129.003)">
+				<title>Sheet.3115</title>
+				<desc>4</desc>
+				<v:textBlock v:margins="rect(4,4,4,4)" v:tabSpace="42.5197"/>
+				<v:textRect cx="4.57711" cy="1643.76" width="9.16" height="8.04378"/>
+				<rect x="0" y="1639.74" width="9.15421" height="8.04378" class="st4"/>
+				<text x="4" y="1644.96" class="st26" v:langID="2067"><v:paragraph v:horizAlign="1"/><v:tabList/>4</text>			</g>
+			<g id="shape3116-2685" v:mID="3116" v:groupContext="shape" transform="translate(4.02479,-114.059)">
+				<title>Sheet.3116</title>
+				<desc>L</desc>
+				<v:textBlock v:margins="rect(4,4,4,4)" v:tabSpace="42.5197"/>
+				<v:textRect cx="4.57711" cy="1643.76" width="9.16" height="8.04378"/>
+				<rect x="0" y="1639.74" width="9.15421" height="8.04378" class="st4"/>
+				<text x="4" y="1645.26" class="st29" v:langID="2067"><v:paragraph v:horizAlign="1"/><v:tabList/>L</text>			</g>
+			<g id="shape3117-2688" v:mID="3117" v:groupContext="shape" transform="translate(10.9244,-113.478)">
+				<title>Sheet.3117</title>
+				<desc>N</desc>
+				<v:textBlock v:margins="rect(4,4,4,4)" v:tabSpace="42.5197"/>
+				<v:textRect cx="4.57711" cy="1643.76" width="9.16" height="8.04378"/>
+				<rect x="0" y="1639.74" width="9.15421" height="8.04378" class="st4"/>
+				<text x="4" y="1645.26" class="st29" v:langID="2067"><v:paragraph v:horizAlign="1"/><v:tabList/>N</text>			</g>
+			<g id="shape3118-2691" v:mID="3118" v:groupContext="shape" transform="translate(1665.24,1655.12) rotate(93.8882)">
+				<title>Sheet.3118</title>
+				<path d="M0 1647.78 L10.4 1647.78" class="st38"/>
+			</g>
+			<g id="shape3119-2694" v:mID="3119" v:groupContext="shape" transform="translate(1681.13,1487.42) rotate(88.0537)">
+				<title>Sheet.3119</title>
+				<path d="M0 1647.78 L10.39 1647.78" class="st38"/>
+			</g>
+			<g id="shape3120-2697" v:mID="3120" v:groupContext="shape" transform="translate(20.548,-94.0151)">
+				<title>Sheet.3120</title>
+				<rect x="0" y="1647.31" width="14.1102" height="0.472699" class="st48"/>
+			</g>
+			<g id="group3121-2699" transform="translate(12.7106,-102.012)" v:mID="3121" v:groupContext="group">
+				<title>Sheet.3121</title>
+				<g id="shape3122-2700" v:mID="3122" v:groupContext="shape">
+					<title>Sheet.3122</title>
+					<ellipse cx="2.26772" cy="1645.51" rx="2.26772" ry="2.26772" class="st39"/>
+				</g>
+				<g id="shape3123-2702" v:mID="3123" v:groupContext="shape" transform="translate(1.13386,-1.13386)">
+					<title>Sheet.3123</title>
+					<ellipse cx="1.13386" cy="1646.65" rx="1.13386" ry="1.13386" class="st39"/>
+				</g>
+			</g>
+			<g id="shape3124-2704" v:mID="3124" v:groupContext="shape" transform="translate(16.122,-50.2552)">
+				<title>Sheet.3124</title>
+				<path d="M0 1615.54 L4.61 1614.09 L4.61 1647.78 L0 1646.4 L0 1615.54 Z" class="st39"/>
+			</g>
+			<g id="shape3125-2706" v:mID="3125" v:groupContext="shape" transform="translate(11.3386,-41.2204)">
+				<title>Sheet.3125</title>
+				<desc>theben</desc>
+				<v:textBlock v:margins="rect(4,4,4,4)" v:tabSpace="42.5197"/>
+				<v:textRect cx="13.3228" cy="1642.31" width="26.65" height="10.9371"/>
+				<rect x="0" y="1636.84" width="26.6457" height="10.9371" class="st4"/>
+				<text x="5.13" y="1643.81" class="st66" v:langID="2067"><v:paragraph v:horizAlign="1"/><v:tabList/>theben</text>			</g>
+			<g id="shape3126-2709" v:mID="3126" v:groupContext="shape" transform="translate(3.68504,-31.5826)">
+				<title>Sheet.3126</title>
+				<desc>16A 230V</desc>
+				<v:textBlock v:margins="rect(4,4,4,4)" v:tabSpace="42.5197"/>
+				<v:textRect cx="16.5827" cy="1642.31" width="33.17" height="10.9371"/>
+				<rect x="0" y="1636.84" width="33.1654" height="10.9371" class="st4"/>
+				<text x="7.13" y="1643.51" class="st69" v:langID="2067"><v:paragraph v:horizAlign="1"/><v:tabList/>16A  230V</text>			</g>
+		</g>
+</svg>

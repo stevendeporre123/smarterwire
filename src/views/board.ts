@@ -4,6 +4,7 @@ import { upsert, softDelete, saveImage, assetUrl, assetSize, upsertStmt } from '
 import { sql } from '../db/client';
 import { boardsOf, devicesOf, circuitsOf, type Board, type Device, type Project, type Circuit } from '../domain/model';
 import { CURVES, DEVICE_KINDS, DIFF_TYPES, PHASES, POLES, deviceTitle, isGroupParent, isFeeder } from '../domain/devices';
+import { moduleArt, SRC_UNIT } from '../domain/modules';
 import { generateNewBoards, DEFAULT_GEN } from '../domain/newboard';
 import { editCircuit } from './circuits';
 import { analyzeBoardPhoto, getAiEndpoint, setAiEndpoint } from '../lib/ai';
@@ -207,14 +208,27 @@ export async function renderBoard(root: HTMLElement, project: Project) {
       const y = PAD + i * ROW_H; let x = PAD;
       s.append(svg('rect', { x: PAD - 14, y: y + 66, width: 2000, height: 8, fill: '#b5bdb5' }), svg('text', { x: 6, y: y + 18, 'font-size': 11, fill: '#555e55' }, `R${rk + 1}`));
       for (const d of rows.get(rk)!.sort((a, b) => a.pos - b.pos)) {
-        const w = Math.max(1, d.modules) * U - 4, main = isGroupParent(d.kind), cs = cByD.get(d.id) ?? [];
+        const cs = cByD.get(d.id) ?? [], main = isGroupParent(d.kind), art = moduleArt(d);
+        const k = U / SRC_UNIT, w = art ? art.w * k : Math.max(1, d.modules) * U - 4;
         const g = svg('g', { style: 'cursor:pointer', onclick: () => { selId = d.id; draw(); drawSide(); } });
-        g.append(svg('rect', { x, y, width: w, height: 120, rx: 4, fill: main ? '#e6f5e6' : '#fff', stroke: d.id === selId ? '#0066aa' : main ? '#008000' : '#555e55', 'stroke-width': d.id === selId ? 3 : 1.5 }),
-          svg('rect', { x: x + w / 2 - 8, y: y + 46, width: 16, height: 26, rx: 3, fill: '#2b312b' }),
-          svg('text', { x: x + w / 2, y: y + 22, 'text-anchor': 'middle', 'font-size': 12, 'font-weight': 600 }, `${d.curve ?? ''}${d.rating_a ?? ''}`),
-          svg('text', { x: x + w / 2, y: y + 36, 'text-anchor': 'middle', 'font-size': 9, fill: '#555e55' }, d.sens_ma ? `${d.sens_ma}mA` : (DEVICE_KINDS[d.kind]?.short ?? '')),
-          ...(d.phase ? [svg('text', { x: x + w / 2, y: y + 96, 'text-anchor': 'middle', 'font-size': 9, 'font-weight': 600, fill: '#0066aa' }, d.phase)] : []));
-        g.append(svg('text', { x: x + w / 2, y: y + 108, 'text-anchor': 'middle', 'font-size': 9, fill: '#555e55' }, (d.label ?? '').slice(0, 8)));
+        if (art) {
+          const ih = art.h * k, iy = y + (120 - ih) / 2;
+          g.append(svg('image', { href: art.url, x, y: iy, width: w, height: ih }));
+          if (art.label) {
+            const l = art.label, lh = l.h * ih / l.lines.length;
+            g.append(svg('rect', { x: x + l.x * w, y: iy + l.y * ih, width: l.w * w, height: l.h * ih, fill: '#e2e2e2' }),
+              ...l.lines.map((t, i) => svg('text', { x: x + l.x * w + 1, y: iy + l.y * ih + lh * (i + 0.82), 'font-size': Math.min(lh * 0.95, 13), 'font-weight': 700, 'font-family': 'Arial' }, t)));
+          }
+          g.append(svg('rect', { x: x - 2, y: iy - 2, width: w + 4, height: ih + 4, rx: 3, fill: 'none', stroke: d.id === selId ? '#0066aa' : 'none', 'stroke-width': 3 }),
+            ...(d.phase ? [svg('text', { x: x + w / 2, y: iy + ih + 11, 'text-anchor': 'middle', 'font-size': 9, 'font-weight': 600, fill: '#0066aa' }, d.phase)] : []));
+        } else {
+          g.append(svg('rect', { x, y, width: w, height: 120, rx: 4, fill: main ? '#e6f5e6' : '#fff', stroke: d.id === selId ? '#0066aa' : main ? '#008000' : '#555e55', 'stroke-width': d.id === selId ? 3 : 1.5 }),
+            svg('rect', { x: x + w / 2 - 8, y: y + 46, width: 16, height: 26, rx: 3, fill: '#2b312b' }),
+            svg('text', { x: x + w / 2, y: y + 22, 'text-anchor': 'middle', 'font-size': 12, 'font-weight': 600 }, `${d.curve ?? ''}${d.rating_a ?? ''}`),
+            svg('text', { x: x + w / 2, y: y + 36, 'text-anchor': 'middle', 'font-size': 9, fill: '#555e55' }, d.sens_ma ? `${d.sens_ma}mA` : (DEVICE_KINDS[d.kind]?.short ?? '')),
+            ...(d.phase ? [svg('text', { x: x + w / 2, y: y + 96, 'text-anchor': 'middle', 'font-size': 9, 'font-weight': 600, fill: '#0066aa' }, d.phase)] : []));
+          g.append(svg('text', { x: x + w / 2, y: y + 108, 'text-anchor': 'middle', 'font-size': 9, fill: '#555e55' }, (d.label ?? '').slice(0, 8)));
+        }
         const warn = isFeeder(d.kind) && !cs.length;
         g.append(svg('text', { x: x + w / 2, y: y + 138, 'text-anchor': 'middle', 'font-size': 10, fill: warn ? '#e07800' : '#008000', 'font-weight': 600 }, warn ? '?' : cs.map((c) => c.nr || '•').join('+')));
         s.append(g);

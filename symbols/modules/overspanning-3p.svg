@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:v="http://schemas.microsoft.com/visio/2003/SVGExtensions/" viewBox="529.93 1156.82 87.04 149.10" width="87.04" height="149.10">
+<style type="text/css"><![CDATA[
+		.st2 {fill:#e2e2e2;stroke:#000000;stroke-linecap:round;stroke-linejoin:round;stroke-width:0.72}
+		.st4 {fill:none;stroke:none;stroke-linecap:round;stroke-linejoin:round;stroke-width:0.72}
+		.st6 {fill:#ff0000;stroke:#000000;stroke-linecap:round;stroke-linejoin:round;stroke-width:1.2}
+		.st7 {fill:#ffffff;stroke:#000000;stroke-linecap:round;stroke-linejoin:round;stroke-width:0.72}
+		.st8 {fill:#13a50c;stroke:#000000;stroke-linecap:round;stroke-linejoin:round;stroke-width:0.72}
+		.st9 {fill:#000000;font-family:Arial;font-size:0.499992em}
+		.st10 {font-size:1em}
+]]></style>
+<g id="group1724-727" transform="translate(530.929,-342.844)" v:mID="1724" v:groupContext="group">
+			<title>Sheet.1724</title>
+			<g id="shape1693-728" v:mID="1693" v:groupContext="shape">
+				<title>Sheet.1693</title>
+				<rect x="0" y="1500.67" width="85.0394" height="147.106" class="st6"/>
+			</g>
+			<g id="shape1694-730" v:mID="1694" v:groupContext="shape" transform="translate(56.6929,-29.8228)">
+				<title>Sheet.1694</title>
+				<rect x="0" y="1564.51" width="28.3465" height="83.2677" class="st6"/>
+			</g>
+			<g id="shape1695-732" v:mID="1695" v:groupContext="shape" transform="translate(60.0591,-45.0591)">
+				<title>Sheet.1695</title>
+				<rect x="0" y="1595.04" width="24.9803" height="52.7362" class="st7"/>
+			</g>
+			<g id="shape1696-734" v:mID="1696" v:groupContext="shape" transform="translate(60.5551,-38.1201)">
+				<title>Sheet.1696</title>
+				<rect x="0" y="1640.84" width="21.6496" height="6.93898" class="st8"/>
+			</g>
+			<g id="group1697-736" transform="translate(63.8061,-129.462)" v:mID="1697" v:groupContext="group">
+				<title>Sheet.1697</title>
+				<g id="shape1698-737" v:mID="1698" v:groupContext="shape">
+					<title>Sheet.1698</title>
+					<ellipse cx="5.96752" cy="1641.81" rx="5.96752" ry="5.96752" class="st2"/>
+				</g>
+				<g id="shape1699-739" v:mID="1699" v:groupContext="shape" transform="translate(2.35925,-2.49803)">
+					<title>Sheet.1699</title>
+					<path d="M2.91 1643.62 L2.91 1640.84 L4.3 1640.84 L4.3 1643.62 L6.94 1643.62 L6.94 1645 L4.3 1645 L4.3 1647.78
+								 L2.91 1647.78 L2.91 1645 L0 1645 L0 1643.62 L2.91 1643.62 Z" class="st2"/>
+				</g>
+			</g>
+			<g id="group1700-741" transform="translate(66.1973,-10.4468)" v:mID="1700" v:groupContext="group">
+				<title>Sheet.1700</title>
+				<g id="shape1701-742" v:mID="1701" v:groupContext="shape">
+					<title>Sheet.1701</title>
+					<ellipse cx="5.96752" cy="1641.81" rx="5.96752" ry="5.96752" class="st2"/>
+				</g>
+				<g id="shape1702-744" v:mID="1702" v:groupContext="shape" transform="translate(2.35925,-2.49803)">
+					<title>Sheet.1702</title>
+					<path d="M2.91 1643.62 L2.91 1640.84 L4.3 1640.84 L4.3 1643.62 L6.94 1643.62 L6.94 1645 L4.3 1645 L4.3 1647.78
+								 L2.91 1647.78 L2.91 1645 L0 1645 L0 1643.62 L2.91 1643.62 Z" class="st2"/>
+				</g>
+			</g>
+			<g id="shape1703-746" v:mID="1703" v:groupContext="shape" transform="translate(-1572.02,1599.62) rotate(-90)">
+				<title>Sheet.1703</title>
+				<desc>Overspannings beveiliging</desc>
+				<v:textBlock v:margins="rect(4,4,4,4)" v:tabSpace="42.5197"/>
+				<v:textRect cx="24.4505" cy="1642.88" width="48.91" height="9.79167"/>
+				<rect x="0" y="1637.99" width="48.9011" height="9.79167" class="st4"/>
+				<text x="4.27" y="1641.08" class="st9" v:langID="2067"><v:paragraph v:horizAlign="1"/><v:tabList/>Overspannings<v:newlineChar/><tspan
+							x="10.27" dy="1.2em" class="st10">beveiliging</tspan></text>			</g>
+			<g id="shape1704-750" v:mID="1704" v:groupContext="shape" transform="translate(0,-29.8228)">
+				<title>Sheet.1704</title>
+				<rect x="0" y="1564.51" width="28.3465" height="83.2677" class="st6"/>
+			</g>
+			<g id="shape1705-752" v:mID="1705" v:groupContext="shape" transform="translate(5.55118,-44.8169)">
+				<title>Sheet.1705</title>
+				<rect x="0" y="1595.04" width="24.9803" height="52.7362" class="st7"/>
+			</g>
+			<g id="shape1706-754" v:mID="1706" v:groupContext="shape" transform="translate(6.80315,-38.1201)">
+				<title>Sheet.1706</title>
+				<rect x="0" y="1640.84" width="20.5157" height="6.93898" class="st8"/>
+			</g>
+			<g id="group1707-756" transform="translate(9.29823,-128.085)" v:mID="1707" v:groupContext="group">
+				<title>Sheet.1707</title>
+				<g id="shape1708-757" v:mID="1708" v:groupContext="shape">
+					<title>Sheet.1708</title>
+					<ellipse cx="5.96752" cy="1641.81" rx="5.96752" ry="5.96752" class="st2"/>
+				</g>
+				<g id="shape1709-759" v:mID="1709" v:groupContext="shape" transform="translate(2.35925,-2.49803)">
+					<title>Sheet.1709</title>
+					<path d="M2.91 1643.62 L2.91 1640.84 L4.3 1640.84 L4.3 1643.62 L6.94 1643.62 L6.94 1645 L4.3 1645 L4.3 1647.78
+								 L2.91 1647.78 L2.91 1645 L0 1645 L0 1643.62 L2.91 1643.62 Z" class="st2"/>
+				</g>
+			</g>
+			<g id="shape1713-761" v:mID="1713" v:groupContext="shape" transform="translate(-1626.53,1601) rotate(-90)">
+				<title>Sheet.1713</title>
+				<desc>Overspannings beveiliging</desc>
+				<v:textBlock v:margins="rect(4,4,4,4)" v:tabSpace="42.5197"/>
+				<v:textRect cx="24.4505" cy="1642.88" width="48.91" height="9.79167"/>
+				<rect x="0" y="1637.99" width="48.9011" height="9.79167" class="st4"/>
+				<text x="4.27" y="1641.08" class="st9" v:langID="2067"><v:paragraph v:horizAlign="1"/><v:tabList/>Overspannings<v:newlineChar/><tspan
+							x="10.27" dy="1.2em" class="st10">beveiliging</tspan></text>			</g>
+			<g id="shape1714-765" v:mID="1714" v:groupContext="shape" transform="translate(28.3465,-29.8228)">
+				<title>Sheet.1714</title>
+				<rect x="0" y="1564.51" width="28.3465" height="83.2677" class="st6"/>
+			</g>
+			<g id="shape1715-767" v:mID="1715" v:groupContext="shape" transform="translate(31.7126,-45.0591)">
+				<title>Sheet.1715</title>
+				<rect x="0" y="1595.04" width="24.9803" height="52.7362" class="st7"/>
+			</g>
+			<g id="shape1716-769" v:mID="1716" v:groupContext="shape" transform="translate(34.0157,-38.1201)">
+				<title>Sheet.1716</title>
+				<rect x="0" y="1640.84" width="21.6496" height="6.93898" class="st8"/>
+			</g>
+			<g id="group1717-771" transform="translate(37.6447,-128.085)" v:mID="1717" v:groupContext="group">
+				<title>Sheet.1717</title>
+				<g id="shape1718-772" v:mID="1718" v:groupContext="shape">
+					<title>Sheet.1718</title>
+					<ellipse cx="5.96752" cy="1641.81" rx="5.96752" ry="5.96752" class="st2"/>
+				</g>
+				<g id="shape1719-774" v:mID="1719" v:groupContext="shape" transform="translate(2.35925,-2.49803)">
+					<title>Sheet.1719</title>
+					<path d="M2.91 1643.62 L2.91 1640.84 L4.3 1640.84 L4.3 1643.62 L6.94 1643.62 L6.94 1645 L4.3 1645 L4.3 1647.78
+								 L2.91 1647.78 L2.91 1645 L0 1645 L0 1643.62 L2.91 1643.62 Z" class="st2"/>
+				</g>
+			</g>
+			<g id="group1720-776" transform="translate(50.7254,-10.4468)" v:mID="1720" v:groupContext="group">
+				<title>Sheet.1720</title>
+				<g id="shape1721-777" v:mID="1721" v:groupContext="shape">
+					<title>Sheet.1721</title>
+					<ellipse cx="5.96752" cy="1641.81" rx="5.96752" ry="5.96752" class="st2"/>
+				</g>
+				<g id="shape1722-779" v:mID="1722" v:groupContext="shape" transform="translate(2.35925,-2.49803)">
+					<title>Sheet.1722</title>
+					<path d="M2.91 1643.62 L2.91 1640.84 L4.3 1640.84 L4.3 1643.62 L6.94 1643.62 L6.94 1645 L4.3 1645 L4.3 1647.78
+								 L2.91 1647.78 L2.91 1645 L0 1645 L0 1643.62 L2.91 1643.62 Z" class="st2"/>
+				</g>
+			</g>
+			<g id="shape1723-781" v:mID="1723" v:groupContext="shape" transform="translate(-1598.18,1601) rotate(-90)">
+				<title>Sheet.1723</title>
+				<desc>Overspannings beveiliging</desc>
+				<v:textBlock v:margins="rect(4,4,4,4)" v:tabSpace="42.5197"/>
+				<v:textRect cx="24.4505" cy="1642.88" width="48.91" height="9.79167"/>
+				<rect x="0" y="1637.99" width="48.9011" height="9.79167" class="st4"/>
+				<text x="4.27" y="1641.08" class="st9" v:langID="2067"><v:paragraph v:horizAlign="1"/><v:tabList/>Overspannings<v:newlineChar/><tspan
+							x="10.27" dy="1.2em" class="st10">beveiliging</tspan></text>			</g>
+		</g>
+</svg>

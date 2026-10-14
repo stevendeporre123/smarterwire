@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:ev="http://www.w3.org/2001/xml-events"
+		width="0.797818in" height="0.482858in" viewBox="0 0 57.4429 34.7657" xml:space="preserve"
+		color-interpolation-filters="sRGB" class="st5">
+	<title>Bestaande installatie</title>
+	
+	<style type="text/css">
+	<![CDATA[
+		.st1 {fill:none;stroke:#000000;stroke-linecap:round;stroke-linejoin:round;stroke-width:0.24}
+		.st2 {fill:none;stroke:none;stroke-linecap:round;stroke-linejoin:round;stroke-width:0.75}
+		.st3 {fill:#000000;font-family:Calibri;font-size:0.666641em}
+		.st4 {fill:#000000;font-family:Calibri;font-size:0.666664em}
+		.st5 {fill:none;fill-rule:evenodd;font-size:12px;overflow:visible;stroke-linecap:square;stroke-miterlimit:3}
+	]]>
+	</style>
+
+	<g>
+		<title>Bestaande installatie</title>
+		<g id="1" transform="translate(0.375,-0.375)">
+			<title>Bestaande installatie</title>
+			<g id="shape42-2">
+				<title>Bestaande installatie</title>
+				<rect x="0" y="0.750001" width="56.6929" height="34.0157" class="st1"/>
+			</g>
+			<g id="2">
+				<title>Bestaande installatie</title>
+				<rect x="0" y="0.750001" width="56.6929" height="34.0157" class="st2"/>
+			</g>
+			<g id="3" transform="translate(3.59712E-014,-16.7173)">
+				<title>Bestaande installatie</title>
+				<desc>BESTAANDE</desc>
+				<rect x="0" y="26.3868" width="56.6929" height="8.37898" class="st2"/>
+				<text x="8.81" y="32.98" class="st3">BESTAANDE</text>			</g>
+			<g id="4" transform="translate(4.39648E-014,-8.91949)">
+				<title>Bestaande installatie</title>
+				<desc>INSTALLATIE</desc>
+				<rect x="0" y="26.3865" width="56.6929" height="8.37921" class="st2"/>
+				<text x="8.07" y="32.98" class="st4">INSTALLATIE</text>			</g>
+		</g>
+	</g>
+</svg>

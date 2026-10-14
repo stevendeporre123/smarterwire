@@ -2,7 +2,7 @@
   "compilerOptions": {
     "target": "ES2022", "module": "ESNext", "moduleResolution": "bundler",
     "lib": ["ES2022", "DOM", "DOM.Iterable", "WebWorker"],
-    "strict": true, "noEmit": true, "skipLibCheck": true, "isolatedModules": true,
+    "strict": true, "resolveJsonModule": true, "noEmit": true, "skipLibCheck": true, "isolatedModules": true,
     "types": ["vite/client"]
   },
   "include": ["src"]

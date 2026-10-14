@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:v="http://schemas.microsoft.com/visio/2003/SVGExtensions/" viewBox="626.96 1159.50 32.53 149.10" width="32.53" height="149.10">
+<style type="text/css"><![CDATA[
+		.st2 {fill:#e2e2e2;stroke:#000000;stroke-linecap:round;stroke-linejoin:round;stroke-width:0.72}
+		.st4 {fill:none;stroke:none;stroke-linecap:round;stroke-linejoin:round;stroke-width:0.72}
+		.st6 {fill:#ff0000;stroke:#000000;stroke-linecap:round;stroke-linejoin:round;stroke-width:1.2}
+		.st7 {fill:#ffffff;stroke:#000000;stroke-linecap:round;stroke-linejoin:round;stroke-width:0.72}
+		.st8 {fill:#13a50c;stroke:#000000;stroke-linecap:round;stroke-linejoin:round;stroke-width:0.72}
+		.st9 {fill:#000000;font-family:Arial;font-size:0.499992em}
+		.st10 {font-size:1em}
+]]></style>
+<g id="group220-64" transform="translate(627.957,-340.157)" v:mID="220" v:groupContext="group">
+			<title>Sheet.220</title>
+			<g id="group132-65" v:mID="132" v:groupContext="group">
+				<title>Sheet.132</title>
+				<g id="shape120-66" v:mID="120" v:groupContext="shape">
+					<title>Sheet.120</title>
+					<rect x="0" y="1500.67" width="30.5315" height="147.106" class="st6"/>
+				</g>
+				<g id="shape122-68" v:mID="122" v:groupContext="shape" transform="translate(0,-27.7559)">
+					<title>Sheet.122</title>
+					<rect x="0" y="1564.51" width="30.5315" height="83.2677" class="st6"/>
+				</g>
+				<g id="shape123-70" v:mID="123" v:groupContext="shape" transform="translate(5.55118,-43.0217)">
+					<title>Sheet.123</title>
+					<rect x="0" y="1595.04" width="24.9803" height="52.7362" class="st7"/>
+				</g>
+				<g id="shape124-72" v:mID="124" v:groupContext="shape" transform="translate(7.49409,-36.0827)">
+					<title>Sheet.124</title>
+					<rect x="0" y="1640.84" width="21.6496" height="6.93898" class="st8"/>
+				</g>
+				<g id="group125-74" transform="translate(9.29823,-126.289)" v:mID="125" v:groupContext="group">
+					<title>Sheet.125</title>
+					<g id="shape126-75" v:mID="126" v:groupContext="shape">
+						<title>Sheet.126</title>
+						<ellipse cx="5.96752" cy="1641.81" rx="5.96752" ry="5.96752" class="st2"/>
+					</g>
+					<g id="shape127-77" v:mID="127" v:groupContext="shape" transform="translate(2.35925,-2.49803)">
+						<title>Sheet.127</title>
+						<path d="M2.91 1643.62 L2.91 1640.84 L4.3 1640.84 L4.3 1643.62 L6.94 1643.62 L6.94 1645 L4.3 1645 L4.3 1647.78
+									 L2.91 1647.78 L2.91 1645 L0 1645 L0 1643.62 L2.91 1643.62 Z" class="st2"/>
+					</g>
+				</g>
+				<g id="group128-79" transform="translate(9.29823,-7.91043)" v:mID="128" v:groupContext="group">
+					<title>Sheet.128</title>
+					<g id="shape129-80" v:mID="129" v:groupContext="shape">
+						<title>Sheet.129</title>
+						<ellipse cx="5.96752" cy="1641.81" rx="5.96752" ry="5.96752" class="st2"/>
+					</g>
+					<g id="shape130-82" v:mID="130" v:groupContext="shape" transform="translate(2.35925,-2.49803)">
+						<title>Sheet.130</title>
+						<path d="M2.91 1643.62 L2.91 1640.84 L4.3 1640.84 L4.3 1643.62 L6.94 1643.62 L6.94 1645 L4.3 1645 L4.3 1647.78
+									 L2.91 1647.78 L2.91 1645 L0 1645 L0 1643.62 L2.91 1643.62 Z" class="st2"/>
+					</g>
+				</g>
+			</g>
+			<g id="shape131-84" v:mID="131" v:groupContext="shape" transform="translate(-1626.53,1602.79) rotate(-90)">
+				<title>Sheet.131</title>
+				<desc>Overspannings beveiliging</desc>
+				<v:textBlock v:margins="rect(4,4,4,4)" v:tabSpace="42.5197"/>
+				<v:textRect cx="24.4505" cy="1642.88" width="48.91" height="9.79167"/>
+				<rect x="0" y="1637.99" width="48.9011" height="9.79167" class="st4"/>
+				<text x="4.27" y="1641.08" class="st9" v:langID="2067"><v:paragraph v:horizAlign="1"/><v:tabList/>Overspannings<v:newlineChar/><tspan
+							x="10.27" dy="1.2em" class="st10">beveiliging</tspan></text>			</g>
+		</g>
+</svg>

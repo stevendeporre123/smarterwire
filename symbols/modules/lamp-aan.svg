@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:v="http://schemas.microsoft.com/visio/2003/SVGExtensions/" viewBox="1245.05 730.13 45.77 81.86" width="45.77" height="81.86">
+<style type="text/css"><![CDATA[
+		.st38 {stroke:#000000;stroke-linecap:round;stroke-linejoin:round;stroke-width:0.24}
+		.st75 {fill:#000000;stroke:#000000;stroke-linecap:round;stroke-linejoin:round;stroke-width:0.24}
+		.st103 {stroke:#bfbfbf;stroke-linecap:round;stroke-linejoin:round;stroke-width:1.2}
+]]></style>
+<g id="group1073-4826" transform="translate(1246.05,-836.22)" v:mID="1073" v:groupContext="group">
+			<title>Sheet.1073</title>
+			<g id="group1074-4827" v:mID="1074" v:groupContext="group">
+				<title>Sheet.1074</title>
+				<g id="shape1075-4828" v:mID="1075" v:groupContext="shape" transform="translate(21.8038,-14.6723)">
+					<title>Sheet.1075</title>
+					<path d="M7.88 1647.78 L8.58 1647.02 L9.39 1637.45 L10.9 1632.02 L18.45 1618.98 L20.46 1614.09 L21.97 1608.11
+								 L21.97 1603.22 L21.47 1598.33 L20.46 1595.07 L17.44 1590.18 L14.65 1587.16 L9.39 1584.2 L4.86 1582.57
+								 L1.34 1582.03 L0 1582.03" class="st38"/>
+				</g>
+				<g id="shape1076-4831" v:mID="1076" v:groupContext="shape" transform="translate(21.9715,-14.6723) scale(-1,1)">
+					<title>Sheet.1076</title>
+					<path d="M7.88 1647.78 L8.58 1647.02 L9.39 1637.45 L10.9 1632.02 L18.45 1618.98 L20.46 1614.09 L21.97 1608.11
+								 L21.97 1603.22 L21.47 1598.33 L20.46 1595.07 L17.44 1590.18 L14.65 1587.16 L9.39 1584.2 L4.86 1582.57
+								 L1.34 1582.03 L0 1582.03" class="st38"/>
+				</g>
+				<g id="shape1077-4834" v:mID="1077" v:groupContext="shape" transform="translate(14.0886,-14.1288)">
+					<title>Sheet.1077</title>
+					<path d="M0 1647.24 L3.02 1647.78 L7.04 1647.78 L12.58 1647.78 L15.6 1647.24" class="st38"/>
+				</g>
+				<g id="shape1078-4837" v:mID="1078" v:groupContext="shape" transform="translate(12.0759,-2.17367)">
+					<title>Sheet.1078</title>
+					<path d="M1.06 1635.28 L2.12 1636.64 L0 1638 L1.83 1639.87 L0.53 1641.2 L1.65 1642.35 L0.59 1643.43 L4.84 1647.78
+								 L9.56 1647.78" class="st38"/>
+				</g>
+				<g id="shape1079-4840" v:mID="1079" v:groupContext="shape" transform="translate(30.693,-2.17367) scale(-1,1)">
+					<title>Sheet.1079</title>
+					<path d="M1.06 1635.28 L2.12 1636.64 L0 1638 L1.83 1639.87 L0.53 1641.2 L1.65 1642.35 L0.59 1643.43 L4.84 1647.78
+								 L9.56 1647.78" class="st38"/>
+				</g>
+				<g id="shape1080-4843" v:mID="1080" v:groupContext="shape" transform="translate(12.6661,-5.43417)">
+					<title>Sheet.1080</title>
+					<path d="M0 1646.69 L5.45 1647.78 L10.98 1647.78 L17.44 1646.69" class="st38"/>
+				</g>
+				<g id="shape1081-4846" v:mID="1081" v:groupContext="shape" transform="translate(13.0823,-8.15126)">
+					<title>Sheet.1081</title>
+					<path d="M0 1647.24 L5.19 1647.78 L10.46 1647.78 L16.6 1647.24" class="st38"/>
+				</g>
+				<g id="shape1082-4849" v:mID="1082" v:groupContext="shape" transform="translate(12.4145,-10.8683)">
+					<title>Sheet.1082</title>
+					<path d="M0 1646.69 L5.71 1647.78 L11.51 1647.78 L18.28 1646.69" class="st38"/>
+				</g>
+				<g id="shape1083-4852" v:mID="1083" v:groupContext="shape" transform="translate(16.1012,-14.1288)">
+					<title>Sheet.1083</title>
+					<path d="M1.01 1647.78 L0 1635.82 A5.03164 1.63025 -180 0 0 5.03 1637.45 A5.5348 1.63025 -180 0 0 10.57 1635.82
+								 L9.06 1647.78" class="st38"/>
+				</g>
+				<g id="shape1084-4855" v:mID="1084" v:groupContext="shape" transform="translate(13.0823,-24.6764)">
+					<title>Sheet.1084</title>
+					<path d="M5.51 1647.78 L0 1619.74 L2.77 1622.73 L4.03 1619.2 L5.03 1623.01 L7.04 1619.2 L8.55 1623.55 L10.06
+								 1619.2 L11.57 1623.55 L13.08 1618.66 L14.09 1623.55 L16.1 1618.11 L16.1 1623.55 L18.62 1619.2 L11.54
+								 1647.64" class="st103"/>
+				</g>
+			</g>
+			<g id="shape1085-4858" v:mID="1085" v:groupContext="shape" transform="translate(18.8304,-0.566929)">
+				<title>Sheet.1085</title>
+				<path d="M0 1646.08 L5.1 1646.08 L4.54 1647.2 a1.70079 0.583049 0 0 1 -1.70079 0.583049 a1.70079 0.583049 0 0 1 -1.70079
+							 -0.583049 L0 1646.08 Z" class="st75"/>
+			</g>
+		</g>
+</svg>

@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:v="http://schemas.microsoft.com/visio/2003/SVGExtensions/" viewBox="532.78 1660.94 52.28 94.09" width="52.28" height="94.09">
+<style type="text/css"><![CDATA[
+		.st4 {fill:none;stroke:none;stroke-linecap:round;stroke-linejoin:round;stroke-width:0.72}
+		.st5 {fill:#000000;font-family:Arial;font-size:1.16666em;font-weight:bold}
+		.st10 {font-size:1em}
+		.st79 {fill:#000000;font-family:Arial;font-size:0.666664em;font-weight:bold}
+		.st144 {fill:url(#ptrn7-7669);shape-rendering:crispEdges;stroke:#000000;stroke-linecap:round;stroke-linejoin:round;stroke-width:0.72}
+		.st145 {fill:url(#grad0-7673);stroke:#000000;stroke-linecap:round;stroke-linejoin:round;stroke-width:0.24}
+		.st146 {fill:url(#grad0-7673);stroke:#000000;stroke-linecap:round;stroke-linejoin:round;stroke-width:0.72}
+		.st147 {fill:#f2f2f2;stroke:#000000;stroke-linecap:round;stroke-linejoin:round;stroke-width:0.72}
+]]></style>
+<g id="group4049-7698" transform="translate(530.929,106.268)" v:mID="4049" v:groupContext="group">
+			<title>Sheet.4049</title>
+			<g id="group4040-7699" v:mID="4040" v:groupContext="group">
+				<title>Sheet.4040</title>
+				<g id="group4041-7700" transform="translate(2.85057,0)" v:mID="4041" v:groupContext="group">
+					<title>Sheet.4041</title>
+					<g id="shape4042-7701" v:mID="4042" v:groupContext="shape" transform="translate(3.48465,-86.1207)">
+						<title>Sheet.4042</title>
+						<path d="M0 1643.8 A24.8904 1.99123 0 0 1 24.89 1641.81 A17.9211 1.99123 0 0 1 42.81 1643.8 L42.81 1647.78
+									 A17.9211 1.99123 -180 0 0 24.89 1645.79 A24.3926 1.99123 -180 0 0 0.5 1647.78 a0.497807 3.98246
+									 0 0 1 -0.497807 -3.98246 Z" class="st144"/>
+					</g>
+					<g id="shape4043-7704" v:mID="4043" v:groupContext="shape" transform="translate(6.7204,-4.23136)">
+						<title>Sheet.4043</title>
+						<rect x="0" y="1643.05" width="6.7204" height="4.72917" class="st145"/>
+					</g>
+					<g id="shape4044-7707" v:mID="4044" v:groupContext="shape" transform="translate(4.48027,0)">
+						<title>Sheet.4044</title>
+						<path d="M1 1643.3 A4.26282 1.42094 -90 0 0 0 1645.54 a2.24013 0.995615 -90 0 0 0.995615 2.24013 L9.46 1647.78
+									 A1.49342 2.24013 -180 0 0 10.95 1645.54 a0.995615 2.24013 -180 0 0 -0.995615 -2.24013 L1 1643.3
+									 Z" class="st146"/>
+					</g>
+					<g id="shape4045-7710" v:mID="4045" v:groupContext="shape" transform="translate(36.5888,-4.23136)">
+						<title>Sheet.4045</title>
+						<rect x="0" y="1643.05" width="6.7204" height="4.72917" class="st145"/>
+					</g>
+					<g id="shape4046-7713" v:mID="4046" v:groupContext="shape" transform="translate(34.3487,0)">
+						<title>Sheet.4046</title>
+						<path d="M1 1643.3 A4.26282 1.42094 -90 0 0 0 1645.54 a2.24013 0.995615 -90 0 0 0.995615 2.24013 L9.46 1647.78
+									 A1.49342 2.24013 -180 0 0 10.95 1645.54 a0.995615 2.24013 -180 0 0 -0.995615 -2.24013 L1 1643.3
+									 Z" class="st146"/>
+					</g>
+					<g id="shape4047-7716" v:mID="4047" v:groupContext="shape" transform="translate(7.99361E-15,-8.97388)">
+						<title>Sheet.4047</title>
+						<path d="M3.98 1570.62 A21.5739 1.97787 0 0 1 25.56 1568.64 A20.7411 1.97788 0 0 1 46.3 1570.62 L49.28 1580.58
+									 L50.28 1647.78 L0 1647.78 L0 1580.58 L3.98 1570.62 Z" class="st147"/>
+					</g>
+				</g>
+				<g id="shape4048-7718" v:mID="4048" v:groupContext="shape" transform="translate(-1625.25,1635.75) rotate(-90)">
+					<title>Sheet.4048</title>
+					<desc>NOXION</desc>
+					<v:textBlock v:margins="rect(4,4,4,4)" v:tabSpace="42.5197"/>
+					<v:textRect cx="33.4488" cy="1640.84" width="66.9" height="13.8835"/>
+					<rect x="0" y="1633.9" width="66.8976" height="13.8835" class="st4"/>
+					<text x="5.84" y="1645.04" class="st5" v:langID="2067"><v:paragraph v:horizAlign="1"/><v:tabList/>NOXION</text>				</g>
+			</g>
+			<g id="shape4050-7721" v:mID="4050" v:groupContext="shape" transform="translate(-1605.4,1628.98) rotate(-90)">
+				<title>Sheet.4050</title>
+				<desc>T8 LED STARTER</desc>
+				<v:textBlock v:margins="rect(4,4,4,4)" v:tabSpace="42.5197"/>
+				<v:textRect cx="26.3787" cy="1640.84" width="52.76" height="13.8835"/>
+				<rect x="0" y="1633.9" width="52.7574" height="13.8835" class="st4"/>
+				<text x="11.49" y="1638.44" class="st79" v:langID="2067"><v:paragraph v:horizAlign="1"/><v:tabList/>T8  LED<v:newlineChar/><tspan
+							x="7.49" dy="1.2em" class="st10">STARTER</tspan></text>			</g>
+		</g>
+</svg>
