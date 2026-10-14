@@ -4,11 +4,12 @@ Browser-app om AREI-conforme eendraadschema's en situatieplannen te maken voor k
 **bestaande** zekeringskasten en niet-gedocumenteerde gebouwen.
 
 ## Werkwijze in de app
-1. **Zekeringskast** – foto opladen, toestellen omkaderen (of AI-voorstel), type/amperage/curve/differentieel invullen. Virtuele weergave van de kast.
-2. **Kringen** – per zekering documenteren (functie, ruimtes, kabel, doorsnede). Meerdere kringen op één zekering worden gemarkeerd.
-3. **Situatieplan** – plattegrond opladen, AREI-symbolen plaatsen en aan een kring koppelen (kleurcodering per kring).
-4. **Nieuwe kast** – voorstel genereren: elke kring krijgt een eigen automaat onder 30 mA-differentiëlen.
-5. **Eendraadschema** – SVG-export of afdrukken naar PDF, voor bestaande én nieuwe kast.
+1. **Projectgegevens** – adres, eigenaar, EAN-code van de meter (18 cijfers), voeding (mono-/driefasig), keuringsinstantie.
+2. **Zekeringskast** – foto opladen, toestellen omkaderen (of AI-voorstel), type/amperage/curve/differentieel invullen. Meerdere kasten mogelijk; een onderverdeler is gewoon een tweede kast die door een kring van de eerste gevoed wordt ("Voedt onderverdeler" bij de kring).
+3. **Kringen** – per zekering documenteren. Verplicht om een kring als "gedocumenteerd" te markeren: kabeltype (VOB/XVB/XGB…), doorsnede, brandklasse en plaatsing (in muur / op muur / in buis / los). Meerdere kringen op één zekering worden gemarkeerd.
+4. **Situatieplan** – meerdere plattegronden (verdiepingen), AREI-symbolen plaatsen en aan een kring koppelen (kleur per kring), symbool- en labelgrootte instelbaar.
+5. **Nieuwe kast(en)** – voorstel: elke kring een eigen automaat, max. 8 kringen per 30 mA-differentieel, gegroepeerd per verdieping, grote verbruikers apart, verdeeld over de fases. Kringen die door de bestaande bekabeling samen moeten blijven (bv. gedeelde nul) markeer je met "samen houden".
+6. **Eendraadschema** – bestaande én nieuwe toestand, inclusief teller/EAN en onderverdelers. SVG-export of afdrukken naar PDF.
 
 ## Techniek
 - Vite + TypeScript (geen framework), SVG voor kast, plan en schema.

@@ -1,12 +1,14 @@
 import { h, svg, btn, icon, toast, clear } from '../lib/dom';
 import { buildForm, formModal, panZoom, type FieldDef } from '../lib/ui';
 import { upsert, softDelete, saveImage, assetUrl, assetSize } from '../db/repo';
-import { plansOf, symbolsOf, circuitsOf, type Plan, type Project, type Symbol_ } from '../domain/model';
+import { plansOf, symbolsOf, circuitsOf, boardsOf, type Plan, type Project, type Symbol_ } from '../domain/model';
 import { SYMBOLS, symbolSvg, circuitColor, symbolById } from '../domain/symbols';
 import { editCircuit } from './circuits';
 
 const LS = (pid: string) => `smarterwire.plan.${pid}`;
-const SYM_SIZE = 0.022; // symboolgrootte als fractie van de plan-breedte
+const SYM_SIZE = 0.022; // basisgrootte als fractie van de plan-breedte; schaalbaar via 'Symboolgrootte'
+const LS_SIZE = 'smarterwire.symsize', LS_LABEL = 'smarterwire.labelsize';
+const pct = (k: string) => Math.min(300, Math.max(30, Number(localStorage.getItem(k)) || 100));
 
 export async function renderPlan(root: HTMLElement, project: Project) {
   const plans = await plansOf(project.id);
@@ -33,10 +35,11 @@ export async function renderPlan(root: HTMLElement, project: Project) {
 
   let planId = localStorage.getItem(LS(project.id)); if (!plans.find((p) => p.id === planId)) planId = plans[0].id;
   const plan = plans.find((p) => p.id === planId)!;
-  const [symbols, circuits] = await Promise.all([symbolsOf(plan.id), circuitsOf(project.id)]);
+  const [symbols, circuits, boards] = await Promise.all([symbolsOf(plan.id), circuitsOf(project.id), boardsOf(project.id)]);
   const order = circuits.map((c) => c.id);
   const url = await assetUrl(plan.asset_id), size = await assetSize(plan.asset_id!);
-  const W = size!.width, H = size!.height, S = W * SYM_SIZE;
+  const W = size!.width, H = size!.height;
+  let S = W * SYM_SIZE * pct(LS_SIZE) / 100, LBL = pct(LS_LABEL) / 100;
 
   let tool: string | null = 'stopcontact'; // symbool om te plaatsen; null = selecteren
   let selId: string | null = null;
@@ -54,6 +57,8 @@ export async function renderPlan(root: HTMLElement, project: Project) {
       btn('', { icon: 'Plus', variant: 'ghost', title: 'Plan toevoegen', onClick: addPlan }),
       btn('', { icon: 'Pencil', variant: 'ghost', title: 'Plan hernoemen', onClick: () => formModal({ title: 'Plan', fields: [{ key: 'name', label: 'Naam', span: 2 }, { key: 'level', label: 'Niveau', span: 2 }], values: plan,
         onSave: async (v) => { await upsert('plan', { ...plan, ...v }); reload(); }, onDelete: async () => { await softDelete('plan', plan.id); reload(); } }) }),
+      h('span', { class: 'hint' }, 'Symbool %'), h('input', { type: 'number', value: pct(LS_SIZE), min: 30, max: 300, step: 10, style: { width: '72px' }, onChange: (e: Event) => { localStorage.setItem(LS_SIZE, (e.target as HTMLInputElement).value); S = W * SYM_SIZE * pct(LS_SIZE) / 100; drawSyms(); } }),
+      h('span', { class: 'hint' }, 'Label %'), h('input', { type: 'number', value: pct(LS_LABEL), min: 30, max: 300, step: 10, style: { width: '72px' }, onChange: (e: Event) => { localStorage.setItem(LS_LABEL, (e.target as HTMLInputElement).value); LBL = pct(LS_LABEL) / 100; drawSyms(); } }),
       h('span', { class: 'hint' }, 'Actieve kring:'), circSel,
       btn('Nieuwe kring', { icon: 'Plus', variant: 'ghost', onClick: () => editCircuit(project, {}, () => reload()) })),
     h('div', { class: 'split left-pal' }, pal, canvas, side));
@@ -88,7 +93,7 @@ export async function renderPlan(root: HTMLElement, project: Project) {
       const inner = svg('g'); inner.innerHTML = symbolSvg(sym.type, S * 1.1); g.append(inner);
       g.addEventListener('pointerdown', (e) => startDrag(e, sym));
       layer.append(g);
-      if (sym.label) layer.append(svg('text', { x: sym.x * W + S * 0.9, y: sym.y * H + 4, 'font-size': S * 0.55, 'font-weight': 600, fill: col, stroke: '#fff', 'stroke-width': 3, 'paint-order': 'stroke' }, sym.label));
+      if (sym.label) layer.append(svg('text', { x: sym.x * W + S * 0.9, y: sym.y * H + 4, 'font-size': S * 0.55 * LBL, 'font-weight': 600, fill: col, stroke: '#fff', 'stroke-width': 3, 'paint-order': 'stroke' }, sym.label));
     }
   }
 
@@ -126,6 +131,7 @@ export async function renderPlan(root: HTMLElement, project: Project) {
     const fields: FieldDef[] = [
       { key: 'type', label: 'Symbool', type: 'select', allowEmpty: false, span: 2, options: SYMBOLS.map((x) => ({ value: x.id, label: x.label })) },
       { key: 'circuit_id', label: 'Kring', type: 'select', span: 2, options: circuits.map((c) => ({ value: c.id, label: `${c.nr ?? ''} ${c.name}` })) },
+      ...(sym.type === 'verdeelbord' ? [{ key: 'board_id', label: 'Kast / onderverdeler', type: 'select' as const, span: 2 as const, options: boards.filter((b) => b.kind === 'bestaand').map((b) => ({ value: b.id, label: b.name })) }] : []),
       { key: 'label', label: 'Label' }, { key: 'rot', label: 'Rotatie (°)', type: 'number' },
       { key: 'notes', label: 'Notities', type: 'textarea', span: 2 },
     ];

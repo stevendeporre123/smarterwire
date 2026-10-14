@@ -1,4 +1,7 @@
-import { h, clear } from '../lib/dom';
+import { h, clear, btn } from '../lib/dom';
+import { upsert } from '../db/repo';
+import { formModal } from '../lib/ui';
+import { projectFields, validateProject } from './projects';
 import { icon } from '../lib/dom';
 import { sql } from '../db/client';
 import { topbar } from './shell';
@@ -20,7 +23,10 @@ export async function renderProject(app: HTMLElement, id: string, tab: string) {
   if (!project) { location.hash = '#/'; return; }
   const body = h('div', { class: 'main' });
   app.append(h('div', { class: 'shell' }, topbar(project.name),
-    h('nav', { class: 'tabs' }, TABS.map((t) => h('a', { class: `tab ${t.id === tab ? 'active' : ''}`, href: `#/p/${id}/${t.id}` }, icon(t.icon, 16), t.label))),
+    h('nav', { class: 'tabs' }, TABS.map((t) => h('a', { class: `tab ${t.id === tab ? 'active' : ''}`, href: `#/p/${id}/${t.id}` }, icon(t.icon, 16), t.label)),
+      h('span', { class: 'spacer' }),
+      btn('Projectgegevens', { icon: 'FileText', variant: 'ghost', onClick: () => formModal({ title: 'Projectgegevens', fields: projectFields, values: project, wide: true,
+        onSave: async (v) => { if (!validateProject(v)) return false; await upsert('project', { ...project, ...v }); location.reload(); } }) })),
     body));
   const t = TABS.find((x) => x.id === tab) ?? TABS[0];
   clear(body);

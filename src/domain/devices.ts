@@ -22,7 +22,12 @@ export const FUNCTIONS = [
   'Verlichting', 'Stopcontacten', 'Kookplaat', 'Oven', 'Wasmachine', 'Droogkast', 'Vaatwasser',
   'Boiler', 'Verwarming', 'Airco / warmtepomp', 'Laadpaal', 'Buiten', 'Bel / laagspanning', 'Andere',
 ];
-export const CABLE_TYPES = ['VOB', 'XVB', 'XVB-F2', 'EXVB', 'H07V-U (buis)', 'H07V-K (buis)', 'YMvK', 'Onbekend'];
+export const CABLE_TYPES = ['VOB', 'XVB', 'XGB', 'EXVB', 'XVB-F2', 'H07V-U', 'H07V-K', 'YMvK', 'Onbekend'];
+export const FIRE_CLASSES = ['Eca', 'Dca', 'Cca', 'B2ca', 'Fca', 'Onbekend'];
+export const INSTALL_MODES = ['In muur', 'Op muur', 'In buis', 'Los'];
+export const SUPPLIES = [{ value: '1x230', label: 'Monofasig 230 V' }, { value: '3N400', label: 'Driefasig 3N 400 V' }, { value: '3x230', label: 'Driefasig 3x230 V (geen nul)' }];
+export const PHASES = ['L1', 'L2', 'L3', '3P'];
+export const INSPECTORS = ['AIB-Vinçotte', 'BTV', 'Technics', 'SECO', 'Vinçotte'];
 export const SECTIONS = [1.5, 2.5, 4, 6, 10, 16];
 export const STATUSES = ['onbekend', 'gedocumenteerd', 'gecontroleerd'];
 
@@ -36,4 +41,23 @@ export function deviceTitle(d: { kind: string; label?: string | null; rating_a?:
   if (d.sens_ma) bits.push(`${d.sens_ma}mA`);
   const t = bits.filter(Boolean).join(' ');
   return t || DEVICE_KINDS[d.kind]?.label.split(' ')[0] || 'Toestel';
+}
+
+const dec = (n: number) => String(n).replace('.', ',');
+
+/** Een kabel is pas volledig als type, doorsnede, brandklasse en plaatsing gekend zijn. */
+export function cableMissing(c: { cable_type?: string | null; section_mm2?: number | null; fire_class?: string | null; install?: string | null }): string[] {
+  const m: string[] = [];
+  if (!c.cable_type || c.cable_type === 'Onbekend') m.push('type');
+  if (!c.section_mm2) m.push('doorsnede');
+  if (!c.fire_class || c.fire_class === 'Onbekend') m.push('brandklasse');
+  if (!c.install) m.push('plaatsing');
+  return m;
+}
+
+/** "VOB Eca 3G2,5 · in buis" */
+export function cableLabel(c: { cable_type?: string | null; section_mm2?: number | null; fire_class?: string | null; install?: string | null; wires?: number | null }): string {
+  const core = c.section_mm2 ? `${c.wires ? c.wires + 'G' : ''}${dec(c.section_mm2)}` : '';
+  const main = [c.cable_type, c.fire_class && c.fire_class !== 'Onbekend' ? c.fire_class : '', core].filter(Boolean).join(' ');
+  return [main, c.install?.toLowerCase()].filter(Boolean).join(' · ');
 }

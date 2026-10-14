@@ -9,23 +9,25 @@ export async function renderSchema(root: HTMLElement, project: Project) {
     return;
   }
   const circuits = await circuitsOf(project.id);
-  let idx = Math.max(0, boards.findIndex((b) => b.kind === 'nieuw') >= 0 ? 0 : 0);
+  const kinds: ('bestaand' | 'nieuw')[] = ['bestaand', 'nieuw'];
+  let which: 'bestaand' | 'nieuw' = boards.some((b) => b.kind === 'nieuw') ? 'nieuw' : 'bestaand';
   const out = h('div', { class: 'schema-wrap' });
   root.classList.add('page-full'); out.style.flex = '1';
 
-  const sel = h('select', { onChange: (e: Event) => { idx = +(e.target as HTMLSelectElement).value; draw(); } },
-    boards.map((b, i) => h('option', { value: i }, `${b.kind === 'nieuw' ? '★ ' : ''}${b.name} (${b.kind})`)));
+  const sel = h('select', { onChange: (e: Event) => { which = (e.target as HTMLSelectElement).value as any; draw(); } },
+    kinds.filter((k) => boards.some((b) => b.kind === k)).map((k) => h('option', { value: k, selected: k === which }, k === 'nieuw' ? '★ Nieuwe toestand (ontwerp)' : 'Bestaande toestand')));
   let current = '';
   async function draw() {
-    const b = boards[idx];
+    const bs = boards.filter((b) => b.kind === which);
+    const withDevs = await Promise.all(bs.map(async (board) => ({ board, devices: await devicesOf(board.id) })));
     current = buildSingleLineSvg({
-      title: `Eendraadschema – ${b.name}`, devices: await devicesOf(b.id), circuits, which: b.kind,
-      meta: [project.name, project.address ?? '', b.kind === 'nieuw' ? 'ontwerp nieuwe kast' : 'bestaande toestand', new Date().toLocaleDateString('nl-BE')].filter(Boolean) as string[],
+      title: `Eendraadschema – ${which === 'nieuw' ? 'nieuwe toestand' : 'bestaande toestand'}`, boards: withDevs, circuits, which, ean: project.ean,
+      meta: [project.name, [project.owner, project.address].filter(Boolean).join(' · '), project.inspector ?? '', new Date().toLocaleDateString('nl-BE')].filter(Boolean) as string[],
     });
     clear(out); out.innerHTML = current;
   }
   root.append(h('div', { class: 'toolbar' }, sel, h('span', { class: 'spacer' }),
-    btn('SVG', { icon: 'Download', onClick: () => download(`eendraadschema-${boards[idx].name}.svg`, current, 'image/svg+xml') }),
+    btn('SVG', { icon: 'Download', onClick: () => download(`eendraadschema-${which}.svg`, current, 'image/svg+xml') }),
     btn('Afdrukken / PDF', { icon: 'Printer', variant: 'primary', onClick: () => window.print() })), out);
   await draw();
 }

@@ -3,8 +3,8 @@ import { buildForm, formModal, panZoom, badge, type FieldDef } from '../lib/ui';
 import { upsert, softDelete, saveImage, assetUrl, assetSize, upsertStmt } from '../db/repo';
 import { sql } from '../db/client';
 import { boardsOf, devicesOf, circuitsOf, type Board, type Device, type Project, type Circuit } from '../domain/model';
-import { CURVES, DEVICE_KINDS, DIFF_TYPES, POLES, deviceTitle, isGroupParent, isFeeder } from '../domain/devices';
-import { generateNewBoard, DEFAULT_GEN } from '../domain/newboard';
+import { CURVES, DEVICE_KINDS, DIFF_TYPES, PHASES, POLES, deviceTitle, isGroupParent, isFeeder } from '../domain/devices';
+import { generateNewBoards, DEFAULT_GEN } from '../domain/newboard';
 import { editCircuit } from './circuits';
 import { analyzeBoardPhoto, getAiEndpoint, setAiEndpoint } from '../lib/ai';
 import { uid } from '../lib/id';
@@ -81,6 +81,12 @@ export async function renderBoard(root: HTMLElement, project: Project) {
   let view: 'foto' | 'virtueel' = photoUrl ? 'foto' : 'virtueel';
   let selId: string | null = null;
 
+  function feedHint() {
+    const srcId = board.kind === 'nieuw' ? board.src_board_id : board.id;
+    const c = circuits.find((x) => x.feeds_board_id === srcId);
+    return c ? ` · onderverdeler, gevoed via kring ${c.nr ?? ''} ${c.name}` : '';
+  }
+
   // ---------- toolbar ----------
   const boardSel = h('select', { onChange: (e: Event) => { localStorage.setItem(LS_BOARD(project.id), (e.target as HTMLSelectElement).value); reload(); } },
     boards.map((b) => h('option', { value: b.id, selected: b.id === board.id }, `${b.kind === 'nieuw' ? '★ ' : ''}${b.name}`)));
@@ -90,11 +96,11 @@ export async function renderBoard(root: HTMLElement, project: Project) {
   } });
   const viewBtns = h('div', { style: { display: 'flex', gap: '4px' } });
   const toolbar = h('div', { class: 'toolbar' }, boardSel,
-    btn('', { icon: 'Plus', variant: 'ghost', title: 'Bestaande kast toevoegen', onClick: () => newBoard('bestaand') }),
+    btn('', { icon: 'Plus', variant: 'ghost', title: 'Kast of onderverdeler toevoegen', onClick: () => newBoard('bestaand') }),
     btn('', { icon: 'Pencil', variant: 'ghost', title: 'Kast hernoemen', onClick: () => formModal({ title: 'Kast bewerken', fields: [{ key: 'name', label: 'Naam', span: 2 }, { key: 'location', label: 'Locatie', span: 2 }, { key: 'notes', label: 'Notities', type: 'textarea', span: 2 }], values: board,
       onSave: async (v) => { await upsert('board', { ...board, ...v }); reload(); },
       onDelete: async () => { await softDelete('board', board.id); localStorage.removeItem(LS_BOARD(project.id)); reload(); } }) }),
-    h('span', { class: 'hint' }, board.kind === 'nieuw' ? 'ontwerp nieuwe kast' : 'bestaande toestand'),
+    h('span', { class: 'hint' }, board.kind === 'nieuw' ? 'ontwerp nieuwe kast' : 'bestaande toestand', feedHint()),
     h('span', { class: 'spacer' }), viewBtns);
 
   if (board.kind === 'bestaand') {
@@ -102,13 +108,9 @@ export async function renderBoard(root: HTMLElement, project: Project) {
     if (photoUrl) toolbar.append(btn('AI-voorstel', { icon: 'Sparkles', variant: 'accent', title: 'Toestellen herkennen met AI (proxy vereist)', onClick: runAi }),
       btn('Ouders afleiden', { icon: 'GitBranch', title: 'Beschermend differentieel automatisch afleiden uit de positie', onClick: async () => {
         const ch = guessParents(devices); await sql.batch(ch.map((d) => upsertStmt('device', d))); toast(`${ch.length} toestel(len) gekoppeld`); refresh(); } }));
-  } else {
-    toolbar.append(btn('+ Toestel', { icon: 'Plus', onClick: () => addDeviceManual() }),
-      btn('Voorstel uit kringen', { icon: 'WandSparkles', variant: 'accent', title: 'Nieuwe kast voorstellen: elke kring eigen automaat', onClick: genNew }));
   }
-  toolbar.append(btn('Nieuwe kast ontwerpen', { icon: 'FilePlus2', variant: 'ghost', onClick: async () => {
-    const ex = boards.find((b) => b.kind === 'nieuw');
-    if (ex) { localStorage.setItem(LS_BOARD(project.id), ex.id); reload(); } else newBoard('nieuw'); } }));
+  toolbar.append(btn('+ Toestel', { icon: 'Plus', title: 'Toestel manueel toevoegen (zonder foto)', onClick: () => addDeviceManual() }));
+  toolbar.append(btn(board.kind === 'nieuw' ? 'Opnieuw genereren' : 'Nieuwe kast voorstellen', { icon: 'WandSparkles', variant: 'accent', title: 'Voorstel voor alle kasten: elke kring eigen automaat, per 30 mA-differentieel', onClick: genNew }));
 
   // ---------- canvas ----------
   const canvas = h('div', { class: 'canvas' });
@@ -210,7 +212,8 @@ export async function renderBoard(root: HTMLElement, project: Project) {
         g.append(svg('rect', { x, y, width: w, height: 120, rx: 4, fill: main ? '#e6f5e6' : '#fff', stroke: d.id === selId ? '#0066aa' : main ? '#008000' : '#555e55', 'stroke-width': d.id === selId ? 3 : 1.5 }),
           svg('rect', { x: x + w / 2 - 8, y: y + 46, width: 16, height: 26, rx: 3, fill: '#2b312b' }),
           svg('text', { x: x + w / 2, y: y + 22, 'text-anchor': 'middle', 'font-size': 12, 'font-weight': 600 }, `${d.curve ?? ''}${d.rating_a ?? ''}`),
-          svg('text', { x: x + w / 2, y: y + 36, 'text-anchor': 'middle', 'font-size': 9, fill: '#555e55' }, d.sens_ma ? `${d.sens_ma}mA` : (DEVICE_KINDS[d.kind]?.short ?? '')));
+          svg('text', { x: x + w / 2, y: y + 36, 'text-anchor': 'middle', 'font-size': 9, fill: '#555e55' }, d.sens_ma ? `${d.sens_ma}mA` : (DEVICE_KINDS[d.kind]?.short ?? '')),
+          ...(d.phase ? [svg('text', { x: x + w / 2, y: y + 96, 'text-anchor': 'middle', 'font-size': 9, 'font-weight': 600, fill: '#0066aa' }, d.phase)] : []));
         g.append(svg('text', { x: x + w / 2, y: y + 108, 'text-anchor': 'middle', 'font-size': 9, fill: '#555e55' }, (d.label ?? '').slice(0, 8)));
         const warn = isFeeder(d.kind) && !cs.length;
         g.append(svg('text', { x: x + w / 2, y: y + 138, 'text-anchor': 'middle', 'font-size': 10, fill: warn ? '#e07800' : '#008000', 'font-weight': 600 }, warn ? '?' : cs.map((c) => c.nr || '•').join('+')));
@@ -242,7 +245,8 @@ export async function renderBoard(root: HTMLElement, project: Project) {
       { key: 'label', label: 'Label / opschrift' }, { key: 'poles', label: 'Polen', type: 'select', options: POLES },
       { key: 'rating_a', label: 'Nominaal (A)', type: 'number' }, { key: 'curve', label: 'Curve', type: 'select', options: CURVES },
       { key: 'sens_ma', label: 'Gevoeligheid (mA)', type: 'number' }, { key: 'dtype', label: 'Type diff.', type: 'select', options: DIFF_TYPES },
-      { key: 'modules', label: 'Modules breed', type: 'number' }, { key: 'breaking_ka', label: 'Kortsluitvermogen (kA)', type: 'number' },
+      { key: 'modules', label: 'Modules breed', type: 'number' }, { key: 'phase', label: 'Fase', type: 'select', options: PHASES },
+      { key: 'breaking_ka', label: 'Kortsluitvermogen (kA)', type: 'number', span: 2 },
       { key: 'parent_id', label: 'Beschermd door', type: 'select', span: 2, options: parents.map((p) => ({ value: p.id, label: deviceTitle(p) + ` (rij ${p.row_no + 1})` })) },
       { key: 'notes', label: 'Notities', type: 'textarea', span: 2 },
     ];
@@ -276,15 +280,30 @@ export async function renderBoard(root: HTMLElement, project: Project) {
   }
 
   async function genNew() {
-    const bests = circuits.filter((c) => c.device_id);
     if (!circuits.length) { toast('Documenteer eerst enkele kringen', 'error'); return; }
-    if (devices.length && !confirm('Het bestaande voorstel in deze kast wordt vervangen. Doorgaan?')) return;
-    const o = { ...DEFAULT_GEN };
-    formModal({ title: 'Voorstel nieuwe kast', fields: [
-      { key: 'mainRating', label: 'Hoofdautomaat (A)', type: 'number' }, { key: 'diffRating', label: 'Differentieel (A)', type: 'number' },
-      { key: 'maxPerDiff', label: 'Max. kringen per differentieel', type: 'number' }, { key: 'splitByFunction', label: 'Groeperen per functie (verlichting / stopcontacten / toestellen)', type: 'checkbox', span: 2 }],
-      values: o, extra: h('p', { class: 'hint' }, `${circuits.length} kring(en) → elke kring krijgt een eigen automaat (${bests.length} gekoppeld aan de bestaande kast). Zekeringwaardes volgen de doorsnede; altijd zelf nakijken.`),
-      onSave: async (v) => { await generateNewBoard(project.id, board.id, circuits, { ...DEFAULT_GEN, ...v } as any); toast('Voorstel aangemaakt'); await reload(); } });
+    const hasNew = boards.some((b) => b.kind === 'nieuw');
+    if (hasNew && !confirm('Bestaande voorstellen voor de nieuwe kast(en) worden vervangen. Doorgaan?')) return;
+    const noPhase = !project.supply;
+    formModal({ title: 'Voorstel nieuwe kast(en)', wide: true, fields: [
+      { key: 'maxPerDiff', label: 'Max. kringen per 30 mA-differentieel', type: 'number' },
+      { key: 'diffRating', label: 'Differentieel (A)', type: 'number' },
+      { key: 'mainRating', label: 'Hoofdautomaat (A)', type: 'number' },
+      { key: 'bigPerDiff', label: 'Grote verbruikers per differentieel', type: 'number' },
+      { key: 'splitByLevel', label: 'Groeperen per verdieping', type: 'checkbox' },
+      { key: 'mergeLeftovers', label: 'Kleine restgroepen van opeenvolgende verdiepingen samenvoegen', type: 'checkbox', span: 2 },
+      { key: 'bigOwnDiff', label: 'Grote verbruikers (kookplaat, oven, droogkast, boiler, verwarming, airco, laadpaal) apart', type: 'checkbox', span: 2 }],
+      values: { ...DEFAULT_GEN },
+      extra: h('div', { class: 'hint' },
+        h('p', null, `${circuits.length} kring(en) → elke kring krijgt een eigen automaat. Onderverdelers blijven onderverdelers. Zekeringwaarde volgt de kabeldoorsnede, altijd zelf nakijken.`),
+        h('p', null, 'Kringen die samen moeten blijven (bestaande bekabeling) markeer je bij de kring met "Samen houden". Fases worden verdeeld volgens de voeding in de projectgegevens.'),
+        noPhase ? h('p', { style: { color: '#b35c00' } }, '⚠ Voeding (mono/driefasig) is niet ingevuld bij de projectgegevens; er wordt monofasig gerekend.') : null),
+      onSave: async (v) => {
+        const r = await generateNewBoards(project, { ...DEFAULT_GEN, ...v } as any);
+        toast(`${r.diffs} differentieel(en) voorgesteld`);
+        if (r.warnings.length) alert('Opmerkingen:\n\n' + [...new Set(r.warnings)].join('\n'));
+        const nb = (await boardsOf(project.id)).find((b) => b.kind === 'nieuw'); if (nb) localStorage.setItem(LS_BOARD(project.id), nb.id);
+        await reload();
+      } });
   }
 
   async function runAi() {

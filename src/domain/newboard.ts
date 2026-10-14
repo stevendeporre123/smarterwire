@@ -2,54 +2,159 @@ import { sql, type Stmt } from '../db/client';
 import { upsertStmt } from '../db/repo';
 import { uid } from '../lib/id';
 import { DEFAULT_RATING_FOR_SECTION } from './devices';
-import type { Circuit } from './model';
+import { boardsOf, circuitsOf, allDevicesOfProject, type Board, type Circuit, type Device, type Project } from './model';
 
-export interface GenOptions { maxPerDiff: number; diffRating: number; mainRating: number; splitByFunction: boolean }
-export const DEFAULT_GEN: GenOptions = { maxPerDiff: 6, diffRating: 40, mainRating: 40, splitByFunction: true };
+export interface GenOptions {
+  maxPerDiff: number;       // max. kringen per 30 mA-differentieel
+  diffRating: number;
+  mainRating: number;
+  splitByLevel: boolean;    // groeperen per verdieping
+  mergeLeftovers: boolean;  // kleine restgroepen van opeenvolgende verdiepingen samenvoegen
+  bigOwnDiff: boolean;      // grote verbruikers op eigen differentieel
+  bigPerDiff: number;
+}
+export const DEFAULT_GEN: GenOptions = { maxPerDiff: 8, diffRating: 40, mainRating: 40, splitByLevel: true, mergeLeftovers: true, bigOwnDiff: true, bigPerDiff: 1 };
 
-const groupOf = (c: Circuit) =>
-  c.func === 'Verlichting' ? 'Verlichting' : c.func === 'Stopcontacten' ? 'Stopcontacten' : 'Toestellen';
+export const BIG_FUNCS = new Set(['Kookplaat', 'Oven', 'Droogkast', 'Boiler', 'Verwarming', 'Airco / warmtepomp', 'Laadpaal']);
+
+interface Item { cs: Circuit[]; level: string; big: boolean }
+interface Chunk { items: Item[]; size: number; level: string; big: boolean }
+export interface GenResult { diffs: number; circuits: number; warnings: string[] }
+
+const is3p = (c: Circuit) => c.voltage === 400 || (c.wires ?? 0) >= 4;
+const sizeOf = (it: Item[]) => it.reduce((s, i) => s + i.cs.length, 0);
 
 /**
- * Bouwt een voorstel voor een nieuwe kast: elke kring krijgt een EIGEN automaat
- * (dus gedeelde zekeringen uit de oude kast worden gesplitst), gegroepeerd onder
- * 30mA-differentiëlen. Het is een voorstel: ratings uit de doorsnede en groepering
- * moeten altijd door de installateur nagekeken worden.
+ * Bouwt voor elke bestaande kast een voorstel voor een nieuwe kast (onderverdelers blijven onderverdelers).
+ * Elke kring krijgt een eigen automaat. Het is een VOORSTEL: kringen die door de bestaande bekabeling
+ * niet te splitsen zijn, kan je met "samen houden" markeren en daarna ter plaatse aanpassen.
  */
-export async function generateNewBoard(projectId: string, boardId: string, circuits: Circuit[], opt: GenOptions) {
-  const stmts: Stmt[] = [];
-  // oude voorstel wissen
-  stmts.push({ sql: `UPDATE device SET deleted=1, updated_at=? WHERE board_id=?`, bind: [Date.now(), boardId] });
-  stmts.push({ sql: `UPDATE circuit SET new_device_id=NULL, updated_at=? WHERE project_id=?`, bind: [Date.now(), projectId] });
+export async function generateNewBoards(project: Project, opt: GenOptions): Promise<GenResult> {
+  const [boards, circuits, devices, symLevels] = await Promise.all([
+    boardsOf(project.id), circuitsOf(project.id), allDevicesOfProject(project.id),
+    sql.query<{ circuit_id: string; level: string; n: number }>(
+      `SELECT s.circuit_id, COALESCE(p.level, p.name) level, COUNT(*) n FROM symbol s JOIN plan p ON p.id=s.plan_id
+       WHERE s.deleted=0 AND p.deleted=0 AND p.project_id=? AND s.circuit_id IS NOT NULL GROUP BY s.circuit_id, p.id`, [project.id]),
+  ]);
+  const old = boards.filter((b) => b.kind === 'bestaand');
+  if (!old.length) throw new Error('Geen bestaande kast gevonden');
+  const devBoard = new Map(devices.map((d) => [d.id, d.board_id]));
+  const warnings: string[] = [];
 
-  const mainId = uid();
-  stmts.push(upsertStmt('device', { id: mainId, board_id: boardId, kind: 'hoofd', label: 'Hoofdautomaat', poles: '2P', rating_a: opt.mainRating, curve: 'B', row_no: 0, pos: 0, modules: 2 }));
-
-  const groups = new Map<string, Circuit[]>();
+  // welke kasten worden gevoed door een kring (= onderverdeler)?
+  const fedBy = new Map<string, string>();
   for (const c of circuits) {
-    const g = opt.splitByFunction ? groupOf(c) : 'Alle';
-    (groups.get(g) ?? groups.set(g, []).get(g)!).push(c);
+    const host = c.device_id ? devBoard.get(c.device_id) : null;
+    if (c.feeds_board_id && host && host !== c.feeds_board_id) fedBy.set(c.feeds_board_id, host);
   }
-  let row = 1, n = 1;
-  for (const [g, cs] of groups) {
-    for (let i = 0; i < cs.length; i += opt.maxPerDiff) {
-      const chunk = cs.slice(i, i + opt.maxPerDiff);
-      const diffId = uid();
-      stmts.push(upsertStmt('device', {
-        id: diffId, board_id: boardId, parent_id: mainId, kind: 'differentieel', label: `ID${n}`, poles: '2P',
-        rating_a: opt.diffRating, sens_ma: 30, dtype: 'A', row_no: row, pos: 0, modules: 2, notes: g,
-      }));
-      chunk.forEach((c, k) => {
-        const devId = uid();
-        const rating = (c.section_mm2 && DEFAULT_RATING_FOR_SECTION[c.section_mm2]) || (c.func === 'Verlichting' ? 10 : 16);
-        stmts.push(upsertStmt('device', {
-          id: devId, board_id: boardId, parent_id: diffId, kind: 'automaat', label: c.nr ? `K${c.nr}` : null, poles: '1P+N',
-          rating_a: rating, curve: 'B', row_no: row, pos: 1 + k, modules: 1,
-        }));
-        stmts.push({ sql: `UPDATE circuit SET new_device_id=?, updated_at=? WHERE id=?`, bind: [devId, Date.now(), c.id] });
-      });
-      row++; n++;
+  const root = old.find((b) => !fedBy.has(b.id)) ?? old[0];
+
+  // verdieping: expliciet, anders waar de meeste symbolen staan
+  const bestLevel = new Map<string, { level: string; n: number }>();
+  for (const r of symLevels) { const cur = bestLevel.get(r.circuit_id); if (!cur || r.n > cur.n) bestLevel.set(r.circuit_id, { level: r.level, n: r.n }); }
+  const levelOf = (c: Circuit) => c.level || bestLevel.get(c.id)?.level || '';
+
+  const threePhase = project.supply === '3N400' || project.supply === '3x230';
+  const phaseNames = project.supply === '3x230' ? ['L1-L2', 'L2-L3', 'L3-L1'] : ['L1', 'L2', 'L3'];
+
+  const stmts: Stmt[] = [];
+  let diffCount = 0;
+  const now = Date.now();
+  stmts.push({ sql: `UPDATE circuit SET new_device_id=NULL, updated_at=? WHERE project_id=?`, bind: [now, project.id] });
+
+  for (const src of old) {
+    // bijhorende nieuwe kast zoeken of aanmaken
+    let nb = boards.find((b) => b.kind === 'nieuw' && b.src_board_id === src.id);
+    if (!nb) {
+      nb = { id: uid(), project_id: project.id, name: `${src.name} (nieuw)`, kind: 'nieuw', src_board_id: src.id } as Board;
+      stmts.push(upsertStmt('board', nb));
     }
+    stmts.push({ sql: `UPDATE device SET deleted=1, updated_at=? WHERE board_id=?`, bind: [now, nb.id] });
+
+    const mine = circuits.filter((c) => (c.device_id ? devBoard.get(c.device_id) === src.id : src.id === root.id));
+    if (!mine.length && src.id !== root.id) continue;
+
+    // items: kringen met dezelfde lock_group blijven samen
+    const items: Item[] = []; const locks = new Map<string, Item>();
+    for (const c of mine) {
+      const big = BIG_FUNCS.has(c.func ?? '');
+      if (c.lock_group) {
+        const it = locks.get(c.lock_group);
+        if (it) { it.cs.push(c); it.big ||= big; continue; }
+        const n: Item = { cs: [c], level: levelOf(c), big }; locks.set(c.lock_group, n); items.push(n);
+      } else items.push({ cs: [c], level: levelOf(c), big });
+    }
+    for (const it of items) if (it.cs.length > opt.maxPerDiff) warnings.push(`Samen-houden-groep "${it.cs[0].lock_group}" heeft ${it.cs.length} kringen (> ${opt.maxPerDiff})`);
+
+    const lvlSort = (a: string, b: string) => (a === '' ? 1 : b === '' ? -1 : a.localeCompare(b, 'nl', { numeric: true }));
+    const normal = items.filter((i) => !(opt.bigOwnDiff && i.big));
+    const bigs = items.filter((i) => opt.bigOwnDiff && i.big);
+
+    // normale kringen: per verdieping vullen tot maxPerDiff
+    const chunks: Chunk[] = [];
+    const levels = opt.splitByLevel ? [...new Set(normal.map((i) => i.level))].sort(lvlSort) : [''];
+    for (const lv of levels) {
+      let cur: Chunk | null = null;
+      for (const it of normal.filter((i) => !opt.splitByLevel || i.level === lv)) {
+        if (!cur || cur.size + it.cs.length > opt.maxPerDiff) { cur = { items: [], size: 0, level: lv, big: false }; chunks.push(cur); }
+        cur.items.push(it); cur.size += it.cs.length;
+      }
+    }
+    if (opt.splitByLevel && opt.mergeLeftovers) {
+      for (let i = 0; i < chunks.length - 1;) {
+        if (chunks[i].size + chunks[i + 1].size <= opt.maxPerDiff) { chunks[i].items.push(...chunks[i + 1].items); chunks[i].size += chunks[i + 1].size; chunks.splice(i + 1, 1); } else i++;
+      }
+    }
+    // grote verbruikers
+    for (let i = 0; i < bigs.length; i += Math.max(1, opt.bigPerDiff)) {
+      const its = bigs.slice(i, i + Math.max(1, opt.bigPerDiff));
+      chunks.push({ items: its, size: sizeOf(its), level: its[0].level, big: true });
+    }
+
+    // kast opbouwen
+    const isRoot = src.id === root.id;
+    const mainId = uid();
+    if (isRoot) stmts.push(upsertStmt('device', { id: mainId, board_id: nb.id, kind: 'hoofd', label: 'Hoofd', poles: threePhase ? '3P+N' : '2P', rating_a: opt.mainRating, curve: 'B', row_no: 0, pos: 0, modules: threePhase ? 4 : 2 }));
+    const globalLoad: Record<string, number> = Object.fromEntries(phaseNames.map((p) => [p, 0]));
+    let row = isRoot ? 1 : 0, n = 1;
+    for (const ch of chunks) {
+      const diffId = uid();
+      const diffLoad: Record<string, number> = Object.fromEntries(phaseNames.map((p) => [p, 0]));
+      const kids: Stmt[] = []; let pos = 1; const phasesUsed = new Set<string>();
+      for (const it of ch.items) {
+        const usedInItem = new Set<string>();
+        for (const c of it.cs) {
+          const devId = uid();
+          const rating = (c.section_mm2 && DEFAULT_RATING_FOR_SECTION[c.section_mm2]) || (c.func === 'Verlichting' ? 10 : 16);
+          if (!c.section_mm2) warnings.push(`Kring "${c.name}": geen doorsnede, standaardzekering ${rating}A`);
+          let phase: string | null = null, poles = '1P+N', modules = 1;
+          if (threePhase) {
+            if (is3p(c)) { phase = '3P'; poles = project.supply === '3x230' ? '3P' : '3P+N'; modules = 3; }
+            else {
+              const cands = phaseNames.filter((p) => !usedInItem.has(p));
+              const pool = cands.length ? cands : phaseNames;
+              phase = pool.reduce((a, b) => (diffLoad[a] + globalLoad[a] <= diffLoad[b] + globalLoad[b] ? a : b));
+              usedInItem.add(phase);
+              if (project.supply === '3x230') poles = '2P';
+            }
+            if (phase !== '3P') { diffLoad[phase] += rating; globalLoad[phase] += rating; } else phaseNames.forEach((p) => { diffLoad[p] += rating; globalLoad[p] += rating; });
+            phasesUsed.add(phase);
+          } else if (project.supply === '1x230') poles = '1P+N';
+          kids.push(upsertStmt('device', { id: devId, board_id: nb.id, parent_id: diffId, kind: 'automaat', label: c.nr ? `K${c.nr}` : null, poles, phase, rating_a: rating, curve: 'B', row_no: row, pos: pos++, modules }));
+          kids.push({ sql: `UPDATE circuit SET new_device_id=?, updated_at=? WHERE id=?`, bind: [devId, now, c.id] });
+        }
+      }
+      const lv = ch.level || '';
+      stmts.push(upsertStmt('device', {
+        id: diffId, board_id: nb.id, parent_id: isRoot ? mainId : null, kind: 'differentieel', label: `ID${n}`,
+        poles: threePhase ? (project.supply === '3x230' ? '3P' : '3P+N') : '2P', rating_a: opt.diffRating, sens_ma: 30, dtype: 'A',
+        row_no: row, pos: 0, modules: threePhase ? 4 : 2, notes: [ch.big ? 'grote verbruiker(s)' : '', lv].filter(Boolean).join(' · ') || null,
+      }), ...kids);
+      row++; n++; diffCount++;
+    }
+    if (threePhase) warnings.push(`${nb.name}: belasting (A) per fase ≈ ${phaseNames.map((p) => `${p}: ${globalLoad[p]}`).join(', ')}`);
   }
+
   await sql.batch(stmts);
+  return { diffs: diffCount, circuits: circuits.length, warnings };
 }
