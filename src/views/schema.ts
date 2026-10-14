@@ -14,6 +14,7 @@ import { ensureCircuits, unlinkDevice } from '../domain/circuits';
 import { getSetting, setSetting } from '../domain/settings';
 import { deviceForm } from './deviceform';
 import { openGenerate } from './generate';
+import { SETS, setById, type CircuitSet } from '../domain/sets';
 
 type Sel = { kind: 'circuit' | 'device' | 'supply' | 'load'; id: string } | null;
 interface Fav { tool: string; key?: string }
@@ -43,7 +44,8 @@ export async function renderSchema(root: HTMLElement, project: Project) {
   let current = '';
 
   // ---------- schema ----------
-  const slotMode = (): 'load' | 'bus' | null => (dragging || tool.startsWith('sym:') ? 'load' : tool === 'kring' || tool === 'diff' || tool === 'spd' ? 'bus' : null);
+  const setKind = () => (tool.startsWith('set:') ? setById(tool.slice(4))?.kind : undefined);
+  const slotMode = (): 'load' | 'bus' | null => (dragging || tool.startsWith('sym:') || setKind() === 'load' ? 'load' : tool === 'kring' || tool === 'diff' || tool === 'spd' || setKind() === 'circuit' ? 'bus' : null);
   async function draw() {
     const bs = boards.filter((b) => b.kind === which);
     const withDevs = bs.map((board) => ({ board, devices: devices.filter((d) => d.board_id === board.id) }));
@@ -59,7 +61,7 @@ export async function renderSchema(root: HTMLElement, project: Project) {
 
   // ---------- toestellen toevoegen / verwijderen ----------
   /** Voegt een toestel in op een bus, vóór het `index`-de toestel van die bus (zelfde volgorde als in het schema). */
-  async function addDevice(kind: 'automaat' | 'differentieel' | 'overspanning', parentId: string, boardId: string, index: number) {
+  async function addDevice(kind: 'automaat' | 'differentieel' | 'overspanning', parentId: string, boardId: string, index: number, preset?: CircuitSet) {
     const three = isThreePhase(supply()), polesAll = three ? (supply() === '3x230' ? '3P' : '4P') : '2P';
     const mine = devices.filter((d) => d.board_id === boardId);
     const sib = mine.filter((d) => (d.parent_id ?? '') === parentId && !(parentId === '' && d.kind === 'hoofd')).sort((a, b) => a.row_no - b.row_no || a.pos - b.pos);
@@ -72,9 +74,14 @@ export async function renderSchema(root: HTMLElement, project: Project) {
     }
     const base: Partial<Device> = kind === 'automaat' ? { poles: '2P', curve: 'C', rating_a: 16, breaking_ka: 3, modules: 1, phase: three ? 'L1' : null }
       : kind === 'differentieel' ? { poles: polesAll, rating_a: 40, sens_ma: 30, dtype: 'A', modules: defaultModules('differentieel', polesAll) } : { poles: polesAll, modules: 2 };
-    const dev = await upsert('device', { board_id: boardId, parent_id: parentId || null, kind, row_no: row, pos, ...base });
+    const dev = await upsert('device', { board_id: boardId, parent_id: parentId || null, kind, row_no: row, pos, ...base, ...(preset?.device ?? {}) });
     await ensureCircuits(project); await reloadData();
-    const c = circuitOfDevice(dev as Device);
+    let c = circuitOfDevice(dev as Device);
+    if (preset && c) {   // set: leiding en onderdelen van de kring meteen invullen
+      await upsert('circuit', { ...c, ...preset.circuit }); await reloadData();
+      for (const types of preset.rows ?? []) await placeLoad({ newTypes: types }, c.id, 9999);
+      c = circuitOfDevice(dev as Device);
+    }
     sel = c ? { kind: 'circuit', id: c.id } : { kind: 'device', id: dev.id };
     await draw(); drawSide();
   }
@@ -99,7 +106,7 @@ export async function renderSchema(root: HTMLElement, project: Project) {
    * Zet een nieuw (`newType`) of bestaand (`key`) onderdeel op `circuitId`: op een nieuwe rij vóór rij `index`,
    * of (chain) achter de laatste van rij `index`. De volgorde en rij-indeling van de kring worden hernummerd.
    */
-  async function placeLoad(what: { key?: string; newType?: string }, circuitId: string, index: number, chain = false) {
+  async function placeLoad(what: { key?: string; newType?: string; newTypes?: string[] }, circuitId: string, index: number, chain = false) {
     const before = rowsOfCircuit(circuitId);
     const moving = what.key ? allLoads().find((l) => keyOf(l) === what.key) : undefined;
     const fr = moving ? before.findIndex((r) => r.some((l) => keyOf(l) === what.key)) : -1;
@@ -108,23 +115,22 @@ export async function renderSchema(root: HTMLElement, project: Project) {
     let at = Math.max(0, Math.min(index, before.length));
     if (rowGone && fr < at) at--;
     if (chain && fr === index && !rowGone) return;                          // op de eigen rij laten vallen: niets te doen
-    const newId = uid();
-    const entry: any = moving ?? { src: 'manual', id: newId, fresh: true, type: what.newType, label: null };
-    if (chain && rows.length) { const t = Math.min(at, rows.length - 1); entry.label = entry.label ?? rows[t].map((l) => l.label).find(Boolean) ?? null; rows[t].push(entry); }
-    else rows.splice(Math.min(at, rows.length), 0, [entry]);
+    const added: any[] = moving ? [moving] : (what.newTypes ?? (what.newType ? [what.newType] : [])).map((type) => ({ src: 'manual', id: uid(), fresh: true, type, label: null }));
+    if (chain && rows.length) { const t = Math.min(at, rows.length - 1); const lbl = rows[t].map((l) => l.label).find(Boolean) ?? null; for (const e of added) { e.label = e.label ?? lbl; rows[t].push(e); } }
+    else rows.splice(Math.min(at, rows.length), 0, added);
     const now = Date.now(), stmts: Stmt[] = [];
     let order = 0;
     for (const row of rows) {
       const grp = row.length > 1 ? (row.find((l) => l.grp && !(l as any).fresh)?.grp ?? uid()) : null;
       for (const l of row) {
         order += 10;
-        if ((l as any).fresh) stmts.push(upsertStmt('schema_load', { id: l.id, circuit_id: circuitId, type: what.newType, label: l.label ?? null, n: 1, pos: order, grp }));
+        if ((l as any).fresh) stmts.push(upsertStmt('schema_load', { id: l.id, circuit_id: circuitId, type: l.type, label: l.label ?? null, n: 1, pos: order, grp }));
         else if (l.src === 'plan') stmts.push({ sql: 'UPDATE symbol SET spos=?, sgrp=?, circuit_id=?, updated_at=? WHERE id=?', bind: [order, grp, circuitId, now, l.id] });
         else stmts.push({ sql: 'UPDATE schema_load SET pos=?, grp=?, circuit_id=?, updated_at=? WHERE id=?', bind: [order, grp, circuitId, now, l.id] });
       }
     }
     await sql.batch(stmts);
-    if (what.newType) sel = { kind: 'load', id: `manual:${newId}` }; else if (moving) sel = { kind: 'load', id: what.key! };
+    if (moving) sel = { kind: 'load', id: what.key! }; else if (added.length) sel = { kind: 'load', id: `manual:${added[0].id}` };
     await after();
   }
   async function removeLoad(key: string) {
@@ -149,10 +155,16 @@ export async function renderSchema(root: HTMLElement, project: Project) {
       if (slotEl && slotEl.getAttribute('data-slot') !== 'bus') await placeLoad({ newType: type }, slotEl.getAttribute('data-cid')!, Number(slotEl.getAttribute('data-idx')), slotEl.getAttribute('data-slot') === 'chain');
       else if (cEl) await placeLoad({ newType: type }, cEl.getAttribute('data-cid')!, rowsOfCircuit(cEl.getAttribute('data-cid')!).length);
       else toast('Klik op een oranje invoegpunt op een kring', 'error');
-    } else if (tool === 'kring' || tool === 'diff' || tool === 'spd') {
-      const kind = tool === 'kring' ? 'automaat' : tool === 'diff' ? 'differentieel' : 'overspanning';
-      if (slotEl?.getAttribute('data-slot') === 'bus') await addDevice(kind, slotEl.getAttribute('data-bus') ?? '', slotEl.getAttribute('data-board') ?? '', Number(slotEl.getAttribute('data-idx')));
-      else if (bEl) await addDevice(kind, bEl.getAttribute('data-bus') ?? '', bEl.getAttribute('data-board') ?? '', 9999);
+    } else if (setKind() === 'load') {
+      const set = setById(tool.slice(4)) as Extract<typeof SETS[number], { kind: 'load' }>;
+      if (slotEl && slotEl.getAttribute('data-slot') !== 'bus') await placeLoad({ newTypes: set.types }, slotEl.getAttribute('data-cid')!, Number(slotEl.getAttribute('data-idx')), slotEl.getAttribute('data-slot') === 'chain');
+      else if (cEl) await placeLoad({ newTypes: set.types }, cEl.getAttribute('data-cid')!, rowsOfCircuit(cEl.getAttribute('data-cid')!).length);
+      else toast('Klik op een oranje invoegpunt op een kring', 'error');
+    } else if (tool === 'kring' || tool === 'diff' || tool === 'spd' || setKind() === 'circuit') {
+      const preset = setKind() === 'circuit' ? setById(tool.slice(4)) as CircuitSet : undefined;
+      const kind = tool === 'diff' ? 'differentieel' : tool === 'spd' ? 'overspanning' : 'automaat';
+      if (slotEl?.getAttribute('data-slot') === 'bus') await addDevice(kind, slotEl.getAttribute('data-bus') ?? '', slotEl.getAttribute('data-board') ?? '', Number(slotEl.getAttribute('data-idx')), preset);
+      else if (bEl) await addDevice(kind, bEl.getAttribute('data-bus') ?? '', bEl.getAttribute('data-board') ?? '', 9999, preset);
       else toast('Klik op een oranje invoegpunt op de bus', 'error');
     }
   });
@@ -187,7 +199,8 @@ export async function renderSchema(root: HTMLElement, project: Project) {
       const g = symbolGeom(e.id, 'schema')!, ic = svg('svg', { width: 26, height: 22, viewBox: `0 0 ${g.w + 2} ${g.h + 2}`, preserveAspectRatio: 'xMidYMid meet' });
       ic.innerHTML = symbolMarkup(e.id, 'schema', (g.w + 2) / 2, (g.h + 2) / 2, 1, 0, 1.6); return ic; } })),
   ];
-  const GROUPS = ['Schema', ...FUNC_ORDER];
+  items.splice(BUILD.length, 0, ...SETS.map((st) => ({ tool: `set:${st.id}`, label: st.label, group: 'Sets', kw: 'set combinatie', icon: () => icon('Layers', 18) })));
+  const GROUPS = ['Schema', 'Sets', ...FUNC_ORDER];
   const closed = new Set<string>(JSON.parse(localStorage.getItem('smarterwire.schemaclosed') || '[]'));
   const norm = (x: string) => x.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
   const favOf = (t: string) => favs.find((f) => f.tool === t);
@@ -299,7 +312,9 @@ export async function renderSchema(root: HTMLElement, project: Project) {
     if (!sel) {
       const t = BUILD.find((x) => x.id === tool);
       side.append(h('div', null, h('h4', null, 'Eigenschappen'),
-        h('p', { class: 'muted' }, t && t.id !== 'select' ? t.hint : tool.startsWith('sym:') ? `Klik op een oranje invoegpunt op een kring om "${symbolEntry(tool.slice(4))?.label}" te plaatsen. Esc = stoppen.` : BUILD[0].hint)));
+        h('p', { class: 'muted' }, t && t.id !== 'select' ? t.hint : tool.startsWith('sym:') ? `Klik op een oranje invoegpunt op een kring om "${symbolEntry(tool.slice(4))?.label}" te plaatsen. Esc = stoppen.`
+          : setKind() === 'load' ? `Klik op een oranje invoegpunt op een kring: de hele set "${setById(tool.slice(4))?.label}" komt op één rij. Esc = stoppen.`
+          : setKind() === 'circuit' ? `Klik op een oranje invoegpunt op de bus: er komt een kring met automaat, leiding en onderdelen ("${setById(tool.slice(4))?.label}"). Esc = stoppen.` : BUILD[0].hint)));
       return;
     }
     if (sel.kind === 'load') { side.append(loadInspector(sel.id)); return; }
