@@ -1,3 +1,14 @@
-name = "smarterwire-ai"
+name = "smarterwire"
 main = "worker.ts"
 compatibility_date = "2025-01-01"
+
+# De gebouwde app (npm run build) wordt als statische assets geserveerd; enkel /api/* gaat langs de worker.
+[assets]
+directory = "../dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*"]
+
+[[routes]]
+pattern = "wire.smarterhomes.be"
+custom_domain = true

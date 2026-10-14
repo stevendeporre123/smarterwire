@@ -8,6 +8,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "ai": "npx wrangler dev -c cloudflare/wrangler.toml",
+    "deploy": "npm run build && npx wrangler deploy -c cloudflare/wrangler.toml",
     "dev:app": "vite --mode app"
   },
   "dependencies": {
