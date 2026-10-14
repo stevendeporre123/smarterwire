@@ -48,6 +48,19 @@ export async function editCircuit(project: Project, circuit: Partial<Circuit>, o
   });
 }
 
+/** Kringen in bulk verwijderen. Symbolen op het plan blijven staan (zonder kring), handmatige verbruikers en leidingtrajecten van de kring verdwijnen/ontkoppelen. */
+async function deleteCircuits(ids: string[], alsoDevices: boolean, devIds: string[]) {
+  const now = Date.now(), ph = (n: number) => Array(n).fill('?').join(',');
+  const stmts = [
+    { sql: `UPDATE circuit SET deleted=1, updated_at=? WHERE id IN (${ph(ids.length)})`, bind: [now, ...ids] },
+    { sql: `UPDATE symbol SET circuit_id=NULL, updated_at=? WHERE circuit_id IN (${ph(ids.length)})`, bind: [now, ...ids] },
+    { sql: `UPDATE schema_load SET deleted=1, updated_at=? WHERE circuit_id IN (${ph(ids.length)})`, bind: [now, ...ids] },
+    { sql: `UPDATE shape SET ref_id=NULL, updated_at=? WHERE kind='cable' AND ref_id IN (${ph(ids.length)})`, bind: [now, ...ids] },
+  ];
+  if (alsoDevices && devIds.length) stmts.push({ sql: `UPDATE device SET deleted=1, updated_at=? WHERE id IN (${ph(devIds.length)})`, bind: [now, ...devIds] });
+  await sql.batch(stmts);
+}
+
 export async function renderCircuits(root: HTMLElement, project: Project) {
   const [circuits, boards] = await Promise.all([circuitsOf(project.id), boardsOf(project.id)]);
   const devs = new Map<string, Device>();
@@ -64,16 +77,32 @@ export async function renderCircuits(root: HTMLElement, project: Project) {
   for (const d of devs.values()) if (oldIds.has(d.board_id) && isFeeder(d.kind) && !shared.has(d.id)) orphan.push(d);
 
   const reload = () => { root.innerHTML = ''; renderCircuits(root, project); };
+  const selection = new Set<string>();
+  const delBtn = btn('', { icon: 'Trash2', variant: 'danger', onClick: () => {
+    const chosen = circuits.filter((c) => selection.has(c.id));
+    if (!chosen.length) return;
+    const devIds = [...new Set(chosen.flatMap((c) => [c.device_id, c.new_device_id]).filter(Boolean) as string[])];
+    formModal({
+      title: `${chosen.length} kring(en) verwijderen`, fields: devIds.length ? [{ key: 'devs', label: `Ook de ${devIds.length} gekoppelde zekering(en) uit de kast verwijderen`, type: 'checkbox', span: 2 }] : [], values: { devs: 0 }, saveLabel: 'Verwijderen',
+      extra: h('div', null,
+        h('p', null, 'Symbolen op het situatieplan blijven staan, maar zonder kring. Op het schema toegevoegde verbruikers van deze kringen verdwijnen.'),
+        devIds.length ? h('p', { class: 'hint' }, 'Een zekering is altijd een kring: laat je de zekeringen staan, dan krijgen ze bij het volgende openen een lege nieuwe kring.') : null),
+      onSave: async (v) => { await deleteCircuits(chosen.map((c) => c.id), !!v.devs, devIds); toast(`${chosen.length} kring(en) verwijderd`); reload(); },
+    });
+  } });
+  const updDel = () => { const n = selection.size; (delBtn.querySelector('span') ?? delBtn.appendChild(h('span'))).textContent = n ? `Verwijder selectie (${n})` : 'Verwijder selectie'; delBtn.disabled = !n; };
+  updDel();
   const bname = (d: Device) => (oldIds.size > 1 ? `${boardName.get(d.board_id)}: ` : '') + deviceTitle(d);
 
   root.append(h('div', { class: 'page' },
     h('div', { class: 'page-head' }, h('h2', null, 'Kringen'), h('span', { class: 'hint' }, `${circuits.length} kring(en)`), h('span', { class: 'spacer' }),
+      delBtn,
       btn('Nieuwe kring', { icon: 'Plus', variant: 'primary', onClick: () => editCircuit(project, {}, reload) })),
     orphan.length ? h('div', { class: 'card card-pad', style: { marginBottom: '16px' } },
       h('div', { class: 'hint', style: { marginBottom: '8px' } }, icon('TriangleAlert', 14), ` ${orphan.length} zekering(en) zonder gedocumenteerde kring – klik om te documenteren:`),
       h('div', { class: 'legend' }, orphan.map((d) => btn(bname(d), { variant: 'secondary', onClick: () => editCircuit(project, { device_id: d.id }, reload) })))) : null,
     dataTable({
-      rows: circuits, search: (c) => `${c.nr} ${c.name} ${c.func} ${c.rooms} ${c.cable_type} ${c.level}`, empty: 'Nog geen kringen. Documenteer ze per zekering of via het situatieplan.',
+      selection, onSelect: updDel, rows: circuits, search: (c) => `${c.nr} ${c.name} ${c.func} ${c.rooms} ${c.cable_type} ${c.level}`, empty: 'Nog geen kringen. Documenteer ze per zekering of via het situatieplan.',
       onRow: (c) => editCircuit(project, c, reload),
       rowClass: (c) => (c.device_id && shared.get(c.device_id)! > 1 ? 'row-warn' : ''),
       columns: [

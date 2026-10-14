@@ -92,11 +92,15 @@ export type Col<T> = { key: string; label: string; render?: (r: T) => Node | str
 
 export function dataTable<T extends { id: string }>(opts: {
   columns: Col<T>[]; rows: T[]; onRow?: (r: T) => void; selectedId?: string | null; search?: (r: T) => string; empty?: string; rowClass?: (r: T) => string;
+  /** vinkjes per rij; de set wordt door de tabel bijgehouden en `onSelect` meldt elke wijziging */
+  selection?: Set<string>; onSelect?: () => void;
 }) {
   let sortKey: string | null = null, dir = 1, q = '';
   const input = h('input', { type: 'search', class: 'table-search', placeholder: 'Zoeken…', onInput: (e: Event) => { q = (e.target as HTMLInputElement).value.toLowerCase(); draw(); } });
   const tbody = h('tbody');
-  const thead = h('thead', null, h('tr', null, opts.columns.map((c) =>
+  const sel = opts.selection, visible: T[] = [];
+  const selAll = h('input', { type: 'checkbox', title: 'Alles (zichtbaar) selecteren', onChange: (e: Event) => { const on = (e.target as HTMLInputElement).checked; visible.forEach((r) => (on ? sel!.add(r.id) : sel!.delete(r.id))); opts.onSelect?.(); draw(); } }) as HTMLInputElement;
+  const thead = h('thead', null, h('tr', null, sel ? h('th', { style: { width: '34px' } }, selAll) : null, opts.columns.map((c) =>
     h('th', { class: c.align === 'right' ? 'right' : '', style: c.width ? { width: c.width } : undefined, onClick: () => { if (sortKey === c.key) dir = -dir; else { sortKey = c.key; dir = 1; } draw(); } }, c.label))));
   const table = h('table', { class: 'table' }, thead, tbody);
   const root = h('div', { class: 'table-wrap' }, opts.search ? h('div', { class: 'table-tools' }, icon('Search', 16), input) : null, h('div', { class: 'table-scroll' }, table));
@@ -109,9 +113,12 @@ export function dataTable<T extends { id: string }>(opts: {
       rows.sort((a, b) => { const x = f(a), y = f(b); return (typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y), 'nl', { numeric: true })) * dir; });
     }
     clear(tbody);
+    visible.length = 0; visible.push(...rows);
+    if (sel) { selAll.checked = rows.length > 0 && rows.every((r) => sel.has(r.id)); selAll.indeterminate = !selAll.checked && rows.some((r) => sel.has(r.id)); }
     if (!rows.length) tbody.appendChild(h('tr', null, h('td', { colSpan: opts.columns.length, class: 'empty' }, opts.empty ?? 'Geen gegevens')));
     for (const r of rows) {
       tbody.appendChild(h('tr', { class: `${opts.onRow ? 'clickable' : ''} ${opts.selectedId === r.id ? 'selected' : ''} ${opts.rowClass?.(r) ?? ''}`, onClick: () => opts.onRow?.(r) },
+        sel ? h('td', { onClick: (e: Event) => e.stopPropagation() }, h('input', { type: 'checkbox', checked: sel.has(r.id), onChange: (e: Event) => { if ((e.target as HTMLInputElement).checked) sel.add(r.id); else sel.delete(r.id); opts.onSelect?.(); draw(); } })) : null,
         opts.columns.map((c) => h('td', { class: c.align === 'right' ? 'right' : '' }, c.render ? c.render(r) : String((r as any)[c.key] ?? '')))));
     }
   }
