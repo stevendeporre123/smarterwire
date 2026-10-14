@@ -319,7 +319,10 @@ export async function renderBoard(root: HTMLElement, project: Project) {
     formModal({ title: 'Voorstel nieuwe kast(en)', wide: true, fields: [
       { key: 'maxPerDiff', label: 'Max. kringen per 30 mA-differentieel', type: 'number' },
       { key: 'diffRating', label: 'Differentieel (A)', type: 'number' },
-      { key: 'mainRating', label: 'Hoofdautomaat (A)', type: 'number' },
+      { key: 'mainDiffRating', label: 'Hoofddifferentieel 300 mA (A)', type: 'number' },
+      { key: 'mainDiffType', label: 'Type hoofddifferentieel', type: 'select', options: DIFF_TYPES, allowEmpty: false },
+      { key: 'rowModules', label: 'Breedte van de nieuwe kast (modules per rij)', type: 'number' },
+      { key: 'rows', label: 'Aantal rijen', type: 'number' },
       { key: 'bigPerDiff', label: 'Grote verbruikers per differentieel', type: 'number' },
       { key: 'splitByLevel', label: 'Groeperen per verdieping', type: 'checkbox' },
       { key: 'mergeLeftovers', label: 'Kleine restgroepen van opeenvolgende verdiepingen samenvoegen', type: 'checkbox', span: 2 },
@@ -327,6 +330,7 @@ export async function renderBoard(root: HTMLElement, project: Project) {
       values: { ...DEFAULT_GEN },
       extra: h('div', { class: 'hint' },
         h('p', null, `${circuits.length} kring(en) → elke kring krijgt een eigen automaat. Onderverdelers blijven onderverdelers. Zekeringwaarde volgt de kabeldoorsnede, altijd zelf nakijken.`),
+        h('p', null, 'De kast begint met een hoofddifferentieel van 300 mA; de hoofdautomaat blijft buiten de kast (aan de meter). Elk 30 mA-differentieel met zijn automaten blijft liefst op één rij.'),
         h('p', null, 'Kringen die samen moeten blijven (bestaande bekabeling) markeer je bij de kring met "Samen houden". Fases worden verdeeld volgens de voeding in de projectgegevens.'),
         noPhase ? h('p', { style: { color: '#b35c00' } }, '⚠ Voeding (mono/driefasig) is niet ingevuld bij de projectgegevens; er wordt monofasig gerekend.') : null),
       onSave: async (v) => {

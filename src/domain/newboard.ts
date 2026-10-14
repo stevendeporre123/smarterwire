@@ -7,13 +7,16 @@ import { boardsOf, circuitsOf, allDevicesOfProject, type Board, type Circuit, ty
 export interface GenOptions {
   maxPerDiff: number;       // max. kringen per 30 mA-differentieel
   diffRating: number;
-  mainRating: number;
+  mainDiffRating: number;   // hoofddifferentieel 300 mA aan het begin van de keten (de hoofdautomaat staat buiten de kast, aan de meter)
+  mainDiffType: string;
+  rowModules: number;       // breedte van de nieuwe kast in modules per rij
+  rows: number;             // aantal rijen
   splitByLevel: boolean;    // groeperen per verdieping
   mergeLeftovers: boolean;  // kleine restgroepen van opeenvolgende verdiepingen samenvoegen
   bigOwnDiff: boolean;      // grote verbruikers op eigen differentieel
   bigPerDiff: number;
 }
-export const DEFAULT_GEN: GenOptions = { maxPerDiff: 8, diffRating: 40, mainRating: 40, splitByLevel: true, mergeLeftovers: true, bigOwnDiff: true, bigPerDiff: 1 };
+export const DEFAULT_GEN: GenOptions = { maxPerDiff: 8, diffRating: 40, mainDiffRating: 40, mainDiffType: 'A', rowModules: 18, rows: 4, splitByLevel: true, mergeLeftovers: true, bigOwnDiff: true, bigPerDiff: 1 };
 
 export const BIG_FUNCS = new Set(['Kookplaat', 'Oven', 'Droogkast', 'Boiler', 'Verwarming', 'Airco / warmtepomp', 'Laadpaal']);
 
@@ -111,16 +114,22 @@ export async function generateNewBoards(project: Project, opt: GenOptions): Prom
       chunks.push({ items: its, size: sizeOf(its), level: its[0].level, big: true });
     }
 
-    // kast opbouwen
+    // kast opbouwen: eerst de toestellen aanmaken (per groep), daarna in rijen leggen volgens de breedte van de kast
     const isRoot = src.id === root.id;
     const mainId = uid();
-    if (isRoot) stmts.push(upsertStmt('device', { id: mainId, board_id: nb.id, kind: 'hoofd', label: 'Hoofd', poles: threePhase ? (project.supply === '3x230' ? '3P' : '4P') : '2P', rating_a: opt.mainRating, curve: 'B', row_no: 0, pos: 0, modules: threePhase ? 4 : 2 }));
+    type Dev = Record<string, any>;
+    const polesAll = threePhase ? (project.supply === '3x230' ? '3P' : '4P') : '2P', modsAll = threePhase ? (project.supply === '3x230' ? 3 : 4) : 2;
+    const groups: Dev[][] = [];
+    const circuitStmts: Stmt[] = [];
+    if (isRoot) groups.push([{ id: mainId, board_id: nb.id, kind: 'differentieel', label: 'Hoofddifferentieel', poles: polesAll, rating_a: opt.mainDiffRating, sens_ma: 300, dtype: opt.mainDiffType || 'A', modules: modsAll, notes: 'hoofddifferentieel 300 mA' }]);
     const globalLoad: Record<string, number> = Object.fromEntries(phaseNames.map((p) => [p, 0]));
-    let row = isRoot ? 1 : 0, n = 1;
+    let n = 1;
     for (const ch of chunks) {
       const diffId = uid();
       const diffLoad: Record<string, number> = Object.fromEntries(phaseNames.map((p) => [p, 0]));
-      const kids: Stmt[] = []; let pos = 1; const phasesUsed = new Set<string>();
+      const lv = ch.level || '';
+      const group: Dev[] = [{ id: diffId, board_id: nb.id, parent_id: isRoot ? mainId : null, kind: 'differentieel', label: `ID${n}`, poles: polesAll, rating_a: opt.diffRating, sens_ma: 30, dtype: 'A', modules: modsAll,
+        notes: [ch.big ? 'grote verbruiker(s)' : '', lv].filter(Boolean).join(' · ') || null }];
       for (const it of ch.items) {
         const usedInItem = new Set<string>();
         for (const c of it.cs) {
@@ -138,20 +147,26 @@ export async function generateNewBoards(project: Project, opt: GenOptions): Prom
               if (project.supply === '3x230') poles = '2P';
             }
             if (phase !== '3P') { diffLoad[phase] += rating; globalLoad[phase] += rating; } else phaseNames.forEach((p) => { diffLoad[p] += rating; globalLoad[p] += rating; });
-            phasesUsed.add(phase);
           }
-          kids.push(upsertStmt('device', { id: devId, board_id: nb.id, parent_id: diffId, kind: 'automaat', label: c.nr ? `K${c.nr}` : null, poles, phase, rating_a: rating, curve: 'B', row_no: row, pos: pos++, modules }));
-          kids.push({ sql: `UPDATE circuit SET new_device_id=?, updated_at=? WHERE id=?`, bind: [devId, now, c.id] });
+          group.push({ id: devId, board_id: nb.id, parent_id: diffId, kind: 'automaat', label: c.nr ? `K${c.nr}` : null, poles, phase, rating_a: rating, curve: 'B', modules });
+          circuitStmts.push({ sql: `UPDATE circuit SET new_device_id=?, updated_at=? WHERE id=?`, bind: [devId, now, c.id] });
         }
       }
-      const lv = ch.level || '';
-      stmts.push(upsertStmt('device', {
-        id: diffId, board_id: nb.id, parent_id: isRoot ? mainId : null, kind: 'differentieel', label: `ID${n}`,
-        poles: threePhase ? (project.supply === '3x230' ? '3P' : '4P') : '2P', rating_a: opt.diffRating, sens_ma: 30, dtype: 'A',
-        row_no: row, pos: 0, modules: threePhase ? 4 : 2, notes: [ch.big ? 'grote verbruiker(s)' : '', lv].filter(Boolean).join(' · ') || null,
-      }), ...kids);
-      row++; n++; diffCount++;
+      groups.push(group); n++; diffCount++;
     }
+
+    // in rijen leggen: een groep (differentieel + zijn automaten) blijft liefst op één rij; past ze niet meer, dan begint een nieuwe rij
+    const cols = Math.max(4, Math.round(opt.rowModules || 18)), rowCount: number[] = [0];
+    let row = 0, used = 0;
+    const put = (d: Dev) => { if (used > 0 && used + d.modules > cols) { row++; used = 0; rowCount[row] = 0; } d.row_no = row; d.pos = rowCount[row]++; used += d.modules; };
+    for (const g of groups) {
+      const w = g.reduce((sum, d) => sum + d.modules, 0);
+      if (used > 0 && used + w > cols && w <= cols) { row++; used = 0; rowCount[row] = 0; }
+      g.forEach(put);
+    }
+    const rowsUsed = row + 1;
+    if (rowsUsed > opt.rows) warnings.push(`${nb.name}: ${rowsUsed} rijen nodig bij ${cols} modules breed, maar er zijn er ${opt.rows} ingesteld. Maak de kast breder of voeg een rij toe.`);
+    stmts.push(...groups.flat().map((d) => upsertStmt('device', d)), ...circuitStmts);
     if (threePhase) warnings.push(`${nb.name}: belasting (A) per fase ≈ ${phaseNames.map((p) => `${p}: ${globalLoad[p]}`).join(', ')}`);
   }
 
