@@ -1,7 +1,6 @@
 import type { Board, Circuit, Device } from './model';
 import { cableLabel, deviceTitle, isGroupParent, isFeeder, polesLabel, supplyLabel, isThreePhase, type Supply } from './devices';
-import { areiSymbol, hasAreiSymbol, SCHEMA_SYMBOL } from './areisymbols';
-import { symbolById } from './symbols';
+import { areiSymbol, hasAreiSymbol, symbolEntry } from './areisymbols';
 import { esc } from '../lib/dom';
 
 export interface DiagramBoard { board: Board; devices: Device[] }
@@ -177,9 +176,9 @@ export function buildSingleLineSvg(opts: {
     l.forEach((ld, i) => {
       const ry = y0 - CABLE_TOP - i * ROW - 10;
       parts.push(`<text x="${x - 8}" y="${ry + 3}" class="t-s" text-anchor="end">${i + 1}</text>`, `<path d="M${x} ${ry} H${x + 15}" class="ln"/>`);
-      const file = SCHEMA_SYMBOL[ld.type];
+      const file = symbolEntry(ld.type)?.schemaFile;
       if (file && hasAreiSymbol(file)) parts.push(areiSymbol(file, x + 15 + 14, ry, 2.6));
-      else { const def = symbolById(ld.type); parts.push(`<circle cx="${x + 29}" cy="${ry}" r="9" class="box"/>`); if (def) parts.push(`<text x="${x + 29}" y="${ry + 3}" class="t-s" text-anchor="middle">?</text>`); }
+      else parts.push(`<circle cx="${x + 29}" cy="${ry}" r="9" class="box"/>`, `<text x="${x + 29}" y="${ry + 3}" class="t-s" text-anchor="middle">?</text>`);
       const txt = [ld.n > 1 ? `${ld.n}×` : '', ld.label].filter(Boolean).join(' ');
       if (txt) parts.push(`<text x="${x + 48}" y="${ry + 3}" class="t-s">${esc(clip(txt, 13))}</text>`);
     });
