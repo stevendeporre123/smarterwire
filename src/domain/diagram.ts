@@ -52,6 +52,8 @@ export function buildDiagram(opts: {
   crop?: [number, number];
   /** kring die in het schema is geselecteerd (krijgt een lichte achtergrond) */
   selCircuit?: string | null;
+  /** geselecteerd toestel (differentieel, hoofdschakelaar, overspanning) en geselecteerde voeding */
+  selDevice?: string | null; selSupply?: boolean;
 }): DiagramResult {
   const { boards, circuits, which, supply } = opts;
   const threePhase = isThreePhase(supply);
@@ -149,6 +151,10 @@ export function buildDiagram(opts: {
 
   // ---- tekenen ----
   const parts: string[] = [];
+  let curBoard = '';   // kast waartoe de bus behoort die we tekenen
+  /** onzichtbaar klikvlak (voor de schema-editor); geselecteerd = lichte achtergrond */
+  const hit = (attrs: string, x: number, y: number, w: number, h: number, on: boolean) =>
+    `<rect ${attrs} x="${x}" y="${y}" width="${w}" height="${h}" rx="6" fill="#0066aa" fill-opacity="${on ? 0.1 : 0}" style="cursor:pointer"/>`;
   const phaseTxt = (d: Device) => (threePhase && d.phase ? d.phase : '');
 
   const protText = (d: Device): [string, string] => {
@@ -161,14 +167,14 @@ export function buildDiagram(opts: {
     return [deviceTitle(d), ''];
   };
 
-  const drawCircuit = (it: Extract<Item, { t: 'circuit' }>, y0: number) => {
+  const drawCircuit = (it: Extract<Item, { t: 'circuit' }>, y0: number, bus: Bus) => {
     const { d, cs, x } = it;
     const l = loadsOf(it.cs);
     const topY = y0 - CABLE_TOP - (l.length ? 14 + l.length * ROW : 0);
     const nr = cs.map((c) => c.nr).filter(Boolean).join('+') || '?';
     const name = cs.map((c) => c.name).filter((n) => n && !/^Kring /.test(n)).join(' / ');
     // klikvlak (voor de schema-weergave): onzichtbaar, geselecteerde kring licht gemarkeerd
-    if (cs[0]) parts.push(`<rect data-cid="${cs[0].id}" x="${x - SP / 2 + 6}" y="${topY - NAME_LEN}" width="${SP - 12}" height="${y0 + 44 - topY + NAME_LEN}" rx="6" fill="#0066aa" fill-opacity="${cs.some((c) => c.id === opts.selCircuit) ? 0.09 : 0}" style="cursor:pointer"/>`);
+    if (cs[0]) parts.push(hit(`data-cid="${cs[0].id}" data-bus="${bus.head?.id ?? ''}" data-board="${curBoard}"`, x - SP / 2 + 6, topY - NAME_LEN, SP - 12, y0 + 44 - topY + NAME_LEN, cs.some((c) => c.id === opts.selCircuit)));
     // lijn + beveiliging
     parts.push(`<path d="M${x} ${y0 - BREAKER_TOP - 6} V${topY}" class="ln"/>`);
     parts.push(breakerSymbol(x, y0, d.kind === 'automaat' || d.kind === 'aardlekautomaat' ? 'automaat' : d.kind === 'smelt' ? 'schakelaar' : 'automaat'));
@@ -203,6 +209,7 @@ export function buildDiagram(opts: {
 
   const drawSpd = (it: Extract<Item, { t: 'spd' }>, y0: number) => {
     const { x, d } = it;
+    parts.push(hit(`data-did="${d.id}"`, x - 12, y0 - 86, 90, 90, d.id === opts.selDevice));
     parts.push(`<path d="M${x} ${y0} V${y0 - 40}" class="ln"/>`, `<rect x="${x - 9}" y="${y0 - 80}" width="18" height="40" class="box"/>`,
       `<path d="M${x - 5} ${y0 - 72} l5 12 l5 -12 M${x} ${y0 - 60} v10" class="ln"/>`, `<text x="${x + 14}" y="${y0 - 56}" class="t-s">Overspanning</text>`, `<text x="${x + 14}" y="${y0 - 45}" class="t-s">${esc(polesLabel(d.poles))}</text>`);
   };
@@ -212,15 +219,17 @@ export function buildDiagram(opts: {
     const last = bus.items.length ? bus.items[bus.items.length - 1] : null;
     const lastX = last ? (last.t === 'child' ? last.bus.x1 : last.x + (last.t === 'circuit' ? SP / 2 - 14 : SPD_W / 2)) : bus.x0 + 40;
     const x1 = Math.max(bus.x1, lastX, bus.x0 + 40);
+    parts.push(hit(`data-bus="${bus.head?.id ?? ''}" data-board="${curBoard}"`, bus.x0 - 8, y0 - 10, x1 - bus.x0 + 18, 20, false));
     parts.push(`<path d="M${bus.x0 - (parentY === null ? 0 : 6)} ${y0} H${x1 + 8}" class="bus"/>`);
     for (const it of bus.items) {
-      if (it.t === 'circuit') drawCircuit(it, y0);
+      if (it.t === 'circuit') drawCircuit(it, y0, bus);
       else if (it.t === 'spd') drawSpd(it, y0);
       else {
         const cy = yOf(it.bus.level), d = it.d, [t1, t2] = protText(d);
         // stub van de bovenliggende bus naar de onderliggende, met het differentieel in het midden
         parts.push(`<path d="M${it.stubX} ${y0} V${cy}" class="ln"/>`);
         const my = (y0 + cy) / 2 + 22;
+        parts.push(hit(`data-did="${d.id}"`, it.stubX - 12, my - 56, 150, 70, d.id === opts.selDevice));
         parts.push(`<rect x="${it.stubX - 4}" y="${my - 52}" width="8" height="62" fill="#fff"/>`, breakerSymbol(it.stubX, my, 'diff'));
         parts.push(`<text x="${it.stubX + 16}" y="${my - 22}" class="t-b">${esc(t1)}</text>`, `<text x="${it.stubX + 16}" y="${my - 9}" class="t-s">${esc(t2)}</text>`);
         if (d.label) parts.push(`<text x="${it.stubX + 16}" y="${my - 36}" class="t-s">${esc(clip(d.label, 18))}</text>`);
@@ -232,12 +241,14 @@ export function buildDiagram(opts: {
 
   for (const blk of blocks) {
     const b = blk.bus, y0 = yOf(0), sx = b.x0 + 20;
+    curBoard = blk.board.id;
     drawBus(b, null, null);
     // voeding links onderaan: (hoofdschakelaar) -> teller -> net
     parts.push(`<path d="M${sx} ${y0} V${y0 + 110}" class="ln"/>`);
     const meterY = b.head ? y0 + 80 : y0 + 36;
     if (b.head) {
       const [t1, t2] = protText(b.head);
+      parts.push(hit(`data-did="${b.head.id}"`, sx - 12, y0 + 8, 150, 62, b.head.id === opts.selDevice));
       parts.push(`<rect x="${sx - 6}" y="${y0 + 12}" width="12" height="54" fill="#fff"/>`, breakerSymbol(sx, y0 + 62, 'diff'),
         `<text x="${sx + 20}" y="${y0 + 32}" class="t-b">${esc(t1)}</text>`, `<text x="${sx + 20}" y="${y0 + 45}" class="t-s">${esc(t2)}</text>`);
     }
@@ -245,7 +256,7 @@ export function buildDiagram(opts: {
       parts.push(`<text x="${sx}" y="${y0 + 128}" class="t-b" text-anchor="start">${esc(clip(blk.board.name, 28))}</text>`,
         `<text x="${sx}" y="${y0 + 142}" class="t-s">gevoed via kring ${esc(blk.fedBy.nr ?? '')} van ${esc(blk.fedFrom?.name ?? '')}</text>`);
     } else {
-      parts.push(`<rect x="${sx - 26}" y="${meterY - 13}" width="52" height="26" class="box"/><text x="${sx}" y="${meterY + 4}" class="t-b" text-anchor="middle">kWh</text>`);
+      parts.push(hit('data-sup="1"', sx - 34, meterY - 20, 68, 40, !!opts.selSupply), `<rect x="${sx - 26}" y="${meterY - 13}" width="52" height="26" class="box"/><text x="${sx}" y="${meterY + 4}" class="t-b" text-anchor="middle">kWh</text>`);
       parts.push(`<text x="${sx}" y="${y0 + 128}" class="t-b" text-anchor="middle">${esc(supplyLabel(supply))}</text>`);
       if (opts.ean) parts.push(`<text x="${sx}" y="${y0 + 142}" class="t-s" text-anchor="middle">EAN ${esc(opts.ean)}</text>`);
     }

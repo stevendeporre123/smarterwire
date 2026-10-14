@@ -22,6 +22,15 @@ await upsert('schema_load', { circuit_id: cs[1].id, type: 'Stopcontact', label: 
 await upsert('schema_load', { circuit_id: cs[1].id, type: 'Wandverlichtingstoestel', label: '', n: 1, pos: 2 });
 await renderSchema(document.getElementById('root')!, proj);
 await sleep(500);
-const click = (el: Element | null) => el?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-click(document.querySelector('[data-cid]') ? [...document.querySelectorAll('[data-cid]')][1] : null);
+const click = (el: Element | null) => { if (!el) throw new Error('element niet gevonden'); el.dispatchEvent(new MouseEvent('click', { bubbles: true })); };
+const root = document.getElementById('root')!;
+const tool = async (label: string) => { click([...root.querySelectorAll('.pal-item')].find((b) => b.getAttribute('title') === label) ?? null); await sleep(150); };
+const q = new URLSearchParams(location.search);
+if (q.has('add')) {
+  await tool('Kring (automaat)'); click(root.querySelector('[data-bus]')); await sleep(400);   // nieuwe automaat met kring op de bus
+  await tool('Lamp (lichtpunt)'); click([...root.querySelectorAll('[data-cid]')][0]); await sleep(400);   // lamp op kring A
+  await tool('Selecteren');
+} else if (q.has('dev')) click(root.querySelector('[data-did]'));
+else if (q.has('sup')) click(root.querySelector('[data-sup]'));
+else click([...root.querySelectorAll('[data-cid]')][1]);
 await sleep(500);

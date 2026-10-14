@@ -21,8 +21,10 @@ Browser-app om AREI-conforme eendraadschema's en situatieplannen te maken voor k
 npm install
 npm run dev          # http://localhost:5173
 npm run build
-# optioneel, AI-analyse:
-cd cloudflare && npx wrangler secret put ANTHROPIC_API_KEY && npx wrangler dev
+# AI-analyse lokaal: zet je sleutel in cloudflare/.dev.vars (zie .dev.vars.example).
+# `npm run dev` start de AI-proxy (poort 8787) vanzelf mee; zonder sleutel wordt hij overgeslagen.
+# Enkel de app, zonder proxy: npm run dev:app (of NO_AI=1 npm run dev)
+# Productie: cd cloudflare && npx wrangler secret put ANTHROPIC_API_KEY && npx wrangler deploy
 ```
 
 ## Status

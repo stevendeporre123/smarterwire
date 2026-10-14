@@ -6,6 +6,8 @@ import { boardsOf, devicesOf, circuitsOf, type Board, type Device, type Project,
 import { CURVES, DEVICE_KINDS, DIFF_TYPES, deviceTitle, isGroupParent, isFeeder, supplyOf, supplyPhases, supplyPoles, supplyConflict, deviceFieldKeys, defaultModules, normPoles, polesText } from '../domain/devices';
 import { ensureCircuits, unlinkDevice } from '../domain/circuits';
 import { moduleArt } from '../domain/modules';
+import { deviceForm } from './deviceform';
+import { openGenerate } from './generate';
 import { generateNewBoards, DEFAULT_GEN } from '../domain/newboard';
 import { editCircuit } from './circuits';
 import { analyzeBoardPhoto, getAiEndpoint, setAiEndpoint } from '../lib/ai';
@@ -256,41 +258,12 @@ export async function renderBoard(root: HTMLElement, project: Project) {
         deviceList());
       return;
     }
-    const parents = devices.filter((x) => isGroupParent(x.kind) && x.id !== d.id);
-    const all: Record<string, FieldDef> = {
-      label: { key: 'label', label: 'Label / opschrift' },
-      poles: { key: 'poles', label: 'Aantal polen', type: 'select', options: supplyPoles(supply).map((p) => ({ value: p, label: polesText(p) })), allowEmpty: false },
-      modules: { key: 'modules', label: 'Breedte (modules)', type: 'number', step: 0.5 },
-      rating_a: { key: 'rating_a', label: 'Nominaal (A)', type: 'number' },
-      curve: { key: 'curve', label: 'Curve', type: 'select', options: CURVES },
-      sens_ma: { key: 'sens_ma', label: 'Gevoeligheid (mA)', type: 'select', options: [10, 30, 100, 300, 500], numeric: true },
-      dtype: { key: 'dtype', label: 'Type diff.', type: 'select', options: DIFF_TYPES },
-      breaking_ka: { key: 'breaking_ka', label: 'Onderbrekingsvermogen (kA)', type: 'select', options: [3, 4.5, 6, 10], numeric: true },
-      phase: { key: 'phase', label: 'Fase', type: 'select', options: supplyPhases(supply) },
-      parent_id: { key: 'parent_id', label: 'Beschermd door', type: 'select', span: 2, options: parents.map((p) => ({ value: p.id, label: deviceTitle(p) + ` (rij ${p.row_no + 1})` })) },
-      notes: { key: 'notes', label: 'Notities', type: 'textarea', span: 2 },
-    };
-    const kindField: FieldDef = { key: 'kind', label: 'Type', type: 'select', allowEmpty: false, span: 2, options: Object.entries(DEVICE_KINDS).map(([value, k]) => ({ value, label: k.label })) };
-    const fields = [kindField, ...deviceFieldKeys(d.kind, supply).map((k) => all[k])];
-    const form = buildForm(fields, { ...d, poles: normPoles(d.poles) });
-    const conflict = supplyConflict(d, supply);
-    const save = async (e?: Event) => {
-      const before = { kind: d.kind, poles: normPoles(d.poles), modules: d.modules };
-      Object.assign(d, form.read());
-      // breedte volgt de polen enkel zolang ze niet apart is aangepast (een mini-automaat heeft 2 polen op 1 module)
-      // standaardwaarden bij een nieuw type: differentieel = type A, automaat = curve C
-      if (d.kind !== before.kind) { if ((d.kind === 'differentieel' || d.kind === 'aardlekautomaat') && !d.dtype) d.dtype = 'A'; if ((d.kind === 'automaat' || d.kind === 'aardlekautomaat') && !d.curve) d.curve = 'C'; }
-      if (d.modules == null || (d.modules === before.modules && d.modules === defaultModules(before.kind, before.poles) && d.poles !== before.poles)) d.modules = defaultModules(d.kind, d.poles);
-      await upsert('device', d);
-      if (d.kind !== before.kind) { await refresh(); return; }   // andere velden na een typewissel
-      draw();
-    };
-    Object.values(form.inputs).forEach((i) => i.addEventListener('change', save));
+    const dform = deviceForm(d, { supply, devices, onChange: async (kindChanged) => { if (kindChanged) await refresh(); else draw(); } });
     const cs = circuitsByDevice().get(d.id) ?? [];
     side.append(
       h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } }, h('h3', null, deviceTitle(d)), h('span', { class: 'spacer' }), btn('', { icon: 'X', variant: 'ghost', onClick: () => { selId = null; draw(); drawSide(); } })),
-      ...(conflict ? [badge(conflict, 'err')] : []),
-      form.el,
+      ...(dform.conflict ? [badge(dform.conflict, 'err')] : []),
+      dform.el,
       h('div', null, h('h4', null, 'Kring van dit toestel'),
         cs.length ? h('div', null, cs.map((c) => h('div', { style: { padding: '4px 0' } }, h('a', { href: '#', onClick: (e: Event) => { e.preventDefault(); editCircuit(project, c, () => refresh()); } }, `${c.nr ?? ''} ${c.name}`)))) : h('p', { class: 'hint' }, isFeeder(d.kind) ? 'Wordt aangemaakt…' : 'Dit toestel voedt zelf geen kring.'),
         cs.length > 1 ? badge('Meerdere kringen op één zekering', 'warn') : null,
@@ -313,36 +286,7 @@ export async function renderBoard(root: HTMLElement, project: Project) {
     selId = d.id; await refresh();
   }
 
-  async function genNew() {
-    if (!circuits.length) { toast('Documenteer eerst enkele kringen', 'error'); return; }
-    const hasNew = boards.some((b) => b.kind === 'nieuw');
-    if (hasNew && !confirm('Bestaande voorstellen voor de nieuwe kast(en) worden vervangen. Doorgaan?')) return;
-    const noPhase = !project.supply;
-    formModal({ title: 'Voorstel nieuwe kast(en)', wide: true, fields: [
-      { key: 'maxPerDiff', label: 'Max. kringen per 30 mA-differentieel', type: 'number' },
-      { key: 'diffRating', label: 'Differentieel (A)', type: 'number' },
-      { key: 'mainDiffRating', label: 'Hoofddifferentieel 300 mA (A)', type: 'number' },
-      { key: 'mainDiffType', label: 'Type hoofddifferentieel', type: 'select', options: DIFF_TYPES, allowEmpty: false },
-      { key: 'rowModules', label: 'Breedte van de nieuwe kast (modules per rij)', type: 'number' },
-      { key: 'rows', label: 'Aantal rijen', type: 'number' },
-      { key: 'bigPerDiff', label: 'Grote verbruikers per differentieel', type: 'number' },
-      { key: 'splitByLevel', label: 'Groeperen per verdieping', type: 'checkbox' },
-      { key: 'mergeLeftovers', label: 'Kleine restgroepen van opeenvolgende verdiepingen samenvoegen', type: 'checkbox', span: 2 },
-      { key: 'bigOwnDiff', label: 'Grote verbruikers (kookplaat, oven, droogkast, boiler, verwarming, airco, laadpaal) apart', type: 'checkbox', span: 2 }],
-      values: { ...DEFAULT_GEN },
-      extra: h('div', { class: 'hint' },
-        h('p', null, `${circuits.length} kring(en) → elke kring krijgt een eigen automaat. Onderverdelers blijven onderverdelers. Zekeringwaarde volgt de kabeldoorsnede, altijd zelf nakijken.`),
-        h('p', null, 'De kast begint met een hoofddifferentieel van 300 mA; de hoofdautomaat blijft buiten de kast (aan de meter). Elk 30 mA-differentieel met zijn automaten blijft liefst op één rij.'),
-        h('p', null, 'Kringen die samen moeten blijven (bestaande bekabeling) markeer je bij de kring met "Samen houden". Fases worden verdeeld volgens de voeding in de projectgegevens.'),
-        noPhase ? h('p', { style: { color: '#b35c00' } }, '⚠ Voeding (mono/driefasig) is niet ingevuld bij de projectgegevens; er wordt monofasig gerekend.') : null),
-      onSave: async (v) => {
-        const r = await generateNewBoards(project, { ...DEFAULT_GEN, ...v } as any);
-        toast(`${r.diffs} differentieel(en) voorgesteld`);
-        if (r.warnings.length) alert('Opmerkingen:\n\n' + [...new Set(r.warnings)].join('\n'));
-        const nb = (await boardsOf(project.id)).find((b) => b.kind === 'nieuw'); if (nb) localStorage.setItem(LS_BOARD(project.id), nb.id);
-        await reload();
-      } });
-  }
+  function genNew() { return openGenerate(project, () => reload()); }
 
   /** Vraagt tussen meerdere acties; geeft de gekozen sleutel terug, of null bij annuleren. */
   function choose(title: string, text: string, options: { key: string; label: string; variant: 'primary' | 'danger' | 'secondary' }[]): Promise<string | null> {
