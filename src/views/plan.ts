@@ -8,7 +8,7 @@ import { CATALOG, FUNC_ORDER, symbolEntry, symbolGeom, symbolMarkup, splitType, 
 import { FURNITURE, CABLE_STYLES, DEFAULT_PLAN_M, dist, projectOnSeg, nearestWall, snapToWallSurface, renderFloor, wallPts, type Pt } from '../domain/floorplan';
 import { editCircuit } from './circuits';
 import { getSetting, setSetting } from '../domain/settings';
-import { schemaLoadsOf, type SchemaLoad } from '../domain/loads';
+import { schemaLoadsOf, planSymbolRows, type SchemaLoad } from '../domain/loads';
 
 const LS = (pid: string) => `smarterwire.plan.${pid}`;
 const SYM_SIZE = 0.022; // basisgrootte van symbolen als fractie van de plan-breedte
@@ -50,6 +50,23 @@ export async function renderPlan(root: HTMLElement, project: Project) {
   let planId = localStorage.getItem(LS(project.id)); if (!plans.find((p) => p.id === planId)) planId = plans[0].id;
   const plan = plans.find((p) => p.id === planId)!;
   const [symbols, shapes, circuits, boards, pending] = await Promise.all([symbolsOf(plan.id), shapesOf(plan.id), circuitsOf(project.id), boardsOf(project.id), schemaLoadsOf(project.id)]);
+  const others = (await planSymbolRows(project.id)).filter((r) => !symbols.some((x) => x.id === r.id));   // symbolen op andere plannen tellen mee voor het adres
+
+  /** Adres van een symbool binnen zijn kring: kringnummer + volgnummer in de volgorde van het eendraadschema (bv. A1, E4). */
+  function addresses(): Map<string, string> {
+    const rows: { id: string; cid: string | null; order: number }[] = [
+      ...others.map((r, i) => ({ id: r.id, cid: r.circuit_id, order: r.spos ?? 1e6 + i })),
+      ...symbols.map((r, i) => ({ id: r.id, cid: r.circuit_id ?? null, order: (r as any).spos ?? 1e6 + 1e3 + i })),
+      ...pending.map((r, i) => ({ id: r.id, cid: r.circuit_id, order: r.pos ?? 1e6 + 5e5 + i })),
+    ];
+    const out = new Map<string, string>(), seen = new Map<string, number>();
+    for (const r of rows.sort((a, b) => a.order - b.order)) {
+      if (!r.cid) continue;
+      const k = (seen.get(r.cid) ?? 0) + 1; seen.set(r.cid, k);
+      out.set(r.id, `${circuits.find((c) => c.id === r.cid)?.nr ?? ''}${k}`);
+    }
+    return out;
+  }
   // onderdelen die op het eendraadschema aan een kring hangen maar nog niet op een plan staan
   const pendingLoad = (id: string) => pending.find((l) => l.id === id);
   const pendingCount = () => pending.reduce((n, l) => n + (l.n || 1), 0);
@@ -143,12 +160,11 @@ export async function renderPlan(root: HTMLElement, project: Project) {
   const items: PalItem[] = [
     ...BUILD.map((t) => ({ tool: t.id, label: t.label, group: 'Bouw', icon: () => icon(t.icon, 18) })),
     ...FURNITURE.map((f) => ({ tool: `furn:${f.id}`, label: f.label, group: 'Meubilair', icon: () => icon('Square', 18) })),
-    ...CABLE_STYLES.map((c) => ({ tool: `cable:${c.id}`, label: c.label, group: 'Leidingen', icon: () => icon('Cable', 18) })),
     ...CATALOG.filter((e) => FUNC_ORDER.includes(e.func)).map((e) => ({ tool: `sym:${e.id}`, label: e.label, group: e.func, entry: e, kw: e.keywords, icon: () => {
       const g = symbolGeom(e.id, 'plan')!, ic = svg('svg', { width: 26, height: 22, viewBox: `0 0 ${g.w + 2} ${g.h + 2}`, preserveAspectRatio: 'xMidYMid meet' });
       ic.innerHTML = symbolMarkup(e.id, 'plan', (g.w + 2) * g.anchor.x + (g.anchor.x === 0 ? 1 : 0), (g.h + 2) / 2, 1, 0, 1.6); return ic; } })),
   ];
-  const GROUPS = ['Bouw', 'Meubilair', 'Leidingen', ...FUNC_ORDER];
+  const GROUPS = ['Bouw', 'Meubilair', ...FUNC_ORDER];
   const closed = new Set<string>(JSON.parse(localStorage.getItem(`${LS_OPT}.closed`) || '[]'));
   const multiTool = () => { const e = tool.startsWith('sym:') ? symbolEntry(tool.slice(4)) : undefined; return !!e?.multi; };
 
@@ -342,6 +358,7 @@ export async function renderPlan(root: HTMLElement, project: Project) {
   }
   function drawSyms() {
     clear(layer);
+    const addr = addresses();
     for (const sym of symbols) {
       const col = circuitColor(sym.circuit_id, order), ink = sym.id === selSym ? '#0066aa' : sym.circuit_id ? col : '#000000';
       const g = svg('g', { transform: `translate(${sym.x * W} ${sym.y * H}) rotate(${sym.rot})`, style: `cursor:pointer` });
@@ -353,7 +370,8 @@ export async function renderPlan(root: HTMLElement, project: Project) {
       const inner = svg('g'); inner.innerHTML = e ? symbolMarkup(sym.type, 'plan', 0, 0, k, 0, 2.2, ink) : `<circle r="${S * 0.4}" fill="none" stroke="currentColor"/>`; g.append(inner);
       g.addEventListener('pointerdown', (ev) => startSymDrag(ev as PointerEvent, sym));
       layer.append(g);
-      if (sym.label) layer.append(svg('text', { x: sym.x * W + S * 0.9, y: sym.y * H + 4, 'font-size': S * 0.55 * LBL, 'font-weight': 600, fill: col, stroke: '#fff', 'stroke-width': 3, 'paint-order': 'stroke' }, sym.label));
+      const txt = [addr.get(sym.id), sym.label].filter(Boolean).join(' ');
+      if (txt) layer.append(svg('text', { x: sym.x * W + S * 0.9, y: sym.y * H + 4, 'font-size': S * 0.55 * LBL, 'font-weight': 600, fill: col, stroke: '#fff', 'stroke-width': 3, 'paint-order': 'stroke', 'pointer-events': 'none' }, txt));
     }
   }
   function startSymDrag(e: PointerEvent, sym: Symbol_) {
