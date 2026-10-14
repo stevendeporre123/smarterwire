@@ -3,7 +3,8 @@ import { buildForm, formModal, panZoom, badge, type FieldDef } from '../lib/ui';
 import { upsert, softDelete, saveImage, assetUrl, assetSize, upsertStmt } from '../db/repo';
 import { sql } from '../db/client';
 import { boardsOf, devicesOf, circuitsOf, type Board, type Device, type Project, type Circuit } from '../domain/model';
-import { CURVES, DEVICE_KINDS, DIFF_TYPES, PHASES, POLES, deviceTitle, isGroupParent, isFeeder } from '../domain/devices';
+import { CURVES, DEVICE_KINDS, DIFF_TYPES, deviceTitle, isGroupParent, isFeeder, supplyOf, supplyPhases, supplyPoles, supplyConflict, deviceFieldKeys, defaultModules, polesLabel } from '../domain/devices';
+import { ensureCircuits, unlinkDevice } from '../domain/circuits';
 import { moduleArt, SRC_UNIT } from '../domain/modules';
 import { generateNewBoards, DEFAULT_GEN } from '../domain/newboard';
 import { editCircuit } from './circuits';
@@ -70,7 +71,8 @@ export async function renderBoard(root: HTMLElement, project: Project) {
 
   const board = boards.find((b) => b.id === boardId)!;
   let devices = await devicesOf(board.id);
-  const circuits = await circuitsOf(project.id);
+  let circuits = await circuitsOf(project.id);
+  const supply = supplyOf(project);
   const circuitsByDevice = () => {
     const m = new Map<string, Circuit[]>();
     for (const c of circuits) { const id = board.kind === 'bestaand' ? c.device_id : c.new_device_id; if (id) (m.get(id) ?? m.set(id, []).get(id)!).push(c); }
@@ -126,7 +128,7 @@ export async function renderBoard(root: HTMLElement, project: Project) {
     [...viewBtns.children].forEach((c, i) => c.classList.toggle('active', (photoUrl ? ['foto', 'virtueel'][i] : 'virtueel') === view));
   }
 
-  async function refresh() { devices = await devicesOf(board.id); draw(); drawSide(); }
+  async function refresh() { await ensureCircuits(project); [devices, circuits] = await Promise.all([devicesOf(board.id), circuitsOf(project.id)]); draw(); drawSide(); }
 
   function draw() {
     setViewButtons(); clear(canvas);
@@ -167,7 +169,7 @@ export async function renderBoard(root: HTMLElement, project: Project) {
       const el = drag.el, x = +el.getAttribute('x')!, y = +el.getAttribute('y')!, w = +el.getAttribute('width')!, h_ = +el.getAttribute('height')!;
       drag = null; el.remove();
       if (w < W * 0.008 || h_ < H * 0.008) return;
-      const d = await upsert('device', { board_id: board.id, kind: 'automaat', poles: '1P+N', curve: 'B', modules: Math.max(1, Math.round(w / h_ * 2.2)), row_no: 0, pos: 0, rx: x / W, ry: y / H, rw: w / W, rh: h_ / H });
+      const d = await upsert('device', { board_id: board.id, kind: 'automaat', poles: '1P+N', curve: 'B', breaking_ka: 3, phase: supply === '1x230' ? null : 'L1', modules: Math.max(1, Math.round(w / h_ * 2.2)), row_no: 0, pos: 0, rx: x / W, ry: y / H, rw: w / W, rh: h_ / H });
       devices = await devicesOf(board.id);
       const ch = recomputeLayout(devices); await sql.batch(ch.map((c) => upsertStmt('device', c)));
       selId = d.id; await refresh();
@@ -254,28 +256,41 @@ export async function renderBoard(root: HTMLElement, project: Project) {
       return;
     }
     const parents = devices.filter((x) => isGroupParent(x.kind) && x.id !== d.id);
-    const fields: FieldDef[] = [
-      { key: 'kind', label: 'Type', type: 'select', allowEmpty: false, span: 2, options: Object.entries(DEVICE_KINDS).map(([value, k]) => ({ value, label: k.label })) },
-      { key: 'label', label: 'Label / opschrift' }, { key: 'poles', label: 'Polen', type: 'select', options: POLES },
-      { key: 'rating_a', label: 'Nominaal (A)', type: 'number' }, { key: 'curve', label: 'Curve', type: 'select', options: CURVES },
-      { key: 'sens_ma', label: 'Gevoeligheid (mA)', type: 'number' }, { key: 'dtype', label: 'Type diff.', type: 'select', options: DIFF_TYPES },
-      { key: 'modules', label: 'Modules breed', type: 'number' }, { key: 'phase', label: 'Fase', type: 'select', options: PHASES },
-      { key: 'breaking_ka', label: 'Kortsluitvermogen (kA)', type: 'number', span: 2 },
-      { key: 'parent_id', label: 'Beschermd door', type: 'select', span: 2, options: parents.map((p) => ({ value: p.id, label: deviceTitle(p) + ` (rij ${p.row_no + 1})` })) },
-      { key: 'notes', label: 'Notities', type: 'textarea', span: 2 },
-    ];
+    const all: Record<string, FieldDef> = {
+      label: { key: 'label', label: 'Label / opschrift' },
+      poles: { key: 'poles', label: 'Polen', type: 'select', options: supplyPoles(supply).map((p) => ({ value: p, label: polesLabel(p) === p ? p : `${polesLabel(p)} (${p})` })), allowEmpty: false },
+      rating_a: { key: 'rating_a', label: 'Nominaal (A)', type: 'number' },
+      curve: { key: 'curve', label: 'Curve', type: 'select', options: CURVES },
+      sens_ma: { key: 'sens_ma', label: 'Gevoeligheid (mA)', type: 'select', options: [10, 30, 100, 300, 500], numeric: true },
+      dtype: { key: 'dtype', label: 'Type diff.', type: 'select', options: DIFF_TYPES },
+      breaking_ka: { key: 'breaking_ka', label: 'Onderbrekingsvermogen (kA)', type: 'select', options: [3, 4.5, 6, 10], numeric: true },
+      phase: { key: 'phase', label: 'Fase', type: 'select', options: supplyPhases(supply) },
+      parent_id: { key: 'parent_id', label: 'Beschermd door', type: 'select', span: 2, options: parents.map((p) => ({ value: p.id, label: deviceTitle(p) + ` (rij ${p.row_no + 1})` })) },
+      notes: { key: 'notes', label: 'Notities', type: 'textarea', span: 2 },
+    };
+    const kindField: FieldDef = { key: 'kind', label: 'Type', type: 'select', allowEmpty: false, span: 2, options: Object.entries(DEVICE_KINDS).map(([value, k]) => ({ value, label: k.label })) };
+    const fields = [kindField, ...deviceFieldKeys(d.kind, supply).map((k) => all[k])];
     const form = buildForm(fields, d);
-    const save = async () => { Object.assign(d, form.read()); await upsert('device', d); draw(); };
+    const conflict = supplyConflict(d, supply);
+    const save = async (e?: Event) => {
+      const before = { kind: d.kind, poles: d.poles };
+      Object.assign(d, form.read());
+      if (d.poles !== before.poles || d.kind !== before.kind) d.modules = defaultModules(d.kind, d.poles);
+      await upsert('device', d);
+      if (d.kind !== before.kind) { await refresh(); return; }   // andere velden na een typewissel
+      draw();
+    };
     Object.values(form.inputs).forEach((i) => i.addEventListener('change', save));
     const cs = circuitsByDevice().get(d.id) ?? [];
     side.append(
       h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } }, h('h3', null, deviceTitle(d)), h('span', { class: 'spacer' }), btn('', { icon: 'X', variant: 'ghost', onClick: () => { selId = null; draw(); drawSide(); } })),
+      ...(conflict ? [badge(conflict, 'err')] : []),
       form.el,
-      h('div', null, h('h4', null, 'Kringen op dit toestel'),
-        cs.length ? h('div', null, cs.map((c) => h('div', { style: { padding: '4px 0' } }, h('a', { href: '#', onClick: (e: Event) => { e.preventDefault(); editCircuit(project, c, () => refresh()); } }, `${c.nr ?? ''} ${c.name}`)))) : h('p', { class: 'hint' }, 'Nog geen kring gedocumenteerd.'),
+      h('div', null, h('h4', null, 'Kring van dit toestel'),
+        cs.length ? h('div', null, cs.map((c) => h('div', { style: { padding: '4px 0' } }, h('a', { href: '#', onClick: (e: Event) => { e.preventDefault(); editCircuit(project, c, () => refresh()); } }, `${c.nr ?? ''} ${c.name}`)))) : h('p', { class: 'hint' }, isFeeder(d.kind) ? 'Wordt aangemaakt…' : 'Dit toestel voedt zelf geen kring.'),
         cs.length > 1 ? badge('Meerdere kringen op één zekering', 'warn') : null,
-        isFeeder(d.kind) ? btn('Kring toevoegen', { icon: 'Plus', variant: 'primary', onClick: () => editCircuit(project, board.kind === 'bestaand' ? { device_id: d.id } : { new_device_id: d.id }, () => refresh()) }) : null),
-      btn('Toestel verwijderen', { icon: 'Trash2', variant: 'danger', onClick: async () => { if (!confirm('Toestel verwijderen?')) return; await softDelete('device', d.id); selId = null; await refresh(); } }));
+        ...(cs.length ? [btn('Kring bewerken', { icon: 'Pencil', variant: 'primary', onClick: () => editCircuit(project, cs[0], () => refresh()) })] : [])),
+      btn('Toestel verwijderen', { icon: 'Trash2', variant: 'danger', onClick: async () => { if (!confirm('Toestel verwijderen?')) return; await softDelete('device', d.id); await unlinkDevice(d.id); selId = null; await refresh(); } }));
   }
 
   function deviceList() {
@@ -289,7 +304,7 @@ export async function renderBoard(root: HTMLElement, project: Project) {
   async function addDeviceManual() {
     const row = devices.length ? Math.max(...devices.map((d) => d.row_no)) : 0;
     const pos = devices.filter((d) => d.row_no === row).length;
-    const d = await upsert('device', { board_id: board.id, kind: 'automaat', poles: '1P+N', curve: 'B', rating_a: 16, row_no: row, pos, modules: 1 });
+    const d = await upsert('device', { board_id: board.id, kind: 'automaat', poles: '1P+N', curve: 'B', rating_a: 16, breaking_ka: 3, phase: supply === '1x230' ? null : 'L1', row_no: row, pos, modules: 1 });
     selId = d.id; await refresh();
   }
 

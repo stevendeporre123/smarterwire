@@ -13,7 +13,7 @@ export const projectFields = [
   { key: 'owner', label: 'Naam eigenaar' },
   { key: 'client', label: 'Opdrachtgever' },
   { key: 'ean', label: 'EAN-code meter', placeholder: '18 cijfers (541…)' },
-  { key: 'supply', label: 'Voeding', type: 'select' as const, options: SUPPLIES },
+  { key: 'supply', label: 'Voeding *', type: 'select' as const, options: SUPPLIES, allowEmpty: false },
   { key: 'inspector', label: 'Keuringsinstantie', list: INSPECTORS, span: 2 as const },
   { key: 'notes', label: 'Notities', type: 'textarea' as const, span: 2 as const },
 ];
@@ -36,7 +36,7 @@ export async function renderProjects(app: HTMLElement) {
 
   const open = (p: Project) => { location.hash = `#/p/${p.id}/kast`; };
   const edit = (p?: Project) => formModal({
-    title: p ? 'Project bewerken' : 'Nieuw project', fields: projectFields, values: p ?? {}, wide: true,
+    title: p ? 'Project bewerken' : 'Nieuw project', fields: projectFields, values: { ...(p ?? {}), supply: p?.supply ?? '1x230' }, wide: true,
     onSave: async (v) => {
       if (!validateProject(v)) return false;
       const saved = await upsert('project', { ...(p ?? {}), ...v });

@@ -5,12 +5,14 @@ export type FieldDef = {
   key: string; label: string;
   type?: 'text' | 'number' | 'select' | 'textarea' | 'checkbox';
   options?: (string | number | { value: string | number; label: string })[];
-  allowEmpty?: boolean; placeholder?: string; step?: number; required?: boolean; span?: 1 | 2; list?: string[]; numeric?: boolean;
+  allowEmpty?: boolean; advanced?: boolean; placeholder?: string; step?: number; required?: boolean; span?: 1 | 2; list?: string[]; numeric?: boolean;
 };
 
 export function buildForm(fields: FieldDef[], values: Record<string, any>) {
   const inputs: Record<string, HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement> = {};
   const wrap = h('div', { class: 'form-grid' });
+  const advGrid = h('div', { class: 'form-grid' });
+  const adv = h('details', { class: 'adv' }, h('summary', null, 'Meer opties'), advGrid);
   for (const f of fields) {
     let input: any;
     const v = values[f.key];
@@ -34,9 +36,10 @@ export function buildForm(fields: FieldDef[], values: Record<string, any>) {
       }
     }
     inputs[f.key] = input;
-    wrap.appendChild(h('label', { class: `field ${f.span === 2 ? 'span-2' : ''} ${f.type === 'checkbox' ? 'field-check' : ''}` },
+    (f.advanced ? advGrid : wrap).appendChild(h('label', { class: `field ${f.span === 2 ? 'span-2' : ''} ${f.type === 'checkbox' ? 'field-check' : ''}` },
       h('span', { class: 'field-label' }, f.label), input));
   }
+  const el = h('div', null, wrap, fields.some((f) => f.advanced) ? adv : null);
   const read = () => {
     const out: Record<string, any> = {};
     for (const f of fields) {
@@ -47,7 +50,7 @@ export function buildForm(fields: FieldDef[], values: Record<string, any>) {
     }
     return out;
   };
-  return { el: wrap, read, inputs };
+  return { el, read, inputs };
 }
 
 // ---------- modal ----------

@@ -3,7 +3,7 @@ import { dataTable, formModal, badge, type FieldDef } from '../lib/ui';
 import { upsert, softDelete } from '../db/repo';
 import { sql } from '../db/client';
 import { boardsOf, devicesOf, circuitsOf, plansOf, type Circuit, type Device, type Project } from '../domain/model';
-import { CABLE_TYPES, FIRE_CLASSES, FUNCTIONS, INSTALL_MODES, SECTIONS, STATUSES, cableLabel, cableMissing, deviceTitle, isFeeder } from '../domain/devices';
+import { CABLE_TYPES, FIRE_CLASSES, FUNCTIONS, INSTALL_MODES, SECTIONS, STATUSES, cableLabel, cableMissing, deviceTitle, isFeeder, supplyOf, supplyVoltages } from '../domain/devices';
 
 export async function editCircuit(project: Project, circuit: Partial<Circuit>, onDone: () => void) {
   const [boards, plans] = await Promise.all([boardsOf(project.id), plansOf(project.id)]);
@@ -11,28 +11,30 @@ export async function editCircuit(project: Project, circuit: Partial<Circuit>, o
   const opts: { value: string; label: string }[] = [];
   let hostBoard: string | undefined;
   for (const b of old) for (const d of await devicesOf(b.id)) { if (d.id === circuit.device_id) hostBoard = b.id; if (isFeeder(d.kind)) opts.push({ value: d.id, label: `${old.length > 1 ? b.name + ': ' : ''}${deviceTitle(d)} (rij ${d.row_no + 1})` }); }
+  const supply = supplyOf(project);
   const fields: FieldDef[] = [
-    { key: 'nr', label: 'Nr.' },
+    { key: 'nr', label: 'Kring' },
     { key: 'name', label: 'Omschrijving', required: true, placeholder: 'bv. Stopcontacten living + keuken' },
     { key: 'func', label: 'Functie', type: 'select', options: FUNCTIONS },
-    { key: 'level', label: 'Verdieping', list: plans.map((p) => p.level || p.name) },
-    { key: 'device_id', label: 'Zekering (bestaande kast)', type: 'select', options: opts, span: 2 },
-    { key: 'rooms', label: 'Ruimtes', placeholder: 'living, keuken…', span: 2 },
+    { key: 'device_id', label: 'Zekering (bestaande kast)', type: 'select', options: opts },
     { key: 'cable_type', label: 'Kabeltype *', type: 'select', options: CABLE_TYPES },
     { key: 'fire_class', label: 'Brandklasse *', type: 'select', options: FIRE_CLASSES },
     { key: 'section_mm2', label: 'Doorsnede (mm²) *', type: 'select', options: SECTIONS, numeric: true },
     { key: 'wires', label: 'Aantal aders (incl. aarde)', type: 'number', placeholder: '3 = 3G, 5 = 5G…' },
     { key: 'install', label: 'Plaatsing *', type: 'select', options: INSTALL_MODES, span: 2 },
-    { key: 'voltage', label: 'Spanning (V)', type: 'select', options: [230, 400], numeric: true, allowEmpty: false },
-    { key: 'status', label: 'Status', type: 'select', options: STATUSES, allowEmpty: false },
-    { key: 'feeds_board_id', label: 'Voedt onderverdeler', type: 'select', options: old.filter((b) => b.id !== hostBoard).map((b) => ({ value: b.id, label: b.name })) },
-    { key: 'lock_group', label: 'Samen houden (bv. gedeelde nul)', placeholder: 'zelfde tekst = zelfde differentieel' },
-    { key: 'has_earth', label: 'Aarding aanwezig', type: 'checkbox' },
-    { key: 'notes', label: 'Notities / opmerkingen keuring', type: 'textarea', span: 2 },
+    // --- zelden nodig ---
+    { key: 'level', label: 'Verdieping', list: plans.map((p) => p.level || p.name), advanced: true },
+    { key: 'rooms', label: 'Ruimtes', placeholder: 'living, keuken…', advanced: true },
+    ...(supply === '3N400' ? [{ key: 'voltage', label: 'Spanning (V)', type: 'select' as const, options: supplyVoltages(supply), numeric: true, allowEmpty: false, advanced: true }] : []),
+    { key: 'status', label: 'Status', type: 'select', options: STATUSES, allowEmpty: false, advanced: true },
+    { key: 'feeds_board_id', label: 'Voedt onderverdeler', type: 'select', options: old.filter((b) => b.id !== hostBoard).map((b) => ({ value: b.id, label: b.name })), advanced: true },
+    { key: 'lock_group', label: 'Samen houden (gedeelde nul)', placeholder: 'zelfde tekst = zelfde differentieel', advanced: true },
+    { key: 'has_earth', label: 'Aarding aanwezig', type: 'checkbox', advanced: true },
+    { key: 'notes', label: 'Notities / opmerkingen keuring', type: 'textarea', span: 2, advanced: true },
   ];
   formModal({
     title: circuit.id ? `Kring ${circuit.nr ?? ''} bewerken` : 'Nieuwe kring', fields, wide: true,
-    values: { status: 'onbekend', voltage: 230, has_earth: 1, ...circuit },
+    values: { status: 'onbekend', voltage: 230, has_earth: 1, wires: 3, ...circuit },
     extra: h('p', { class: 'hint' }, '* verplicht om een kring als "gedocumenteerd" te kunnen markeren.'),
     onSave: async (v) => {
       if (!v.name) return false;

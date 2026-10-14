@@ -9,6 +9,7 @@ import { renderBoard } from './board';
 import { renderCircuits } from './circuits';
 import { renderPlan } from './plan';
 import { renderSchema } from './schema';
+import { ensureCircuits } from '../domain/circuits';
 import type { Project } from '../domain/model';
 
 const TABS = [
@@ -21,11 +22,12 @@ const TABS = [
 export async function renderProject(app: HTMLElement, id: string, tab: string) {
   const project = await sql.one<Project>('SELECT * FROM project WHERE id=? AND deleted=0', [id]);
   if (!project) { location.hash = '#/'; return; }
+  await ensureCircuits(project);
   const body = h('div', { class: 'main' });
   app.append(h('div', { class: 'shell' }, topbar(project.name),
     h('nav', { class: 'tabs' }, TABS.map((t) => h('a', { class: `tab ${t.id === tab ? 'active' : ''}`, href: `#/p/${id}/${t.id}` }, icon(t.icon, 16), t.label)),
       h('span', { class: 'spacer' }),
-      btn('Projectgegevens', { icon: 'FileText', variant: 'ghost', onClick: () => formModal({ title: 'Projectgegevens', fields: projectFields, values: project, wide: true,
+      btn('Projectgegevens', { icon: 'FileText', variant: 'ghost', onClick: () => formModal({ title: 'Projectgegevens', fields: projectFields, values: { ...project, supply: project.supply ?? '1x230' }, wide: true,
         onSave: async (v) => { if (!validateProject(v)) return false; await upsert('project', { ...project, ...v }); location.reload(); } }) })),
     body));
   const t = TABS.find((x) => x.id === tab) ?? TABS[0];

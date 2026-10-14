@@ -1,6 +1,8 @@
 import { h, btn, icon, download, clear } from '../lib/dom';
 import { boardsOf, devicesOf, circuitsOf, type Project } from '../domain/model';
 import { buildSingleLineSvg } from '../domain/diagram';
+import { supplyOf } from '../domain/devices';
+import { sql } from '../db/client';
 
 export async function renderSchema(root: HTMLElement, project: Project) {
   const boards = await boardsOf(project.id);
@@ -9,6 +11,8 @@ export async function renderSchema(root: HTMLElement, project: Project) {
     return;
   }
   const circuits = await circuitsOf(project.id);
+  const symbols = await sql.query<{ circuit_id: string | null; type: string; label: string | null }>(
+    `SELECT s.circuit_id, s.type, s.label FROM symbol s JOIN plan p ON p.id=s.plan_id WHERE s.deleted=0 AND p.deleted=0 AND p.project_id=? ORDER BY p.level, p.name, s.rowid`, [project.id]);
   const kinds: ('bestaand' | 'nieuw')[] = ['bestaand', 'nieuw'];
   let which: 'bestaand' | 'nieuw' = boards.some((b) => b.kind === 'nieuw') ? 'nieuw' : 'bestaand';
   const out = h('div', { class: 'schema-wrap' });
@@ -21,7 +25,7 @@ export async function renderSchema(root: HTMLElement, project: Project) {
     const bs = boards.filter((b) => b.kind === which);
     const withDevs = await Promise.all(bs.map(async (board) => ({ board, devices: await devicesOf(board.id) })));
     current = buildSingleLineSvg({
-      title: `Eendraadschema – ${which === 'nieuw' ? 'nieuwe toestand' : 'bestaande toestand'}`, boards: withDevs, circuits, which, ean: project.ean,
+      title: `Eendraadschema – ${which === 'nieuw' ? 'nieuwe toestand' : 'bestaande toestand'}`, boards: withDevs, circuits, symbols, which, supply: supplyOf(project), ean: project.ean,
       meta: [project.name, [project.owner, project.address].filter(Boolean).join(' · '), project.inspector ?? '', new Date().toLocaleDateString('nl-BE')].filter(Boolean) as string[],
     });
     clear(out); out.innerHTML = current;
