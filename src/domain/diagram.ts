@@ -9,7 +9,8 @@ export interface DiagramResult {
   /** plaatsen waar het schema netjes kan worden afgebroken (einde van een kring of groep); `hard` = einde van een kast */
   cuts: { x: number; hard: boolean; depth: number }[];
 }
-export interface DiagramSymbol { circuit_id?: string | null; type: string; label?: string | null; n?: number }
+/** Eén onderdeel op een kring (symbool van het plan of handmatig toegevoegd). `order` bepaalt de volgorde binnen de kring. */
+export interface DiagramSymbol { id?: string; src?: 'plan' | 'manual'; order?: number; circuit_id?: string | null; type: string; label?: string | null; n?: number }
 
 // ---- maten (px) ----
 const SP = 120;        // breedte van één kring
@@ -54,6 +55,10 @@ export function buildDiagram(opts: {
   selCircuit?: string | null;
   /** geselecteerd toestel (differentieel, hoofdschakelaar, overspanning) en geselecteerde voeding */
   selDevice?: string | null; selSupply?: boolean;
+  /** geselecteerd onderdeel op een kring (sleutel `plan:<id>` of `manual:<id>`) */
+  selLoad?: string | null;
+  /** oranje invoegpunten tonen: op de kringen (voor onderdelen) of op de bussen (voor kringen/differentiëlen) */
+  showSlots?: 'load' | 'bus' | null;
 }): DiagramResult {
   const { boards, circuits, which, supply } = opts;
   const threePhase = isThreePhase(supply);
@@ -68,14 +73,13 @@ export function buildDiagram(opts: {
   const circuitsOf = new Map<string, Circuit[]>();
   for (const c of circuits) { const id = devId(c); if (id && devs.has(id)) (circuitsOf.get(id) ?? circuitsOf.set(id, []).get(id)!).push(c); }
 
-  const loads = new Map<string, { type: string; label: string; n: number }[]>();
-  for (const s of opts.symbols) {
-    if (!s.circuit_id) continue;
-    const l = loads.get(s.circuit_id) ?? loads.set(s.circuit_id, []).get(s.circuit_id)!;
-    const label = (s.label ?? '').trim(), hit = l.find((x) => x.type === s.type && x.label === label);
-    if (hit) hit.n += s.n ?? 1; else l.push({ type: s.type, label, n: s.n ?? 1 });
-  }
-  const loadsOf = (cs: Circuit[]) => cs.flatMap((c) => loads.get(c.id) ?? []);
+  interface LoadRow { key: string; type: string; label: string; n: number; order: number }
+  const loads = new Map<string, LoadRow[]>();
+  opts.symbols.forEach((sy, idx) => {
+    if (!sy.circuit_id) return;
+    (loads.get(sy.circuit_id) ?? loads.set(sy.circuit_id, []).get(sy.circuit_id)!).push({ key: sy.id ? `${sy.src}:${sy.id}` : `x${idx}`, type: sy.type, label: (sy.label ?? '').trim(), n: sy.n ?? 1, order: sy.order ?? idx });
+  });
+  const loadsOf = (cs: Circuit[]) => cs.flatMap((c) => loads.get(c.id) ?? []).sort((x, y) => x.order - y.order);
 
   // ---- bussen opbouwen ----
   const buildItems = (list: Device[], level: number): Item[] => list.flatMap((d): Item[] => {
@@ -152,6 +156,7 @@ export function buildDiagram(opts: {
   // ---- tekenen ----
   const parts: string[] = [];
   let curBoard = '';   // kast waartoe de bus behoort die we tekenen
+  const slot = (attrs: string, cx: number, cy: number) => `<g ${attrs} style="cursor:copy"><circle cx="${cx}" cy="${cy}" r="11" fill="#fff" fill-opacity="0.01"/><circle cx="${cx}" cy="${cy}" r="5" fill="#fff" stroke="#e07800" stroke-width="2"/></g>`;
   /** onzichtbaar klikvlak (voor de schema-editor); geselecteerd = lichte achtergrond */
   const hit = (attrs: string, x: number, y: number, w: number, h: number, on: boolean) =>
     `<rect ${attrs} x="${x}" y="${y}" width="${w}" height="${h}" rx="6" fill="#0066aa" fill-opacity="${on ? 0.1 : 0}" style="cursor:pointer"/>`;
@@ -193,9 +198,10 @@ export function buildDiagram(opts: {
     // kring-letter onder de bus
     parts.push(`<text x="${x}" y="${y0 + 20}" class="t-nr" text-anchor="middle">${esc(nr)}</text>`);
     const ph = phaseTxt(d); if (ph) parts.push(`<text x="${x}" y="${y0 + 33}" class="t-s" text-anchor="middle">${esc(ph)}</text>`);
-    // verbruikers: één rij per soort symbool
+    // verbruikers: elk onderdeel is een eigen rij (selecteerbaar, versleepbaar naar een andere plaats of kring)
     l.forEach((ld, i) => {
       const ry = y0 - CABLE_TOP - i * ROW - 10;
+      parts.push(hit(`data-lid="${ld.key}"`, x + 2, ry - ROW / 2 + 3, SP / 2 + 46, ROW - 6, ld.key === opts.selLoad));
       parts.push(`<text x="${x - 8}" y="${ry + 3}" class="t-s" text-anchor="end">${i + 1}</text>`, `<path d="M${x} ${ry} H${x + 15}" class="ln"/>`);
       const geo = symbolGeom(ld.type, 'schema'), sc = 2.6, gw = geo ? geo.w * sc : 20;
       if (geo) parts.push(symbolMarkup(ld.type, 'schema', x + 15 + gw / 2, ry, sc));
@@ -203,6 +209,7 @@ export function buildDiagram(opts: {
       const txt = [ld.n > 1 ? `${ld.n}×` : '', ld.label].filter(Boolean).join(' ');
       if (txt) parts.push(`<text x="${x + Math.max(48, 15 + gw + 6)}" y="${ry + 3}" class="t-s">${esc(clip(txt, 13))}</text>`);
     });
+    if (opts.showSlots === 'load' && cs[0]) for (let k = 0; k <= l.length; k++) parts.push(slot(`data-slot="load" data-cid="${cs[0].id}" data-idx="${k}"`, x, y0 - CABLE_TOP - (k - 0.5) * ROW - 10));
     if (name) parts.push(vtext(x + 4, topY - 8, clip(name, 24), 't-c'));
     else if (!l.length) parts.push(vtext(x + 4, topY - 8, '', 't-c'));
   };
@@ -220,6 +227,10 @@ export function buildDiagram(opts: {
     const lastX = last ? (last.t === 'child' ? last.bus.x1 : last.x + (last.t === 'circuit' ? SP / 2 - 14 : SPD_W / 2)) : bus.x0 + 40;
     const x1 = Math.max(bus.x1, lastX, bus.x0 + 40);
     parts.push(hit(`data-bus="${bus.head?.id ?? ''}" data-board="${curBoard}"`, bus.x0 - 8, y0 - 10, x1 - bus.x0 + 18, 20, false));
+    if (opts.showSlots === 'bus') {
+      const left = (it: Item) => (it.t === 'circuit' ? it.x - SP / 2 : it.t === 'spd' ? it.x - SPD_W / 2 : it.stubX - 18);
+      for (let j = 0; j <= bus.items.length; j++) parts.push(slot(`data-slot="bus" data-bus="${bus.head?.id ?? ''}" data-board="${curBoard}" data-idx="${j}"`, j === 0 ? (bus.items.length ? left(bus.items[0]) : bus.x0 + 40) : bus.items[j - 1].end, y0));
+    }
     parts.push(`<path d="M${bus.x0 - (parentY === null ? 0 : 6)} ${y0} H${x1 + 8}" class="bus"/>`);
     for (const it of bus.items) {
       if (it.t === 'circuit') drawCircuit(it, y0, bus);

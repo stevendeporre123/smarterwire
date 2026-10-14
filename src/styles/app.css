@@ -161,3 +161,6 @@ input[type=checkbox] { width: auto; }
 .load-results { display: flex; flex-direction: column; margin-top: 6px; }
 .schema-wrap { min-width: min-content; }
 .schema-scroll { min-height: 0; overflow: auto; background: #fff; }
+.schema-wrap g[data-slot]:hover circle:last-child { fill: #e07800; }
+.load-row.clickable { cursor: pointer; border-radius: 4px; }
+.load-row.clickable:hover { background: #eef3ee; }

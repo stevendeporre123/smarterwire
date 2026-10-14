@@ -3,7 +3,7 @@ import { dataTable, formModal, badge, type FieldDef } from '../lib/ui';
 import { upsert, softDelete } from '../db/repo';
 import { sql } from '../db/client';
 import { boardsOf, devicesOf, circuitsOf, plansOf, type Circuit, type Device, type Project } from '../domain/model';
-import { CABLE_TYPES, FIRE_CLASSES, FUNCTIONS, INSTALL_MODES, SECTIONS, STATUSES, cableLabel, cableMissing, deviceTitle, isFeeder, supplyOf, supplyVoltages } from '../domain/devices';
+import { CABLE_TYPES, FIRE_CLASSES, FUNCTIONS, INSTALL_MODES, CONDUIT_MODES, SECTIONS, STATUSES, cableLabel, cableMissing, deviceTitle, isFeeder, supplyOf, supplyVoltages } from '../domain/devices';
 
 export async function editCircuit(project: Project, circuit: Partial<Circuit>, onDone: () => void) {
   const [boards, plans] = await Promise.all([boardsOf(project.id), plansOf(project.id)]);
@@ -21,7 +21,8 @@ export async function editCircuit(project: Project, circuit: Partial<Circuit>, o
     { key: 'fire_class', label: 'Brandklasse *', type: 'select', options: FIRE_CLASSES },
     { key: 'section_mm2', label: 'Doorsnede (mm²) *', type: 'select', options: SECTIONS, numeric: true },
     { key: 'wires', label: 'Aantal aders (incl. aarde)', type: 'number', placeholder: '3 = 3G, 5 = 5G…' },
-    { key: 'install', label: 'Plaatsing *', type: 'select', options: INSTALL_MODES, span: 2 },
+    { key: 'install', label: 'Plaatsing *', type: 'select', options: INSTALL_MODES },
+    { key: 'conduit', label: 'Los of in buis', type: 'select', options: CONDUIT_MODES, numeric: true },
     // --- zelden nodig ---
     { key: 'level', label: 'Verdieping', list: plans.map((p) => p.level || p.name), advanced: true },
     { key: 'rooms', label: 'Ruimtes', placeholder: 'living, keuken…', advanced: true },

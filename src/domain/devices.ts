@@ -29,7 +29,9 @@ export const FUNCTIONS = [
 ];
 export const CABLE_TYPES = ['VOB', 'XVB', 'XGB', 'EXVB', 'XVB-F2', 'H07V-U', 'H07V-K', 'YMvK', 'Onbekend'];
 export const FIRE_CLASSES = ['Eca', 'Dca', 'Cca', 'B2ca', 'Fca', 'Onbekend'];
-export const INSTALL_MODES = ['In muur', 'Op muur', 'In buis', 'Los'];
+/** Waar de leiding ligt (wand, plafond of vloer); of ze los of in een buis zit is een aparte eigenschap. */
+export const INSTALL_MODES = ['In wand', 'In plafond', 'In vloer'];
+export const CONDUIT_MODES = [{ value: 0, label: 'Los' }, { value: 1, label: 'In buis' }];
 export const SUPPLIES = [{ value: '1x230', label: 'Monofasig 230 V' }, { value: '3N400', label: 'Driefasig 3N 400 V' }, { value: '3x230', label: 'Driefasig 3x230 V (geen nul)' }];
 export const PHASES = ['L1', 'L2', 'L3', '3P'];
 
@@ -105,8 +107,9 @@ export function cableMissing(c: { cable_type?: string | null; section_mm2?: numb
 }
 
 /** "VOB Eca 3G2,5 · in buis" */
-export function cableLabel(c: { cable_type?: string | null; section_mm2?: number | null; fire_class?: string | null; install?: string | null; wires?: number | null }): string {
+export function cableLabel(c: { cable_type?: string | null; section_mm2?: number | null; fire_class?: string | null; install?: string | null; conduit?: number | null; wires?: number | null }): string {
   const core = c.section_mm2 ? `${c.wires ? c.wires + 'G' : ''}${dec(c.section_mm2)}` : '';
   const main = [c.cable_type, c.fire_class && c.fire_class !== 'Onbekend' ? c.fire_class : '', core].filter(Boolean).join(' ');
-  return [main, c.install?.toLowerCase()].filter(Boolean).join(' · ');
+  const place = [c.install?.toLowerCase(), c.conduit == null ? '' : c.conduit ? 'in buis' : 'los'].filter(Boolean).join(', ');
+  return [main, place].filter(Boolean).join(' · ');
 }

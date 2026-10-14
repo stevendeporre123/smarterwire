@@ -1,20 +1,21 @@
 import { h, svg, btn, icon, download, clear, toast } from '../lib/dom';
 import { buildForm, badge, type FieldDef } from '../lib/ui';
-import { upsert, softDelete } from '../db/repo';
-import { sql } from '../db/client';
+import { upsert, upsertStmt, softDelete } from '../db/repo';
+import { sql, type Stmt } from '../db/client';
+import { uid } from '../lib/id';
 import { boardsOf, circuitsOf, allDevicesOfProject, type Project, type Circuit, type Device } from '../domain/model';
 import { buildDiagram } from '../domain/diagram';
 import {
-  CABLE_TYPES, FIRE_CLASSES, FUNCTIONS, INSTALL_MODES, SECTIONS, STATUSES, SUPPLIES, supplyOf, isThreePhase, defaultModules, deviceTitle, DEVICE_KINDS,
+  CABLE_TYPES, FIRE_CLASSES, FUNCTIONS, INSTALL_MODES, CONDUIT_MODES, SECTIONS, STATUSES, SUPPLIES, supplyOf, isThreePhase, defaultModules, deviceTitle, DEVICE_KINDS,
 } from '../domain/devices';
 import { CATALOG, FUNC_ORDER, symbolEntry, symbolGeom, symbolMarkup, splitType, joinType, type SymbolEntry } from '../domain/areisymbols';
-import { schemaLoadsOf, planSymbolRows, type SchemaLoad, type PlanSymbolRow } from '../domain/loads';
+import { schemaLoadsOf, planSymbolRows, toDiagramLoads, type SchemaLoad, type PlanSymbolRow } from '../domain/loads';
 import { ensureCircuits, unlinkDevice } from '../domain/circuits';
 import { getSetting, setSetting } from '../domain/settings';
 import { deviceForm } from './deviceform';
 import { openGenerate } from './generate';
 
-type Sel = { kind: 'circuit' | 'device' | 'supply'; id: string } | null;
+type Sel = { kind: 'circuit' | 'device' | 'supply' | 'load'; id: string } | null;
 interface Fav { tool: string; key?: string }
 interface PalItem { tool: string; label: string; group: string; icon: () => Element; kw?: string }
 
@@ -30,36 +31,45 @@ export async function renderSchema(root: HTMLElement, project: Project) {
   let favs = await getSetting<Fav[]>('planFavs', [{ tool: 'sym:Stopcontact', key: 's' }, { tool: 'sym:Verlichtingstoestel', key: 'l' }, { tool: 'sym:Schakelaar algemeen symbool', key: 'e' }]);
 
   let which: 'bestaand' | 'nieuw' = boards.some((b) => b.kind === 'nieuw') ? 'nieuw' : 'bestaand';
-  let tool = 'select', sel: Sel = null, gang = 1, palQuery = '';
+  let tool = 'select', sel: Sel = null, gang = 1, palQuery = '', dragging = false, justDragged = false;
   const supply = () => supplyOf(project);
   const devOf = (c: Circuit) => devices.find((d) => d.id === (which === 'nieuw' ? c.new_device_id : c.device_id));
   const circuitOfDevice = (d: Device) => circuits.find((c) => (which === 'nieuw' ? c.new_device_id : c.device_id) === d.id);
+  const allLoads = () => toDiagramLoads(planSyms, manual);
+  const loadOf = (key: string) => allLoads().find((l) => `${l.src}:${l.id}` === key);
 
   const out = h('div', { class: 'schema-wrap' }), side = h('div', { class: 'side' }), pal = h('div', { class: 'pal' });
   root.classList.add('page-full');
   let current = '';
 
   // ---------- schema ----------
+  const slotMode = (): 'load' | 'bus' | null => (dragging || tool.startsWith('sym:') ? 'load' : tool === 'kring' || tool === 'diff' || tool === 'spd' ? 'bus' : null);
   async function draw() {
     const bs = boards.filter((b) => b.kind === which);
     const withDevs = bs.map((board) => ({ board, devices: devices.filter((d) => d.board_id === board.id) }));
-    const symbols = [...planSyms.map((s) => ({ circuit_id: s.circuit_id, type: s.type, label: s.label })), ...manual.map((m) => ({ circuit_id: m.circuit_id, type: m.type, label: m.label, n: m.n }))];
     current = buildDiagram({
-      title: `Eendraadschema – ${which === 'nieuw' ? 'nieuwe toestand' : 'bestaande toestand'}`, boards: withDevs, circuits, symbols, which, supply: supply(), ean: project.ean,
-      selCircuit: sel?.kind === 'circuit' ? sel.id : null, selDevice: sel?.kind === 'device' ? sel.id : null, selSupply: sel?.kind === 'supply',
+      title: `Eendraadschema – ${which === 'nieuw' ? 'nieuwe toestand' : 'bestaande toestand'}`, boards: withDevs, circuits, symbols: allLoads(), which, supply: supply(), ean: project.ean,
+      selCircuit: sel?.kind === 'circuit' ? sel.id : null, selDevice: sel?.kind === 'device' ? sel.id : null, selSupply: sel?.kind === 'supply', selLoad: sel?.kind === 'load' ? sel.id : null, showSlots: slotMode(),
       meta: [project.name, [project.owner, project.address?.replace(/\n/g, ', ')].filter(Boolean).join(' · '), project.inspector ?? '', new Date().toLocaleDateString('nl-BE')].filter(Boolean) as string[],
     }).svg;
     out.innerHTML = current;
-    out.classList.toggle('tool-add', tool !== 'select');
   }
   async function after(msg?: string) { await reloadData(); await draw(); drawSide(); if (msg) toast(msg); }
   const select = (s: Sel) => { sel = s; draw(); drawSide(); };
 
   // ---------- toestellen toevoegen / verwijderen ----------
-  async function addDevice(kind: 'automaat' | 'differentieel' | 'overspanning', parentId: string, boardId: string) {
+  /** Voegt een toestel in op een bus, vóór het `index`-de toestel van die bus (zelfde volgorde als in het schema). */
+  async function addDevice(kind: 'automaat' | 'differentieel' | 'overspanning', parentId: string, boardId: string, index: number) {
     const three = isThreePhase(supply()), polesAll = three ? (supply() === '3x230' ? '3P' : '4P') : '2P';
-    const mine = devices.filter((d) => d.board_id === boardId), row = mine.length ? Math.max(...mine.map((d) => d.row_no)) : 0;
-    const pos = Math.max(-1, ...mine.filter((d) => d.row_no === row).map((d) => d.pos)) + 1;
+    const mine = devices.filter((d) => d.board_id === boardId);
+    const sib = mine.filter((d) => (d.parent_id ?? '') === parentId && !(parentId === '' && d.kind === 'hoofd')).sort((a, b) => a.row_no - b.row_no || a.pos - b.pos);
+    let row = mine.length ? Math.max(...mine.map((d) => d.row_no)) : 0, pos = Math.max(-1, ...mine.filter((d) => d.row_no === row).map((d) => d.pos)) + 1;
+    if (sib.length) {
+      const i = Math.max(0, Math.min(index, sib.length));
+      if (i === 0) { row = sib[0].row_no; pos = sib[0].pos - 1; }
+      else if (i >= sib.length) { row = sib[sib.length - 1].row_no; pos = sib[sib.length - 1].pos + 1; }
+      else { const a = sib[i - 1], b = sib[i]; row = a.row_no; pos = a.row_no === b.row_no ? (a.pos + b.pos) / 2 : a.pos + 1; }
+    }
     const base: Partial<Device> = kind === 'automaat' ? { poles: '2P', curve: 'C', rating_a: 16, breaking_ka: 3, modules: 1, phase: three ? 'L1' : null }
       : kind === 'differentieel' ? { poles: polesAll, rating_a: 40, sens_ma: 30, dtype: 'A', modules: defaultModules('differentieel', polesAll) } : { poles: polesAll, modules: 2 };
     const dev = await upsert('device', { board_id: boardId, parent_id: parentId || null, kind, row_no: row, pos, ...base });
@@ -75,35 +85,83 @@ export async function renderSchema(root: HTMLElement, project: Project) {
     await softDelete('device', d.id); await unlinkDevice(d.id);
     sel = null; await after();
   }
-  async function addLoad(circuitId: string, type: string) {
-    const pos = manual.filter((m) => m.circuit_id === circuitId).length + 1;
-    await upsert('schema_load', { circuit_id: circuitId, type, label: null, n: 1, pos }); await after();
+
+  // ---------- onderdelen op een kring: plaatsen en verplaatsen ----------
+  /** Zet een nieuw (`newType`) of bestaand (`key`) onderdeel op `circuitId`, vóór het `index`-de onderdeel; de volgorde van de kring wordt hernummerd. */
+  async function placeLoad(what: { key?: string; newType?: string }, circuitId: string, index: number) {
+    const list = allLoads().filter((l) => l.circuit_id === circuitId).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    const moving = what.key ? allLoads().find((l) => `${l.src}:${l.id}` === what.key) : undefined;
+    const from = moving ? list.findIndex((l) => l.id === moving.id && l.src === moving.src) : -1;
+    const rest = list.filter((l) => !(moving && l.id === moving.id && l.src === moving.src));
+    let at = Math.max(0, Math.min(index, list.length));
+    if (from >= 0 && at > from) at--;                                    // de plek schuift op als het onderdeel er zelf voor stond
+    const seq: { src: 'plan' | 'manual'; id: string; fresh?: boolean }[] = rest.map((l) => ({ src: l.src!, id: l.id! }));
+    const newId = uid();
+    seq.splice(at, 0, moving ? { src: moving.src!, id: moving.id! } : { src: 'manual', id: newId, fresh: true });
+    const now = Date.now(), stmts: Stmt[] = [];
+    seq.forEach((it, j) => {
+      const order = (j + 1) * 10;
+      if (it.fresh) stmts.push(upsertStmt('schema_load', { id: it.id, circuit_id: circuitId, type: what.newType, label: null, n: 1, pos: order }));
+      else if (it.src === 'plan') stmts.push({ sql: 'UPDATE symbol SET spos=?, circuit_id=?, updated_at=? WHERE id=?', bind: [order, circuitId, now, it.id] });
+      else stmts.push({ sql: 'UPDATE schema_load SET pos=?, circuit_id=?, updated_at=? WHERE id=?', bind: [order, circuitId, now, it.id] });
+    });
+    await sql.batch(stmts);
+    if (what.newType) sel = { kind: 'load', id: `manual:${newId}` }; else if (moving) sel = { kind: 'load', id: what.key! };
+    await after();
+  }
+  async function removeLoad(key: string) {
+    const l = loadOf(key); if (!l) return;
+    if (l.src === 'manual') await softDelete('schema_load', l.id!);
+    else await sql.run('UPDATE symbol SET circuit_id=NULL, updated_at=? WHERE id=?', [Date.now(), l.id]);
+    sel = null; await after();
   }
 
-  // ---------- klikken in het schema ----------
+  // ---------- klikken en slepen in het schema ----------
   out.addEventListener('click', async (e) => {
-    const t = e.target as Element, cEl = t.closest('[data-cid]'), dEl = t.closest('[data-did]'), sEl = t.closest('[data-sup]'), bEl = t.closest('[data-bus]');
+    if (justDragged) { justDragged = false; return; }
+    const t = e.target as Element, slotEl = t.closest('[data-slot]'), lEl = t.closest('[data-lid]'), cEl = t.closest('[data-cid]'), dEl = t.closest('[data-did]'), sEl = t.closest('[data-sup]'), bEl = t.closest('[data-bus]');
     if (tool === 'select') {
-      if (cEl) select({ kind: 'circuit', id: cEl.getAttribute('data-cid')! });
+      if (lEl) select({ kind: 'load', id: lEl.getAttribute('data-lid')! });
+      else if (cEl) select({ kind: 'circuit', id: cEl.getAttribute('data-cid')! });
       else if (dEl) select({ kind: 'device', id: dEl.getAttribute('data-did')! });
       else if (sEl) select({ kind: 'supply', id: project.id });
       else select(null);
     } else if (tool.startsWith('sym:')) {
-      if (!cEl) { toast('Klik op een kring om er dit symbool aan toe te voegen', 'error'); return; }
-      const en = symbolEntry(tool.slice(4));
-      await addLoad(cEl.getAttribute('data-cid')!, joinType(tool.slice(4), en?.multi ? gang : 1));
+      const en = symbolEntry(tool.slice(4)), type = joinType(tool.slice(4), en?.multi ? gang : 1);
+      if (slotEl?.getAttribute('data-slot') === 'load') await placeLoad({ newType: type }, slotEl.getAttribute('data-cid')!, Number(slotEl.getAttribute('data-idx')));
+      else if (cEl) await placeLoad({ newType: type }, cEl.getAttribute('data-cid')!, allLoads().filter((l) => l.circuit_id === cEl.getAttribute('data-cid')).length);
+      else toast('Klik op een oranje invoegpunt op een kring', 'error');
     } else if (tool === 'kring' || tool === 'diff' || tool === 'spd') {
-      if (!bEl) { toast('Klik op een bus (de dikke lijn) of een kring om te bepalen waar het toestel komt', 'error'); return; }
-      await addDevice(tool === 'kring' ? 'automaat' : tool === 'diff' ? 'differentieel' : 'overspanning', bEl.getAttribute('data-bus') ?? '', bEl.getAttribute('data-board') ?? '');
+      const kind = tool === 'kring' ? 'automaat' : tool === 'diff' ? 'differentieel' : 'overspanning';
+      if (slotEl?.getAttribute('data-slot') === 'bus') await addDevice(kind, slotEl.getAttribute('data-bus') ?? '', slotEl.getAttribute('data-board') ?? '', Number(slotEl.getAttribute('data-idx')));
+      else if (bEl) await addDevice(kind, bEl.getAttribute('data-bus') ?? '', bEl.getAttribute('data-board') ?? '', 9999);
+      else toast('Klik op een oranje invoegpunt op de bus', 'error');
     }
+  });
+  // een onderdeel met de muis oppakken en op een oranje invoegpunt loslaten (ook op een andere kring)
+  out.addEventListener('pointerdown', (e) => {
+    if (tool !== 'select' || (e as PointerEvent).button !== 0) return;
+    const lEl = (e.target as Element).closest('[data-lid]'); if (!lEl) return;
+    const key = lEl.getAttribute('data-lid')!, x0 = (e as PointerEvent).clientX, y0 = (e as PointerEvent).clientY;
+    const move = async (ev: PointerEvent) => {
+      if (!dragging && Math.hypot(ev.clientX - x0, ev.clientY - y0) > 6) { dragging = true; sel = { kind: 'load', id: key }; await draw(); drawSide(); document.body.style.cursor = 'grabbing'; }
+    };
+    const up = async (ev: PointerEvent) => {
+      window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); document.body.style.cursor = '';
+      if (!dragging) return;
+      const slotEl = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('[data-slot="load"]');
+      dragging = false; justDragged = true; setTimeout(() => { justDragged = false; }, 50);
+      if (slotEl) await placeLoad({ key }, slotEl.getAttribute('data-cid')!, Number(slotEl.getAttribute('data-idx'))); else await draw();
+    };
+    window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
   });
 
   // ---------- palet links ----------
   const BUILD: { id: string; label: string; icon: string; hint: string }[] = [
-    { id: 'select', label: 'Selecteren', icon: 'MousePointer2', hint: 'Klik op een kring, differentieel of de voeding om de eigenschappen rechts te bewerken.' },
-    { id: 'kring', label: 'Kring (automaat)', icon: 'Plus', hint: 'Klik op een bus of kring: er komt een nieuwe automaat met kring bij.' },
-    { id: 'diff', label: 'Differentieel', icon: 'Split', hint: 'Klik op een bus: er komt een differentieel (met eigen bus) onder.' },
-    { id: 'spd', label: 'Overspanningsbeveiliging', icon: 'Zap', hint: 'Klik op een bus om een overspanningsbeveiliging toe te voegen.' },
+    { id: 'select', label: 'Selecteren', icon: 'MousePointer2', hint: 'Klik op een onderdeel, kring, differentieel of de voeding om de eigenschappen rechts te bewerken. Onderdelen kun je naar een oranje invoegpunt slepen, ook op een andere kring.' },
+    { id: 'kring', label: 'Kring (automaat)', icon: 'Plus', hint: 'Klik op een oranje invoegpunt op de bus: er komt een nieuwe automaat met kring.' },
+    { id: 'diff', label: 'Differentieel', icon: 'Split', hint: 'Klik op een oranje invoegpunt op de bus: er komt een differentieel (met eigen bus).' },
+    { id: 'spd', label: 'Overspanningsbeveiliging', icon: 'Zap', hint: 'Klik op een oranje invoegpunt op de bus.' },
   ];
   const items: PalItem[] = [
     ...BUILD.map((t) => ({ tool: t.id, label: t.label, group: 'Schema', icon: () => icon(t.icon, 18) })),
@@ -162,38 +220,53 @@ export async function renderSchema(root: HTMLElement, project: Project) {
     Object.values(form.inputs).forEach((i) => i.addEventListener('change', async () => { Object.assign(obj, form.read()); await upsert(table, obj); await after(); }));
     return form.el;
   }
+  const field = (label: string, input: Element) => h('label', { class: 'field' }, h('span', { class: 'field-label' }, label), input);
+
+  /** Eigenschappen van één onderdeel (stopcontact, lamp, …): soort, aantal, adres, kring. */
+  function loadInspector(key: string) {
+    const l = loadOf(key); if (!l) { select(null); return h('div'); }
+    const { id: baseId, n: gangN } = splitType(l.type), en = symbolEntry(baseId), isPlan = l.src === 'plan';
+    const circ = circuits.find((c) => c.id === l.circuit_id);
+    const save = async (patch: { type?: string; label?: string | null; n?: number; circuit_id?: string | null }) => {
+      if (isPlan) { const sets = Object.keys(patch).filter((k) => k !== 'n'); if (sets.length) await sql.run(`UPDATE symbol SET ${sets.map((k) => `${k}=?`).join(',')}, updated_at=? WHERE id=?`, [...sets.map((k) => (patch as any)[k]), Date.now(), l.id]); }
+      else { const row = manual.find((m) => m.id === l.id)!; Object.assign(row, patch); await upsert('schema_load', row); }
+      await after();
+    };
+    const el = h('div');
+    el.append(h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } }, iconFor(l.type), h('h3', null, en?.label ?? l.type), h('span', { class: 'spacer' }), btn('', { icon: 'X', variant: 'ghost', onClick: () => select(null) })),
+      h('p', { class: 'muted' }, `${isPlan ? 'Symbool van het situatieplan' : 'Toegevoegd op het schema'}${circ ? ` · kring ${circ.nr ?? ''}` : ''}`),
+      h('div', { class: 'form-grid' },
+        h('label', { class: 'field span-2' }, h('span', { class: 'field-label' }, 'Soort'), h('select', { onChange: (e: Event) => { const id = (e.target as HTMLSelectElement).value; save({ type: joinType(id, symbolEntry(id)?.multi ? gangN : 1) }); } },
+          stock.map((x) => h('option', { value: x.id, selected: x.id === baseId }, x.label)))),
+        en?.multi ? field('Aantal (enkel, dubbel…)', h('select', { onChange: (e: Event) => save({ type: joinType(baseId, Number((e.target as HTMLSelectElement).value)) }) }, [1, 2, 3, 4].map((n) => h('option', { value: n, selected: n === gangN }, String(n))))) : null,
+        !en?.multi && !isPlan ? field('Aantal', h('input', { type: 'number', min: 1, max: 20, value: l.n ?? 1, onChange: (e: Event) => save({ n: Math.max(1, Number((e.target as HTMLInputElement).value) || 1) }) })) : null,
+        h('label', { class: 'field span-2' }, h('span', { class: 'field-label' }, 'Adres (ruimte)'), h('input', { value: l.label ?? '', placeholder: 'bv. keuken, living', onChange: (e: Event) => save({ label: (e.target as HTMLInputElement).value || null }) })),
+        h('label', { class: 'field span-2' }, h('span', { class: 'field-label' }, 'Kring'), h('select', { onChange: async (e: Event) => { const v = (e.target as HTMLSelectElement).value; if (!v) { await save({ circuit_id: null }); sel = null; drawSide(); } else await placeLoad({ key }, v, 9999); } },
+          h('option', { value: '' }, '— niet gekoppeld —'), circuits.map((c) => h('option', { value: c.id, selected: c.id === l.circuit_id }, `${c.nr ?? ''} ${c.name}`))))),
+      h('p', { class: 'hint' }, 'Tip: sleep het onderdeel in het schema naar een oranje invoegpunt om het te verplaatsen.'),
+      btn(isPlan ? 'Van de kring loskoppelen' : 'Verwijderen', { icon: isPlan ? 'Unlink' : 'Trash2', variant: 'danger', onClick: () => removeLoad(key) }));
+    return el;
+  }
 
   function loadsSection(c: Circuit) {
-    const fromPlan = new Map<string, { type: string; label: string; n: number }>();
-    for (const s of planSyms.filter((x) => x.circuit_id === c.id)) { const k = `${s.type}|${s.label ?? ''}`; (fromPlan.get(k) ?? fromPlan.set(k, { type: s.type, label: s.label ?? '', n: 0 }).get(k)!).n++; }
-    const mine = manual.filter((m) => m.circuit_id === c.id);
+    const mine = allLoads().filter((l) => l.circuit_id === c.id).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
     const unlinked = new Map<string, { type: string; label: string; ids: string[] }>();
     for (const s of planSyms.filter((x) => !x.circuit_id)) { const k = `${s.type}|${s.label ?? ''}`; (unlinked.get(k) ?? unlinked.set(k, { type: s.type, label: s.label ?? '', ids: [] }).get(k)!).ids.push(s.id); }
     const nameOf = (t: string) => symbolEntry(t)?.label ?? t;
     const el = h('div');
-    el.append(h('h4', null, 'Verbruikers'),
-      ...[...fromPlan.values()].map((g) => h('div', { class: 'load-row' }, iconFor(g.type), h('span', { style: { flex: 1 } }, `${g.n}× ${nameOf(g.type)}${g.label ? ' – ' + g.label : ''}`), h('span', { class: 'hint' }, 'plan'))),
-      ...mine.map((m) => {
-        const { id: baseId, n: gangN } = splitType(m.type), en = symbolEntry(baseId);
-        const save = async (patch: Partial<SchemaLoad>) => { Object.assign(m, patch); await upsert('schema_load', m); await after(); };
-        return h('div', { class: 'load-row load-edit' }, iconFor(m.type),
-          h('select', { onChange: async (e: Event) => { const id = (e.target as HTMLSelectElement).value; await save({ type: joinType(id, symbolEntry(id)?.multi ? gangN : 1) }); } }, stock.map((x) => h('option', { value: x.id, selected: x.id === baseId }, x.label))),
-          en?.multi ? h('select', { title: 'Enkel, dubbel, drie- of vierdubbel', onChange: async (e: Event) => { await save({ type: joinType(baseId, Number((e.target as HTMLSelectElement).value)) }); } }, [1, 2, 3, 4].map((n) => h('option', { value: n, selected: n === gangN }, `${n}x`))) : null,
-          h('input', { placeholder: 'label', value: m.label ?? '', style: { width: '80px' }, onChange: (e: Event) => save({ label: (e.target as HTMLInputElement).value || null }) }),
-          h('input', { type: 'number', min: 1, max: 20, value: m.n, title: 'Aantal', style: { width: '48px' }, onChange: (e: Event) => save({ n: Math.max(1, Number((e.target as HTMLInputElement).value) || 1) }) }),
-          btn('', { icon: 'Trash2', variant: 'ghost', title: 'Verwijderen', onClick: async () => { await softDelete('schema_load', m.id); await after(); } }));
-      }));
-    if (!fromPlan.size && !mine.length) el.append(h('p', { class: 'hint' }, 'Nog geen verbruikers. Kies links een symbool en klik op de kring, of zoek hieronder.'));
-    const input = h('input', { type: 'search', class: 'table-search', placeholder: 'Verbruiker toevoegen: lamp, stopcontact, boiler…', value: loadQuery, style: { width: '100%', boxSizing: 'border-box' }, onInput: (e: Event) => { loadQuery = (e.target as HTMLInputElement).value; fill(); } }) as HTMLInputElement;
+    el.append(h('h4', null, `Onderdelen (${mine.length})`),
+      ...mine.map((l, i) => h('div', { class: 'load-row clickable', onClick: () => select({ kind: 'load', id: `${l.src}:${l.id}` }) }, h('span', { class: 'hint', style: { width: '16px' } }, String(i + 1)), iconFor(l.type), h('span', { style: { flex: 1 } }, `${nameOf(splitType(l.type).id)}${splitType(l.type).n > 1 ? ' ' + splitType(l.type).n + 'x' : ''}${l.label ? ' – ' + l.label : ''}`), h('span', { class: 'hint' }, l.src === 'plan' ? 'plan' : ''))));
+    if (!mine.length) el.append(h('p', { class: 'hint' }, 'Nog geen onderdelen. Kies links een symbool en klik op een oranje invoegpunt, of zoek hieronder.'));
+    const input = h('input', { type: 'search', class: 'table-search', placeholder: 'Toevoegen: lamp, stopcontact, boiler…', value: loadQuery, style: { width: '100%', boxSizing: 'border-box' }, onInput: (e: Event) => { loadQuery = (e.target as HTMLInputElement).value; fill(); } }) as HTMLInputElement;
     const results = h('div', { class: 'load-results' });
     function fill() {
       clear(results); const q = norm(loadQuery.trim());
       if (!q) return;
       for (const e of stock.filter((x) => norm(x.label).includes(q) || norm(x.keywords).includes(q) || norm(x.func).includes(q)).slice(0, 8))
-        results.append(h('button', { class: 'pal-item', onClick: () => addLoad(c.id, e.id) }, iconFor(e.id), e.label));
+        results.append(h('button', { class: 'pal-item', title: 'Achteraan deze kring toevoegen', onClick: () => placeLoad({ newType: e.id }, c.id, 9999) }, iconFor(e.id), e.label));
     }
     el.append(input, results); fill();
-    if (unlinked.size) el.append(h('h4', null, 'Nog niet gekoppeld op het plan'), ...[...unlinked.values()].map((g) => h('div', { class: 'load-row' }, iconFor(g.type), h('span', { style: { flex: 1 } }, `${g.ids.length}× ${nameOf(g.type)}${g.label ? ' – ' + g.label : ''}`),
+    if (unlinked.size) el.append(h('h4', null, 'Nog niet gekoppeld op het plan'), ...[...unlinked.values()].map((g) => h('div', { class: 'load-row' }, iconFor(g.type), h('span', { style: { flex: 1 } }, `${g.ids.length}× ${nameOf(splitType(g.type).id)}${g.label ? ' – ' + g.label : ''}`),
       btn('Koppel', { variant: 'secondary', title: `Aan kring ${c.nr ?? ''} koppelen`, onClick: async () => {
         const now = Date.now(); await sql.batch(g.ids.map((id) => ({ sql: 'UPDATE symbol SET circuit_id=?, updated_at=? WHERE id=?', bind: [c.id, now, id] }))); await after(`${g.ids.length} symbool/symbolen gekoppeld`);
       } }))));
@@ -206,9 +279,10 @@ export async function renderSchema(root: HTMLElement, project: Project) {
     if (!sel) {
       const t = BUILD.find((x) => x.id === tool);
       side.append(h('div', null, h('h4', null, 'Eigenschappen'),
-        h('p', { class: 'muted' }, t && t.id !== 'select' ? t.hint : tool.startsWith('sym:') ? `Klik op een kring om "${symbolEntry(tool.slice(4))?.label}" toe te voegen. Esc = stoppen.` : 'Klik op een kring, een differentieel of de voeding in het schema om de eigenschappen hier te bewerken.')));
+        h('p', { class: 'muted' }, t && t.id !== 'select' ? t.hint : tool.startsWith('sym:') ? `Klik op een oranje invoegpunt op een kring om "${symbolEntry(tool.slice(4))?.label}" te plaatsen. Esc = stoppen.` : BUILD[0].hint)));
       return;
     }
+    if (sel.kind === 'load') { side.append(loadInspector(sel.id)); return; }
     if (sel.kind === 'supply') {
       const proj = project as Record<string, any>;
       if (!proj.supply) proj.supply = '1x230';
@@ -230,7 +304,7 @@ export async function renderSchema(root: HTMLElement, project: Project) {
       { key: 'name', label: 'Omschrijving', span: 2 },
       { key: 'cable_type', label: 'Kabeltype', type: 'select', options: CABLE_TYPES }, { key: 'fire_class', label: 'Brandklasse', type: 'select', options: FIRE_CLASSES },
       { key: 'section_mm2', label: 'Doorsnede (mm²)', type: 'select', options: SECTIONS, numeric: true }, { key: 'wires', label: 'Aantal aders', type: 'number' },
-      { key: 'install', label: 'Plaatsing', type: 'select', options: INSTALL_MODES, span: 2 },
+      { key: 'install', label: 'Plaatsing', type: 'select', options: INSTALL_MODES }, { key: 'conduit', label: 'Los of in buis', type: 'select', options: CONDUIT_MODES, numeric: true },
       { key: 'rooms', label: 'Ruimtes', advanced: true, span: 2 }, { key: 'level', label: 'Verdieping', advanced: true }, { key: 'status', label: 'Status', type: 'select', options: STATUSES, allowEmpty: false, advanced: true },
       { key: 'lock_group', label: 'Samen houden (gedeelde nul)', advanced: true, span: 2 }, { key: 'notes', label: 'Notities', type: 'textarea', advanced: true, span: 2 },
     ];
@@ -259,7 +333,8 @@ export async function renderSchema(root: HTMLElement, project: Project) {
     if ((e.target as HTMLElement).matches?.('input,textarea,select')) return;
     if (e.key === 'Escape') { if (tool !== 'select') setTool('select'); else select(null); return; }
     if (e.key === 'Delete' && sel) {
-      if (sel.kind === 'device') { const d = devices.find((x) => x.id === sel!.id); if (d) removeDevice(d); }
+      if (sel.kind === 'load') removeLoad(sel.id);
+      else if (sel.kind === 'device') { const d = devices.find((x) => x.id === sel!.id); if (d) removeDevice(d); }
       else if (sel.kind === 'circuit') { const c = circuits.find((x) => x.id === sel!.id), dv = c && devOf(c); if (dv) removeDevice(dv); }
       return;
     }

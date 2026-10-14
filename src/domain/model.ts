@@ -12,7 +12,7 @@ export interface Circuit {
   id: string; project_id: string; nr?: string | null; name: string; func?: string | null; device_id?: string | null; new_device_id?: string | null;
   voltage?: number | null; cable_type?: string | null; section_mm2?: number | null; wires?: number | null; has_earth?: number | null;
   rooms?: string | null; status: string; notes?: string | null;
-  fire_class?: string | null; install?: string | null; level?: string | null; lock_group?: string | null; feeds_board_id?: string | null;
+  fire_class?: string | null; install?: string | null; conduit?: number | null; level?: string | null; lock_group?: string | null; feeds_board_id?: string | null;
 }
 export interface Plan { id: string; project_id: string; name: string; level?: string | null; asset_id?: string | null; w?: number | null; h?: number | null; scale?: number | null; bg_opacity?: number | null }
 export interface Shape {
