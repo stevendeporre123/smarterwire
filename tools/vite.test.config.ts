@@ -2,5 +2,5 @@
 import { defineConfig } from 'vite';
 export default defineConfig({
   root: '.', optimizeDeps: { exclude: ['@sqlite.org/sqlite-wasm'] }, worker: { format: 'es' },
-  build: { target: 'es2022', outDir: 'dist-test', emptyOutDir: true, rollupOptions: { input: { e2e: 'tools/plan-e2e.html', pdf: 'tools/pdf-test.html', board: 'tools/board-e2e.html', gen: 'tools/gen-e2e.html' } } },
+  build: { target: 'es2022', outDir: 'dist-test', emptyOutDir: true, rollupOptions: { input: { e2e: 'tools/plan-e2e.html', pdf: 'tools/pdf-test.html', board: 'tools/board-e2e.html', gen: 'tools/gen-e2e.html', schema: 'tools/schema-e2e.html' } } },
 });

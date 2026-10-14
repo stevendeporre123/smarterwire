@@ -40,7 +40,7 @@ export function areiSymbol(name: string, cx: number, cy: number, scale = 2.5, ro
 
 // ---- catalogus ----
 export type Multi = 'socket' | 'switch';
-export interface SymbolEntry { id: string; label: string; group: string; func: string; planFile: string; schemaFile: string; anchor: { x: number; y: number }; multi?: Multi }
+export interface SymbolEntry { id: string; label: string; keywords: string; group: string; func: string; planFile: string; schemaFile: string; anchor: { x: number; y: number }; multi?: Multi }
 
 /** Functionele blokken in het palet (i.p.v. de mappen van de AREI-set). */
 export const FUNC_ORDER = ['Stopcontacten', 'Schakelaars', 'Verlichting', 'Toestellen', 'Domotica & regeling', 'Signalisatie & deur', 'Kasten & dozen', 'Zonne-energie'];
@@ -53,6 +53,21 @@ const FUNC_BY_NAME: [RegExp, string][] = [
 const FUNC_BY_FOLDER: Record<string, string> = { Stopcontacten: 'Stopcontacten', Schakelaars: 'Schakelaars', Verbruikstoestellen: 'Toestellen', 'Elektrische Toestellen': 'Kasten & dozen', Beschermingstoestellen: 'Beschermingen', 'Zonnepanelen (≠AREI)': 'Zonne-energie' };
 const funcOf = (name: string, folder: string) => FUNC_BY_NAME.find(([re]) => re.test(name))?.[1] ?? FUNC_BY_FOLDER[folder] ?? folder;
 
+/** Herkenbare namen en zoekwoorden voor de gangbare symbolen (de AREI-bestandsnamen blijven de id). */
+const DISPLAY: Record<string, { label: string; kw: string }> = {
+  Verlichtingstoestel: { label: 'Lamp (lichtpunt)', kw: 'lamp lichtpunt plafondlamp licht gewone lamp' },
+  Wandverlichtingstoestel: { label: 'Wandlamp', kw: 'wandverlichting lichtpunt wand lamp' },
+  Fluorescentiearmatuur: { label: 'TL-armatuur', kw: 'tl fluorescent fluo lamp' },
+  'Schakelaar algemeen symbool': { label: 'Enkelpolige schakelaar', kw: 'enkelvoudige enkelvoudig schakelaar lichtschakelaar gewone schakelaar enkel' },
+  'Tweepolige schakelaar': { label: 'Tweepolige schakelaar', kw: 'schakelaar 2-polig' },
+  'Enkelpolige wisselschakelaar': { label: 'Wisselschakelaar', kw: 'wissel schakelaar' },
+  Kruisschakelaar: { label: 'Kruisschakelaar', kw: 'kruis schakelaar' },
+  Stopcontact: { label: 'Stopcontact', kw: 'contactdoos wandcontactdoos' },
+  'Stopcontact waterdicht': { label: 'Stopcontact waterdicht', kw: 'contactdoos buiten ip' },
+  'Autonoom noodverlichtingstoestel': { label: 'Noodverlichting (autonoom)', kw: 'nood lamp' },
+};
+/** Gangbare symbolen staan bovenaan hun blok. */
+const PRIORITY = ['Stopcontact', 'Verlichtingstoestel', 'Schakelaar algemeen symbool', 'Enkelpolige wisselschakelaar', 'Tweepolige schakelaar', 'Kruisschakelaar', 'Drukknop', 'Dimmer', 'Wandverlichtingstoestel', 'Fluorescentiearmatuur'];
 const SKIP_GROUPS = new Set(['Elektrische Leidingen', 'Algemeenheden']);
 const PLAN_SUF = ' voor situatieschema', SCHEMA_SUF = [' voor ééndraadsschema', ' voor éénsdraadsschema'];
 /** Stopcontacten: de staart (die tegen de muur komt) is het ankerpunt. Bij de tweepolige varianten zit die op 40% van de breedte. */
@@ -69,10 +84,11 @@ export const CATALOG: SymbolEntry[] = (() => {
     const plan = group.has(name + PLAN_SUF) ? name + PLAN_SUF : name;
     const schema = SCHEMA_SUF.map((x) => name + x).find((x) => group.has(x)) ?? name;
     const tail = g === 'Stopcontacten' && plan.endsWith(PLAN_SUF);
-    out.push({ id: name, label: name, group: g, func: funcOf(name, g), planFile: plan, schemaFile: schema, anchor: tail ? tailAnchor(plan) : { x: 0.5, y: 0.5 },
+    out.push({ id: name, label: DISPLAY[name]?.label ?? name, keywords: DISPLAY[name]?.kw ?? '', group: g, func: funcOf(name, g), planFile: plan, schemaFile: schema, anchor: tail ? tailAnchor(plan) : { x: 0.5, y: 0.5 },
       multi: tail && !/transfo/.test(name) ? 'socket' : MULTI_SWITCH.has(name) ? 'switch' : undefined });
   }
-  return out.sort((a, b) => FUNC_ORDER.indexOf(a.func) - FUNC_ORDER.indexOf(b.func) || a.label.length - b.label.length || a.label.localeCompare(b.label, 'nl'));
+  const prio = (e: SymbolEntry) => { const i = PRIORITY.indexOf(e.id); return i < 0 ? 99 : i; };
+  return out.sort((a, b) => FUNC_ORDER.indexOf(a.func) - FUNC_ORDER.indexOf(b.func) || prio(a) - prio(b) || a.label.length - b.label.length || a.label.localeCompare(b.label, 'nl'));
 })();
 
 /** Oude (zelfgetekende) symbool-id's in bestaande projecten → AREI-symbool. */

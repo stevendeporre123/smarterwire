@@ -170,7 +170,7 @@ export async function renderBoard(root: HTMLElement, project: Project) {
       const el = drag.el, x = +el.getAttribute('x')!, y = +el.getAttribute('y')!, w = +el.getAttribute('width')!, h_ = +el.getAttribute('height')!;
       drag = null; el.remove();
       if (w < W * 0.008 || h_ < H * 0.008) return;
-      const d = await upsert('device', { board_id: board.id, kind: 'automaat', poles: '2P', curve: 'B', breaking_ka: 3, phase: supply === '1x230' ? null : 'L1', modules: Math.max(1, Math.round(w / h_ * 2.2)), row_no: 0, pos: 0, rx: x / W, ry: y / H, rw: w / W, rh: h_ / H });
+      const d = await upsert('device', { board_id: board.id, kind: 'automaat', poles: '2P', curve: 'C', breaking_ka: 3, phase: supply === '1x230' ? null : 'L1', modules: Math.max(1, Math.round(w / h_ * 2.2)), row_no: 0, pos: 0, rx: x / W, ry: y / H, rw: w / W, rh: h_ / H });
       devices = await devicesOf(board.id);
       const ch = recomputeLayout(devices); await sql.batch(ch.map((c) => upsertStmt('device', c)));
       selId = d.id; await refresh();
@@ -278,6 +278,8 @@ export async function renderBoard(root: HTMLElement, project: Project) {
       const before = { kind: d.kind, poles: normPoles(d.poles), modules: d.modules };
       Object.assign(d, form.read());
       // breedte volgt de polen enkel zolang ze niet apart is aangepast (een mini-automaat heeft 2 polen op 1 module)
+      // standaardwaarden bij een nieuw type: differentieel = type A, automaat = curve C
+      if (d.kind !== before.kind) { if ((d.kind === 'differentieel' || d.kind === 'aardlekautomaat') && !d.dtype) d.dtype = 'A'; if ((d.kind === 'automaat' || d.kind === 'aardlekautomaat') && !d.curve) d.curve = 'C'; }
       if (d.modules == null || (d.modules === before.modules && d.modules === defaultModules(before.kind, before.poles) && d.poles !== before.poles)) d.modules = defaultModules(d.kind, d.poles);
       await upsert('device', d);
       if (d.kind !== before.kind) { await refresh(); return; }   // andere velden na een typewissel
@@ -307,7 +309,7 @@ export async function renderBoard(root: HTMLElement, project: Project) {
   async function addDeviceManual() {
     const row = devices.length ? Math.max(...devices.map((d) => d.row_no)) : 0;
     const pos = devices.filter((d) => d.row_no === row).length;
-    const d = await upsert('device', { board_id: board.id, kind: 'automaat', poles: '2P', curve: 'B', rating_a: 16, breaking_ka: 3, phase: supply === '1x230' ? null : 'L1', row_no: row, pos, modules: 1 });
+    const d = await upsert('device', { board_id: board.id, kind: 'automaat', poles: '2P', curve: 'C', rating_a: 16, breaking_ka: 3, phase: supply === '1x230' ? null : 'L1', row_no: row, pos, modules: 1 });
     selId = d.id; await refresh();
   }
 

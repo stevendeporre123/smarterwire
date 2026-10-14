@@ -36,7 +36,7 @@ try {
   };
   const ev = (type: string, x: number, y: number, target?: EventTarget) => { const c = toClient(x, y); (target ?? document.elementFromPoint(c.clientX, c.clientY) ?? svgEl).dispatchEvent(new PointerEvent(type, { bubbles: true, button: 0, pointerId: 1, ...c })); };
   const click = async (x: number, y: number) => { ev('pointermove', x, y); await sleep(20); ev('pointerdown', x, y); await sleep(40); ev('pointerup', x, y); await sleep(40); };
-  const tool = async (label: string) => { [...root.querySelectorAll('.pal-item')].find((b) => b.getAttribute('title') === label || b.textContent?.trim() === label)!.dispatchEvent(new MouseEvent('click', { bubbles: true })); await sleep(50); };
+  const tool = async (label: string) => { ([...root.querySelectorAll('.pal-item')].find((b) => b.getAttribute('title') === label || b.textContent?.trim() === label) ?? (() => { throw new Error('knop niet gevonden: ' + label); })()).dispatchEvent(new MouseEvent('click', { bubbles: true })); await sleep(50); };
   const key = (k: string) => window.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true }));
 
   if (PHOTO) {
@@ -65,7 +65,7 @@ try {
   await tool('Tafel'); await click(1000, 500);
   await tool('Tekst'); await click(600, 1050);
   await tool('Stopcontact'); await click(335, 400); await click(1480, 600); await click(1000, 1185);
-  await tool('Verlichtingstoestel'); await click(700, 700);
+  await tool('Lamp (lichtpunt)'); await click(700, 700);
   await tool('Selecteren'); await sleep(100);
   await click(900, 400);   // tussenmuur selecteren → zijpaneel met lengte
   const len = root.querySelector('.side input[type=number]') as HTMLInputElement; len.value = '2,5'.replace(',', '.'); len.dispatchEvent(new Event('change', { bubbles: true })); await sleep(300);
@@ -73,11 +73,14 @@ try {
   if (!PHOTO) {
     const gangBtn = (n: number) => { (document.querySelectorAll('.gang-btn')[n - 1] as HTMLElement).click(); };
     await tool('Stopcontact'); gangBtn(2); await click(1480, 950 - 140); gangBtn(3); await click(330, 1000); gangBtn(4); await click(1000, 1185 - 0);
-    await tool('Schakelaar algemeen symbool'); gangBtn(1); await click(600, 330); gangBtn(2); await click(800, 330); gangBtn(3); await click(1100, 330); gangBtn(4); await click(1250, 330);
+    await tool('Enkelpolige schakelaar'); gangBtn(1); await click(600, 330); gangBtn(2); await click(800, 330); gangBtn(3); await click(1100, 330); gangBtn(4); await click(1250, 330);
     await tool('Tweepolige schakelaar'); gangBtn(3); await click(700, 600);
     await tool('Leiding in wand'); await click(700, 700); await click(700, 900); await click(1000, 900); key('Escape'); await sleep(50);
     await tool('Leiding in buis'); await click(1100, 600); await click(1400, 600); key('Escape'); await sleep(50);
     await tool('Selecteren');
+    key('l'); await sleep(100);   // sneltoets van favoriet 'Lamp'
+    const act = root.querySelector('.pal-item.active')?.getAttribute('title'); log('sneltoets L → ' + act);
+    await click(1250, 900);   // lamp plaatsen met de sneltoets
     if (location.search.includes('nohalo')) { [...root.querySelectorAll('label')].find((x) => x.textContent?.includes('Cirkels'))!.querySelector('input')!.click(); await sleep(100); }
     if (location.search.includes('q=')) { const inp = root.querySelector('.pal input[type=search]') as HTMLInputElement; inp.value = 'schak'; inp.dispatchEvent(new Event('input', { bubbles: true })); await sleep(100); }
   }

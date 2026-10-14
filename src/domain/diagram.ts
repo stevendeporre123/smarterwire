@@ -9,7 +9,7 @@ export interface DiagramResult {
   /** plaatsen waar het schema netjes kan worden afgebroken (einde van een kring of groep); `hard` = einde van een kast */
   cuts: { x: number; hard: boolean; depth: number }[];
 }
-export interface DiagramSymbol { circuit_id?: string | null; type: string; label?: string | null }
+export interface DiagramSymbol { circuit_id?: string | null; type: string; label?: string | null; n?: number }
 
 // ---- maten (px) ----
 const SP = 120;        // breedte van één kring
@@ -50,6 +50,8 @@ export function buildDiagram(opts: {
   supply: Supply; meta?: string[]; ean?: string | null;
   /** alleen het deel tussen x0 en x1 (voor PDF-pagina's); zonder titel, legende en gegevens */
   crop?: [number, number];
+  /** kring die in het schema is geselecteerd (krijgt een lichte achtergrond) */
+  selCircuit?: string | null;
 }): DiagramResult {
   const { boards, circuits, which, supply } = opts;
   const threePhase = isThreePhase(supply);
@@ -69,7 +71,7 @@ export function buildDiagram(opts: {
     if (!s.circuit_id) continue;
     const l = loads.get(s.circuit_id) ?? loads.set(s.circuit_id, []).get(s.circuit_id)!;
     const label = (s.label ?? '').trim(), hit = l.find((x) => x.type === s.type && x.label === label);
-    if (hit) hit.n++; else l.push({ type: s.type, label, n: 1 });
+    if (hit) hit.n += s.n ?? 1; else l.push({ type: s.type, label, n: s.n ?? 1 });
   }
   const loadsOf = (cs: Circuit[]) => cs.flatMap((c) => loads.get(c.id) ?? []);
 
@@ -165,6 +167,8 @@ export function buildDiagram(opts: {
     const topY = y0 - CABLE_TOP - (l.length ? 14 + l.length * ROW : 0);
     const nr = cs.map((c) => c.nr).filter(Boolean).join('+') || '?';
     const name = cs.map((c) => c.name).filter((n) => n && !/^Kring /.test(n)).join(' / ');
+    // klikvlak (voor de schema-weergave): onzichtbaar, geselecteerde kring licht gemarkeerd
+    if (cs[0]) parts.push(`<rect data-cid="${cs[0].id}" x="${x - SP / 2 + 6}" y="${topY - NAME_LEN}" width="${SP - 12}" height="${y0 + 44 - topY + NAME_LEN}" rx="6" fill="#0066aa" fill-opacity="${cs.some((c) => c.id === opts.selCircuit) ? 0.09 : 0}" style="cursor:pointer"/>`);
     // lijn + beveiliging
     parts.push(`<path d="M${x} ${y0 - BREAKER_TOP - 6} V${topY}" class="ln"/>`);
     parts.push(breakerSymbol(x, y0, d.kind === 'automaat' || d.kind === 'aardlekautomaat' ? 'automaat' : d.kind === 'smelt' ? 'schakelaar' : 'automaat'));

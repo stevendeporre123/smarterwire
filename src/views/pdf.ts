@@ -1,17 +1,16 @@
 import { h, toast } from '../lib/dom';
 import { formModal } from '../lib/ui';
-import { sql } from '../db/client';
 import { assetUrl, assetSize } from '../db/repo';
 import { boardsOf, circuitsOf, plansOf, shapesOf, symbolsOf, allDevicesOfProject, type Project } from '../domain/model';
 import { getInstaller } from '../domain/settings';
+import { projectLoads } from '../domain/loads';
 import { buildPdfPages, type PdfData, type PdfOptions } from '../domain/pdfpages';
 
 /** Verzamelt alles wat op de PDF komt. */
 export async function loadPdfData(project: Project): Promise<PdfData> {
   const [boards, circuits, devices, plans, installer, symbols] = await Promise.all([
     boardsOf(project.id), circuitsOf(project.id), allDevicesOfProject(project.id), plansOf(project.id), getInstaller(),
-    sql.query<{ circuit_id: string | null; type: string; label: string | null }>(
-      `SELECT s.circuit_id, s.type, s.label FROM symbol s JOIN plan p ON p.id=s.plan_id WHERE s.deleted=0 AND p.deleted=0 AND p.project_id=? ORDER BY p.level, p.name, s.rowid`, [project.id]),
+    projectLoads(project.id),
   ]);
   const pdfPlans = await Promise.all(plans.map(async (plan) => ({ plan, shapes: await shapesOf(plan.id), symbols: await symbolsOf(plan.id), photoUrl: await assetUrl(plan.asset_id) })));
   const photos = (await Promise.all(boards.filter((b) => b.kind === 'bestaand' && b.asset_id).map(async (board) => {

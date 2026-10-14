@@ -7,6 +7,7 @@ import { circuitColor } from '../domain/symbols';
 import { CATALOG, FUNC_ORDER, symbolEntry, symbolGeom, symbolMarkup, splitType, joinType, type SymbolEntry } from '../domain/areisymbols';
 import { FURNITURE, CABLE_STYLES, DEFAULT_PLAN_M, dist, projectOnSeg, nearestWall, snapToWallSurface, renderFloor, wallPts, type Pt } from '../domain/floorplan';
 import { editCircuit } from './circuits';
+import { getSetting, setSetting } from '../domain/settings';
 
 const LS = (pid: string) => `smarterwire.plan.${pid}`;
 const SYM_SIZE = 0.022; // basisgrootte van symbolen als fractie van de plan-breedte
@@ -49,6 +50,12 @@ export async function renderPlan(root: HTMLElement, project: Project) {
   const plan = plans.find((p) => p.id === planId)!;
   const [symbols, shapes, circuits, boards] = await Promise.all([symbolsOf(plan.id), shapesOf(plan.id), circuitsOf(project.id), boardsOf(project.id)]);
   const order = circuits.map((c) => c.id);
+  // favorieten met sneltoets (blijven bewaard in de database)
+  interface Fav { tool: string; key?: string }
+  const DEFAULT_FAVS: Fav[] = [{ tool: 'sym:Stopcontact', key: 's' }, { tool: 'sym:Verlichtingstoestel', key: 'l' }, { tool: 'sym:Schakelaar algemeen symbool', key: 'e' }];
+  let favs = await getSetting<Fav[]>('planFavs', DEFAULT_FAVS);
+  const saveFavs = () => setSetting('planFavs', favs);
+  let pendingKey: string | null = null;      // tool waarvoor we een sneltoets aan het opnemen zijn
   let url = await assetUrl(plan.asset_id);
   if (plan.asset_id && (!plan.w || !plan.h)) { const sz = await assetSize(plan.asset_id); if (sz) { plan.w = sz.width; plan.h = sz.height; await upsert('plan', plan); } }
   const W = plan.w ?? 3000, H = plan.h ?? 2100;
@@ -120,13 +127,13 @@ export async function renderPlan(root: HTMLElement, project: Project) {
     { id: 'text', label: 'Tekst', icon: 'Type', hint: 'Klik om een ruimtenaam of opmerking te plaatsen.' },
   ];
   const TOOLS = BUILD;
-  interface PalItem { tool: string; label: string; group: string; icon: () => Element; entry?: SymbolEntry }
+  interface PalItem { tool: string; label: string; group: string; icon: () => Element; entry?: SymbolEntry; kw?: string }
   const norm = (x: string) => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const items: PalItem[] = [
     ...BUILD.map((t) => ({ tool: t.id, label: t.label, group: 'Bouw', icon: () => icon(t.icon, 18) })),
     ...FURNITURE.map((f) => ({ tool: `furn:${f.id}`, label: f.label, group: 'Meubilair', icon: () => icon('Square', 18) })),
     ...CABLE_STYLES.map((c) => ({ tool: `cable:${c.id}`, label: c.label, group: 'Leidingen', icon: () => icon('Cable', 18) })),
-    ...CATALOG.filter((e) => FUNC_ORDER.includes(e.func)).map((e) => ({ tool: `sym:${e.id}`, label: e.label, group: e.func, entry: e, icon: () => {
+    ...CATALOG.filter((e) => FUNC_ORDER.includes(e.func)).map((e) => ({ tool: `sym:${e.id}`, label: e.label, group: e.func, entry: e, kw: e.keywords, icon: () => {
       const g = symbolGeom(e.id, 'plan')!, ic = svg('svg', { width: 26, height: 22, viewBox: `0 0 ${g.w + 2} ${g.h + 2}`, preserveAspectRatio: 'xMidYMid meet' });
       ic.innerHTML = symbolMarkup(e.id, 'plan', (g.w + 2) * g.anchor.x + (g.anchor.x === 0 ? 1 : 0), (g.h + 2) / 2, 1, 0, 1.6); return ic; } })),
   ];
@@ -147,15 +154,28 @@ export async function renderPlan(root: HTMLElement, project: Project) {
     clear(pal);
     pal.append(searchInput, gangRow); drawGang(); drawPalList();
   }
+  const favOf = (tool: string) => favs.find((f) => f.tool === tool);
+  function toggleFav(tool: string) {
+    favs = favOf(tool) ? favs.filter((f) => f.tool !== tool) : [...favs, { tool }];
+    saveFavs(); drawPalList();
+  }
+  function palRow(i: PalItem) {
+    const f = favOf(i.tool);
+    return h('div', { class: 'pal-row' },
+      h('button', { class: `pal-item ${tool === i.tool ? 'active' : ''}`, title: i.label, onClick: () => setTool(i.tool) }, i.icon(), i.label),
+      f ? h('button', { class: `pal-key ${pendingKey === i.tool ? 'wait' : ''}`, title: 'Sneltoets instellen (daarna op de gewenste toets drukken)', onClick: () => { pendingKey = pendingKey === i.tool ? null : i.tool; if (pendingKey) toast('Druk op de gewenste toets (Esc = annuleren, Delete = wissen)'); drawPalList(); } }, pendingKey === i.tool ? '…' : (f.key ?? '+').toUpperCase()) : null,
+      h('button', { class: `pal-star ${f ? 'on' : ''}`, title: f ? 'Uit favorieten halen' : 'Favoriet maken', onClick: () => toggleFav(i.tool) }, f ? '★' : '☆'));
+  }
   function drawPalList() {
     clear(palList);
     const q = norm(palQuery.trim());
-    for (const g of GROUPS) {
-      const its = items.filter((i) => i.group === g && (!q || norm(i.label).includes(q) || norm(g).includes(q)));
+    const match = (i: PalItem) => !q || norm(i.label).includes(q) || norm(i.group).includes(q) || norm(i.kw ?? '').includes(q);
+    for (const g of favs.length ? ['Favorieten', ...GROUPS] : GROUPS) {
+      const its = (g === 'Favorieten' ? favs.map((f) => items.find((i) => i.tool === f.tool)).filter((x): x is PalItem => !!x) : items.filter((i) => i.group === g)).filter(match);
       if (!its.length) continue;
       const det = h('details', { class: 'pal-group', open: q ? true : !closed.has(g) },
-        h('summary', null, g, h('span', { class: 'pal-count' }, String(its.length))),
-        ...its.map((i) => h('button', { class: `pal-item ${tool === i.tool ? 'active' : ''}`, title: i.label, onClick: () => setTool(i.tool) }, i.icon(), i.label)));
+        h('summary', null, g === 'Favorieten' ? '★ Favorieten' : g, h('span', { class: 'pal-count' }, String(its.length))),
+        ...its.map(palRow));
       det.addEventListener('toggle', () => { if (q) return; if ((det as HTMLDetailsElement).open) closed.delete(g); else closed.add(g); localStorage.setItem(`${LS_OPT}.closed`, JSON.stringify([...closed])); });
       palList.append(det);
     }
@@ -504,6 +524,17 @@ export async function renderPlan(root: HTMLElement, project: Project) {
   window.addEventListener('keydown', async function onKey(e) {
     if (!root.isConnected) { window.removeEventListener('keydown', onKey); return; }
     if ((e.target as HTMLElement).matches?.('input,textarea,select')) return;
+    if (pendingKey) {   // sneltoets opnemen voor een favoriet
+      e.preventDefault();
+      const f = favOf(pendingKey);
+      if (f && e.key !== 'Escape') {
+        if (e.key === 'Delete' || e.key === 'Backspace') delete f.key;
+        else if (/^[a-z0-9]$/i.test(e.key) && e.key.toLowerCase() !== 'r') { const k = e.key.toLowerCase(); favs.forEach((x) => { if (x.key === k) delete x.key; }); f.key = k; }
+        else { toast(e.key.toLowerCase() === 'r' ? 'R draait een symbool en kan niet als sneltoets dienen' : 'Kies een letter of cijfer', 'error'); return; }
+        saveFavs();
+      }
+      pendingKey = null; drawPalList(); return;
+    }
     if (isLine(tool) && drawing) {
       if (/^[0-9.,]$/.test(e.key)) { lenBuf += e.key; drawGhost(); e.preventDefault(); return; }
       if (e.key === 'Backspace' && lenBuf) { lenBuf = lenBuf.slice(0, -1); drawGhost(); e.preventDefault(); return; }
@@ -516,6 +547,10 @@ export async function renderPlan(root: HTMLElement, project: Project) {
         } else drawing = null;
         drawGhost(); return;
       }
+    }
+    if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.length === 1) {   // sneltoets van een favoriet
+      const fav = favs.find((f) => f.key === e.key.toLowerCase());
+      if (fav) { e.preventDefault(); setTool(fav.tool); return; }
     }
     if (e.key === 'Escape') { drawing = null; scaleA = null; rectDrag = null; lenBuf = ''; drawGhost(); if (tool !== 'select') setTool('select'); else { selShape = null; selSym = null; drawShapes(); drawSyms(); drawSide(); } return; }
     const sh = shapeById(selShape);

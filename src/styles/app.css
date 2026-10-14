@@ -144,3 +144,20 @@ input[type=checkbox] { width: auto; }
   .pdf-page { width: 297mm; height: 210mm; overflow: hidden; break-after: page; page-break-after: always; }
   .pdf-page svg { display: block; }
 }
+
+.pal-row { display: flex; align-items: center; gap: 2px; padding-right: 4px; }
+.pal-row .pal-item { flex: 1; min-width: 0; }
+.pal-star { border: 0; background: transparent; cursor: pointer; font-size: 15px; color: #b5bdb5; padding: 2px 4px; opacity: .55; }
+.pal-row:hover .pal-star, .pal-star.on { opacity: 1; }
+.pal-star.on { color: #e0a800; }
+.pal-key { min-width: 20px; height: 20px; border: 1px solid #b5bdb5; background: #fff; border-radius: 4px; font-size: 11px; font-weight: 700; cursor: pointer; color: #3a463a; padding: 0 4px; }
+.pal-key.wait { background: #fff3cd; border-color: #e0a800; }
+
+/* verbruikers op het eendraadschema */
+.load-row { display: flex; align-items: center; gap: 6px; padding: 4px 0; font-size: 13px; }
+.load-edit { flex-wrap: wrap; border-bottom: 1px solid #e6eae6; padding-bottom: 6px; }
+.load-edit select, .load-edit input { font-size: 12px; padding: 3px 4px; min-width: 0; }
+.load-edit select:first-of-type { flex: 1 1 150px; }
+.load-results { display: flex; flex-direction: column; margin-top: 6px; }
+.schema-wrap { min-width: min-content; }
+.schema-scroll { min-height: 0; overflow: auto; background: #fff; }

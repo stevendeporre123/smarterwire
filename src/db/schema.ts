@@ -103,4 +103,14 @@ export const MIGRATIONS: string[] = [
   UPDATE device SET poles='2P' WHERE poles='1P+N';
   UPDATE device SET poles='4P' WHERE poles='3P+N';
   `,
+  // v6: verbruikers die rechtstreeks op het eendraadschema zijn toegevoegd (naast die van het situatieplan)
+  `
+  CREATE TABLE schema_load (
+    id TEXT PRIMARY KEY, circuit_id TEXT NOT NULL REFERENCES circuit(id),
+    type TEXT NOT NULL,                                      -- symbool-id (zoals op het situatieplan, evt. met #aantal)
+    label TEXT, n INTEGER NOT NULL DEFAULT 1, pos REAL,
+    ${SYNC}
+  );
+  CREATE INDEX idx_schema_load_circuit ON schema_load(circuit_id);
+  `,
 ];

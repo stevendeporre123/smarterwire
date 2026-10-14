@@ -148,7 +148,7 @@ export async function generateNewBoards(project: Project, opt: GenOptions): Prom
             }
             if (phase !== '3P') { diffLoad[phase] += rating; globalLoad[phase] += rating; } else phaseNames.forEach((p) => { diffLoad[p] += rating; globalLoad[p] += rating; });
           }
-          group.push({ id: devId, board_id: nb.id, parent_id: diffId, kind: 'automaat', label: c.nr ? `K${c.nr}` : null, poles, phase, rating_a: rating, curve: 'B', modules });
+          group.push({ id: devId, board_id: nb.id, parent_id: diffId, kind: 'automaat', label: c.nr ? `K${c.nr}` : null, poles, phase, rating_a: rating, curve: 'C', modules });
           circuitStmts.push({ sql: `UPDATE circuit SET new_device_id=?, updated_at=? WHERE id=?`, bind: [devId, now, c.id] });
         }
       }
