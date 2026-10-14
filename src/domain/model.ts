@@ -14,7 +14,12 @@ export interface Circuit {
   rooms?: string | null; status: string; notes?: string | null;
   fire_class?: string | null; install?: string | null; level?: string | null; lock_group?: string | null; feeds_board_id?: string | null;
 }
-export interface Plan { id: string; project_id: string; name: string; level?: string | null; asset_id?: string | null }
+export interface Plan { id: string; project_id: string; name: string; level?: string | null; asset_id?: string | null; w?: number | null; h?: number | null; scale?: number | null; bg_opacity?: number | null }
+export interface Shape {
+  id: string; plan_id: string; kind: 'wall' | 'window' | 'door' | 'stair' | 'furniture' | 'text';
+  x1?: number | null; y1?: number | null; x2?: number | null; y2?: number | null; ref_id?: string | null; pos?: number | null; size?: number | null; thick?: number | null;
+  flip?: number | null; rot?: number | null; label?: string | null; sub?: string | null;
+}
 export interface Symbol_ { id: string; plan_id: string; type: string; x: number; y: number; rot: number; circuit_id?: string | null; board_id?: string | null; label?: string | null; notes?: string | null }
 
 export const boardsOf = (pid: string) => list<Board>('board', 'project_id=?', [pid], 'kind, name');
@@ -22,6 +27,7 @@ export const devicesOf = (boardId: string) => list<Device>('device', 'board_id=?
 export const circuitsOf = (pid: string) =>
   list<Circuit>('circuit', 'project_id=?', [pid], `CASE WHEN nr GLOB '[0-9]*' THEN CAST(nr AS INTEGER) ELSE 9999 END, nr, name`);
 export const plansOf = (pid: string) => list<Plan>('plan', 'project_id=?', [pid], 'level, name');
+export const shapesOf = (planId: string) => list<Shape>('shape', 'plan_id=?', [planId]);
 export const symbolsOf = (planId: string) => list<Symbol_>('symbol', 'plan_id=?', [planId]);
 export const allDevicesOfProject = (pid: string) =>
   sql.query<Device>(`SELECT d.* FROM device d JOIN board b ON b.id=d.board_id WHERE d.deleted=0 AND b.deleted=0 AND b.project_id=?`, [pid]);

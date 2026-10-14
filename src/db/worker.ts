@@ -11,6 +11,7 @@ let persistent = false;
 async function openDb() {
   if (!sqlite3) sqlite3 = await sqlite3InitModule();
   try {
+    if (self.name === 'mem') throw new Error('?mem: tijdelijke database (tests)');
     // OPFS SyncAccessHandle pool: persistent, offline, geen COOP/COEP-headers nodig
     pool ??= await sqlite3.installOpfsSAHPoolVfs({ name: 'smarterwire', initialCapacity: 6 });
     db = new pool.OpfsSAHPoolDb(PATH);

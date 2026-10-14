@@ -5,7 +5,8 @@ const pending = new Map<number, { resolve: (v: any) => void; reject: (e: Error) 
 
 function w(): Worker {
   if (!worker) {
-    worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
+    // ?mem in de URL = tijdelijke database (tests); de naam is de schakelaar naar de worker
+    worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module', name: new URLSearchParams(location.search).has('mem') ? 'mem' : 'db' });
     worker.onmessage = (e) => {
       const p = pending.get(e.data.id);
       if (!p) return;

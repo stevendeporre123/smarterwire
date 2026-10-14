@@ -144,7 +144,7 @@ export function panZoom(svgEl: SVGSVGElement, w: number, h_: number) {
   // pannen: middelste muisknop, of spatie + slepen
   let panning: { sx: number; sy: number; vx: number; vy: number; s: number } | null = null;
   let space = false;
-  window.addEventListener('keydown', (e) => { if (e.code === 'Space' && !(e.target as HTMLElement).matches('input,textarea,select')) { space = true; svgEl.classList.add('panning'); } });
+  window.addEventListener('keydown', (e) => { if (e.code === 'Space' && !(e.target as HTMLElement).matches?.('input,textarea,select')) { space = true; svgEl.classList.add('panning'); } });
   window.addEventListener('keyup', (e) => { if (e.code === 'Space') { space = false; svgEl.classList.remove('panning'); } });
   svgEl.addEventListener('pointerdown', (e) => {
     if (e.button === 1 || (space && e.button === 0)) {

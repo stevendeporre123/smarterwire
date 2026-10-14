@@ -1,130 +1,425 @@
-import { h, svg, btn, icon, toast, clear } from '../lib/dom';
+import { h, svg, btn, icon, toast, clear, download } from '../lib/dom';
 import { buildForm, formModal, panZoom, type FieldDef } from '../lib/ui';
 import { upsert, softDelete, saveImage, assetUrl, assetSize } from '../db/repo';
-import { plansOf, symbolsOf, circuitsOf, boardsOf, type Plan, type Project, type Symbol_ } from '../domain/model';
+import { sql } from '../db/client';
+import { plansOf, symbolsOf, shapesOf, circuitsOf, boardsOf, type Plan, type Project, type Symbol_, type Shape } from '../domain/model';
 import { circuitColor } from '../domain/symbols';
 import { CATALOG, areiSymbol, areiSize, symbolEntry } from '../domain/areisymbols';
+import { FURNITURE, DEFAULT_PLAN_M, dist, projectOnSeg, nearestWall, snapToWallSurface, renderFloor, wallPts, type Pt } from '../domain/floorplan';
 import { editCircuit } from './circuits';
 
 const LS = (pid: string) => `smarterwire.plan.${pid}`;
-const SYM_SIZE = 0.022; // basisgrootte als fractie van de plan-breedte; schaalbaar via 'Symboolgrootte'
-const LS_SIZE = 'smarterwire.symsize', LS_LABEL = 'smarterwire.labelsize';
+const SYM_SIZE = 0.022; // basisgrootte van symbolen als fractie van de plan-breedte
+const LS_SIZE = 'smarterwire.symsize', LS_LABEL = 'smarterwire.labelsize', LS_OPT = 'smarterwire.planopt';
 const pct = (k: string) => Math.min(300, Math.max(30, Number(localStorage.getItem(k)) || 100));
+const opt = (k: string, d: boolean) => { const v = localStorage.getItem(`${LS_OPT}.${k}`); return v === null ? d : v === '1'; };
+const setOpt = (k: string, v: boolean) => localStorage.setItem(`${LS_OPT}.${k}`, v ? '1' : '0');
+const THICKS = [0.1, 0.15, 0.2, 0.3];
+const NUM = (s: string) => Number(s.replace(',', '.'));
 
 export async function renderPlan(root: HTMLElement, project: Project) {
   const plans = await plansOf(project.id);
   const reload = () => { clear(root); return renderPlan(root, project); };
   const fileInput = h('input', { type: 'file', accept: 'image/*', style: { display: 'none' } }) as HTMLInputElement;
 
-  const addPlan = () => {
+  const addPhotoPlan = () => {
     fileInput.onchange = async () => {
       const f = fileInput.files?.[0]; if (!f) return;
       const name = prompt('Naam van het plan', `Verdieping ${plans.length}`) ?? 'Plan';
       const img = await saveImage(f, 3200);
-      const p = await upsert('plan', { project_id: project.id, name, asset_id: img.id, level: String(plans.length) });
+      const p = await upsert('plan', { project_id: project.id, name, asset_id: img.id, level: String(plans.length), w: img.width, h: img.height });
       localStorage.setItem(LS(project.id), p.id); reload();
     };
     fileInput.click();
   };
+  const addBlankPlan = async () => {
+    const name = prompt('Naam van het plan', `Verdieping ${plans.length}`); if (!name) return;
+    const p = await upsert('plan', { project_id: project.id, name, level: String(plans.length), w: 3000, h: 2100, scale: 150 });
+    localStorage.setItem(LS(project.id), p.id); reload();
+  };
 
   if (!plans.length) {
-    root.append(h('div', { class: 'page' }, h('div', { class: 'card empty-state' }, icon('Map', 40), h('h3', null, 'Voeg een plattegrond toe'),
-      h('p', null, 'Foto, scan of schets van elke verdieping. Daarop plaats je stopcontacten, lichtpunten… en koppel je ze aan een kring.'),
-      fileInput, btn('Plan opladen', { icon: 'Upload', variant: 'primary', onClick: addPlan }))));
+    root.append(h('div', { class: 'page' }, h('div', { class: 'card empty-state' }, icon('Map', 40), h('h3', null, 'Maak een plan'),
+      h('p', null, 'Begin met een foto van de plattegrond als achtergrond en teken er de muren op, of start met een leeg plan. Daarna plaats je stopcontacten, lichtpunten… en koppel je ze aan een kring.'),
+      fileInput, h('div', { style: { display: 'flex', gap: '8px', justifyContent: 'center' } }, btn('Foto opladen', { icon: 'Upload', variant: 'primary', onClick: addPhotoPlan }), btn('Leeg plan', { icon: 'Plus', onClick: addBlankPlan })))));
     return;
   }
 
   let planId = localStorage.getItem(LS(project.id)); if (!plans.find((p) => p.id === planId)) planId = plans[0].id;
   const plan = plans.find((p) => p.id === planId)!;
-  const [symbols, circuits, boards] = await Promise.all([symbolsOf(plan.id), circuitsOf(project.id), boardsOf(project.id)]);
+  const [symbols, shapes, circuits, boards] = await Promise.all([symbolsOf(plan.id), shapesOf(plan.id), circuitsOf(project.id), boardsOf(project.id)]);
   const order = circuits.map((c) => c.id);
-  const url = await assetUrl(plan.asset_id), size = await assetSize(plan.asset_id!);
-  const W = size!.width, H = size!.height;
+  let url = await assetUrl(plan.asset_id);
+  if (plan.asset_id && (!plan.w || !plan.h)) { const sz = await assetSize(plan.asset_id); if (sz) { plan.w = sz.width; plan.h = sz.height; await upsert('plan', plan); } }
+  const W = plan.w ?? 3000, H = plan.h ?? 2100;
+  const scale = () => plan.scale ?? W / DEFAULT_PLAN_M;      // px per meter
   let S = W * SYM_SIZE * pct(LS_SIZE) / 100, LBL = pct(LS_LABEL) / 100;
 
-  let tool: string | null = 'Stopcontact'; // symbool om te plaatsen; null = selecteren
-  let selId: string | null = null;
-  let activeCircuit: string | null = null; // nieuwe symbolen krijgen automatisch deze kring
+  type Tool = string; // select | wall | window | door | stair | furn:<id> | text | scale | sym:<catalogId>
+  let tool: Tool = 'select';
+  let selSym: string | null = null, selShape: string | null = null;
+  let activeCircuit: string | null = null;
+  let wallThick = Number(localStorage.getItem(`${LS_OPT}.thick`)) || 0.2;
+  let snapOn = opt('snap', true), ortho = opt('ortho', true), grid = opt('grid', true), showBg = opt('bg', true);
+  let drawing: Pt | null = null;      // beginpunt van het volgende muursegment
+  let lenBuf = '';                    // getypte lengte (m)
+  let cursor: Pt | null = null;
 
+  const walls = () => shapes.filter((s) => s.kind === 'wall');
+  const shapeById = (id: string | null) => shapes.find((s) => s.id === id);
+
+  // ---------- toolbar ----------
   const planSel = h('select', { onChange: (e: Event) => { localStorage.setItem(LS(project.id), (e.target as HTMLSelectElement).value); reload(); } },
     plans.map((p) => h('option', { value: p.id, selected: p.id === plan.id }, p.name)));
   const circSel = h('select', { title: 'Nieuwe symbolen worden aan deze kring gekoppeld', onChange: (e: Event) => { activeCircuit = (e.target as HTMLSelectElement).value || null; } },
     h('option', { value: '' }, '— geen kring —'), circuits.map((c) => h('option', { value: c.id }, `${c.nr ?? ''} ${c.name}`)));
+  const check = (label: string, key: string, get: () => boolean, set: (v: boolean) => void, title = '') =>
+    h('label', { class: 'hint', title, style: { display: 'inline-flex', gap: '4px', alignItems: 'center', cursor: 'pointer' } },
+      h('input', { type: 'checkbox', checked: get(), onChange: (e: Event) => { const v = (e.target as HTMLInputElement).checked; set(v); setOpt(key, v); drawAll(); } }), label);
+  const scaleBtn = btn('Schaal', { icon: 'Ruler', variant: 'ghost', onClick: () => { tool = 'scale'; drawing = null; drawPal(); drawSide(); } });
+  const updScale = () => { scaleBtn.querySelector('span')!.textContent = plan.scale ? `1 m = ${Math.round(plan.scale)} px` : 'Schaal instellen'; scaleBtn.style.color = plan.scale ? '' : '#b35c00'; };
 
   const canvas = h('div', { class: 'canvas' }), side = h('div', { class: 'side' }), pal = h('div', { class: 'pal' });
   root.classList.add('page-full');
   root.append(
-    h('div', { class: 'toolbar' }, planSel, fileInput,
-      btn('', { icon: 'Plus', variant: 'ghost', title: 'Plan toevoegen', onClick: addPlan }),
+    h('div', { class: 'toolbar', style: { flexWrap: 'wrap' } }, planSel, fileInput,
+      btn('', { icon: 'Plus', variant: 'ghost', title: 'Plan toevoegen (foto)', onClick: addPhotoPlan }),
+      btn('', { icon: 'FilePlus', variant: 'ghost', title: 'Leeg plan toevoegen', onClick: addBlankPlan }),
       btn('', { icon: 'Pencil', variant: 'ghost', title: 'Plan hernoemen', onClick: () => formModal({ title: 'Plan', fields: [{ key: 'name', label: 'Naam', span: 2 }, { key: 'level', label: 'Niveau', span: 2 }], values: plan,
         onSave: async (v) => { await upsert('plan', { ...plan, ...v }); reload(); }, onDelete: async () => { await softDelete('plan', plan.id); reload(); } }) }),
-      h('span', { class: 'hint' }, 'Symbool %'), h('input', { type: 'number', value: pct(LS_SIZE), min: 30, max: 300, step: 10, style: { width: '72px' }, onChange: (e: Event) => { localStorage.setItem(LS_SIZE, (e.target as HTMLInputElement).value); S = W * SYM_SIZE * pct(LS_SIZE) / 100; drawSyms(); } }),
-      h('span', { class: 'hint' }, 'Label %'), h('input', { type: 'number', value: pct(LS_LABEL), min: 30, max: 300, step: 10, style: { width: '72px' }, onChange: (e: Event) => { localStorage.setItem(LS_LABEL, (e.target as HTMLInputElement).value); LBL = pct(LS_LABEL) / 100; drawSyms(); } }),
+      scaleBtn,
+      h('span', { class: 'hint' }, 'Muurdikte'), h('select', { onChange: (e: Event) => { wallThick = Number((e.target as HTMLSelectElement).value); localStorage.setItem(`${LS_OPT}.thick`, String(wallThick)); } },
+        THICKS.map((t) => h('option', { value: t, selected: t === wallThick }, `${t * 100} cm`))),
+      check('Magneet', 'snap', () => snapOn, (v) => (snapOn = v), 'Kleven aan raster en muurpunten (Shift = tijdelijk uit)'),
+      check('Haaks', 'ortho', () => ortho, (v) => (ortho = v), 'Muren horizontaal/verticaal vergrendelen'),
+      check('Raster', 'grid', () => grid, (v) => (grid = v)),
+      ...(plan.asset_id ? [check('Foto', 'bg', () => showBg, (v) => (showBg = v), 'Achtergrondfoto tonen'),
+        h('input', { type: 'range', min: 10, max: 100, value: Math.round((plan.bg_opacity ?? 0.6) * 100), title: 'Doorzichtigheid foto', style: { width: '80px' }, onInput: async (e: Event) => { plan.bg_opacity = Number((e.target as HTMLInputElement).value) / 100; bgImg?.setAttribute('opacity', String(plan.bg_opacity)); }, onChange: () => upsert('plan', plan) }),
+        btn('Foto verwijderen', { icon: 'ImageOff', variant: 'ghost', title: 'Achtergrondfoto verwijderen als alle muren getekend zijn', onClick: async () => {
+          if (!confirm('De achtergrondfoto van dit plan verwijderen? Je tekening (muren, symbolen) blijft behouden.')) return;
+          plan.asset_id = null; await upsert('plan', plan); reload(); } })] : []),
+      h('span', { class: 'hint' }, 'Symbool %'), h('input', { type: 'number', value: pct(LS_SIZE), min: 30, max: 300, step: 10, style: { width: '64px' }, onChange: (e: Event) => { localStorage.setItem(LS_SIZE, (e.target as HTMLInputElement).value); S = W * SYM_SIZE * pct(LS_SIZE) / 100; drawSyms(); } }),
+      h('span', { class: 'hint' }, 'Label %'), h('input', { type: 'number', value: pct(LS_LABEL), min: 30, max: 300, step: 10, style: { width: '64px' }, onChange: (e: Event) => { localStorage.setItem(LS_LABEL, (e.target as HTMLInputElement).value); LBL = pct(LS_LABEL) / 100; drawSyms(); } }),
       h('span', { class: 'hint' }, 'Actieve kring:'), circSel,
-      btn('Nieuwe kring', { icon: 'Plus', variant: 'ghost', onClick: () => editCircuit(project, {}, () => reload()) })),
+      btn('Nieuwe kring', { icon: 'Plus', variant: 'ghost', onClick: () => editCircuit(project, {}, () => reload()) }),
+      btn('SVG', { icon: 'Download', variant: 'ghost', title: 'Tekening (zonder foto) exporteren', onClick: exportSvg })),
     h('div', { class: 'split left-pal' }, pal, canvas, side));
+  updScale();
 
-  // palet
+  // ---------- palet ----------
+  const TOOLS: { id: string; label: string; icon: string; hint: string }[] = [
+    { id: 'select', label: 'Selecteren', icon: 'MousePointer2', hint: 'Klik om te selecteren en te verslepen.' },
+    { id: 'wall', label: 'Muur', icon: 'BrickWall', hint: 'Klik beginpunt, klik volgende punten. Typ een lengte in meter + Enter. Dubbelklik, Enter of Esc = stoppen.' },
+    { id: 'window', label: 'Raam', icon: 'PanelTop', hint: 'Klik op een muur om een raam te plaatsen.' },
+    { id: 'door', label: 'Deur', icon: 'DoorOpen', hint: 'Klik op een muur om een deur te plaatsen; de kant waar je klikt is de draairichting.' },
+    { id: 'stair', label: 'Trap', icon: 'Footprints', hint: 'Sleep een rechthoek, of klik voor een standaardtrap.' },
+    { id: 'text', label: 'Tekst', icon: 'Type', hint: 'Klik om een ruimtenaam of opmerking te plaatsen.' },
+  ];
   function drawPal() {
     clear(pal);
-    pal.append(h('button', { class: `pal-item ${tool === null ? 'active' : ''}`, onClick: () => { tool = null; drawPal(); } }, icon('MousePointer2', 18), 'Selecteren'));
+    pal.append(h('h4', null, 'Tekenen'));
+    for (const t of TOOLS) pal.append(h('button', { class: `pal-item ${tool === t.id ? 'active' : ''}`, onClick: () => setTool(t.id) }, icon(t.icon, 18), t.label));
+    pal.append(h('h4', null, 'Meubilair'));
+    for (const f of FURNITURE) pal.append(h('button', { class: `pal-item ${tool === `furn:${f.id}` ? 'active' : ''}`, onClick: () => setTool(`furn:${f.id}`) }, icon('Square', 18), f.label));
     let g = '';
     for (const e of CATALOG.filter((x) => x.group !== 'Beschermingstoestellen')) {
       if (e.group !== g) { g = e.group; pal.append(h('h4', null, g)); }
       const sz = areiSize(e.planFile)!, ic = svg('svg', { width: 26, height: 22, viewBox: `0 0 ${sz.w + 2} ${sz.h + 2}`, preserveAspectRatio: 'xMidYMid meet' });
       ic.innerHTML = areiSymbol(e.planFile, (sz.w + 2) / 2, (sz.h + 2) / 2, 1, 0, { x: 0.5, y: 0.5 }, 1.6);
-      pal.append(h('button', { class: `pal-item ${tool === e.id ? 'active' : ''}`, title: e.label, onClick: () => { tool = e.id; selId = null; drawPal(); drawSide(); } }, ic, e.label));
+      pal.append(h('button', { class: `pal-item ${tool === `sym:${e.id}` ? 'active' : ''}`, title: e.label, onClick: () => setTool(`sym:${e.id}`) }, ic, e.label));
+    }
+  }
+  function setTool(t: Tool) { tool = t; drawing = null; lenBuf = ''; selSym = null; if (t !== 'select') selShape = null; drawPal(); drawAll(); drawSide(); }
+
+  // ---------- canvas ----------
+  const s = svg('svg', { preserveAspectRatio: 'xMidYMid meet' }) as SVGSVGElement;
+  const pz = panZoom(s, W, H);
+  s.append(svg('rect', { x: 0, y: 0, width: W, height: H, fill: '#fff' }));
+  const bgImg = url ? svg('image', { href: url, x: 0, y: 0, width: W, height: H, opacity: plan.bg_opacity ?? 0.6, 'pointer-events': 'none' }) : null;
+  if (bgImg) s.append(bgImg);
+  const gridRect = svg('rect', { x: 0, y: 0, width: W, height: H, fill: 'url(#plan-grid)', 'pointer-events': 'none' });
+  const defs = svg('defs'); s.append(defs, gridRect);
+  const shapesG = svg('g'), layer = svg('g'), ghostG = svg('g', { 'pointer-events': 'none' }), handleG = svg('g');
+  s.append(shapesG, layer, ghostG, handleG);
+  canvas.append(s);
+
+  const toPlan = (e: PointerEvent | MouseEvent): Pt & { s: number } => pz.toSvg(e.clientX, e.clientY);
+
+  function drawAll() {
+    const g = 0.5 * scale();
+    defs.innerHTML = `<pattern id="plan-grid" width="${g}" height="${g}" patternUnits="userSpaceOnUse"><path d="M${g} 0H0V${g}" fill="none" stroke="#c9d3de" stroke-width="${0.006 * scale()}"/></pattern>`;
+    gridRect.setAttribute('visibility', grid ? 'visible' : 'hidden');
+    bgImg?.setAttribute('visibility', showBg ? 'visible' : 'hidden');
+    drawShapes(); drawSyms(); drawGhost();
+  }
+  function drawShapes() { shapesG.innerHTML = renderFloor(shapes, { scale: scale(), selId: selShape }); drawHandles(); }
+
+  /** Na het verplaatsen of verkorten van een muur: ramen en deuren blijven binnen de muur. */
+  async function clampOpenings(wall: Shape) {
+    const [a, b] = wallPts(wall), L = dist(a, b) || 1;
+    for (const o of shapes.filter((x) => x.ref_id === wall.id)) {
+      const hw = ((o.size ?? 0.9) * scale()) / 2, pos = Math.max(hw / L, Math.min(1 - hw / L, o.pos ?? 0.5));
+      if (hw * 2 > L) { await softDelete('shape', o.id); shapes.splice(shapes.indexOf(o), 1); } else if (pos !== o.pos) { o.pos = pos; await upsert('shape', o); }
     }
   }
 
-  // canvas
-  const s = svg('svg', { preserveAspectRatio: 'xMidYMid meet' }) as SVGSVGElement;
-  const pz = panZoom(s, W, H);
-  s.append(svg('image', { href: url!, x: 0, y: 0, width: W, height: H }));
-  const layer = svg('g'); s.append(layer);
-  canvas.append(s);
+  // ---- snappen ----
+  function snapPt(p: Pt & { s: number }, from: Pt | null, raw = false): Pt {
+    if (raw || !snapOn) return { x: p.x, y: p.y };
+    const tol = 14 / p.s;
+    for (const w of walls()) for (const q of wallPts(w)) if (dist(q, p) < tol) return { ...q };
+    let x = p.x, y = p.y, lockX = false, lockY = false;
+    if (ortho && from) {
+      const dx = Math.abs(x - from.x), dy = Math.abs(y - from.y);
+      if (dy < dx * 0.14) { y = from.y; lockY = true; } else if (dx < dy * 0.14) { x = from.x; lockX = true; }
+    }
+    const gs = 0.05 * scale();
+    if (!lockX) x = Math.round(x / gs) * gs;
+    if (!lockY) y = Math.round(y / gs) * gs;
+    return { x, y };
+  }
 
+  // ---- ghost (voorbeeld tijdens het tekenen) ----
+  let rectDrag: { a: Pt; b: Pt } | null = null, scaleA: Pt | null = null;
+  const fm = (px: number) => (px / scale()).toFixed(2).replace('.', ',');
+  function drawGhost() {
+    ghostG.innerHTML = '';
+    const k = scale(), lw = 0.012 * k;
+    if (tool === 'wall' && drawing && cursor) {
+      let end = cursor;
+      if (lenBuf) { const L = NUM(lenBuf) * k, d = dist(drawing, cursor) || 1; end = { x: drawing.x + ((cursor.x - drawing.x) / d) * L, y: drawing.y + ((cursor.y - drawing.y) / d) * L }; }
+      ghostG.innerHTML = `<path d="M${drawing.x} ${drawing.y} L${end.x} ${end.y}" stroke="#0066aa" stroke-opacity=".5" stroke-width="${wallThick * k}" stroke-linecap="square"/>
+        <circle cx="${drawing.x}" cy="${drawing.y}" r="${0.06 * k}" fill="#0066aa"/>
+        <text x="${(drawing.x + end.x) / 2}" y="${(drawing.y + end.y) / 2 - wallThick * k}" text-anchor="middle" font-size="${0.28 * k}" font-family="Arial" font-weight="700" fill="#0066aa" stroke="#fff" stroke-width="${0.05 * k}" paint-order="stroke">${lenBuf ? lenBuf + ' m' : fm(dist(drawing, end)) + ' m'}</text>`;
+    } else if (tool === 'wall' && cursor) {
+      ghostG.innerHTML = `<circle cx="${cursor.x}" cy="${cursor.y}" r="${0.07 * k}" fill="#0066aa" fill-opacity=".6"/>`;
+    } else if ((tool === 'window' || tool === 'door') && cursor) {
+      const hit = nearestWall(walls(), cursor, wallThick * k + 20 / (pz.toSvg(0, 0).s || 1));
+      if (hit) {
+        const [a, b] = wallPts(hit.wall), L = dist(a, b), size = tool === 'door' ? 0.9 : 1.2, pos = Math.max(size * k / 2 / L, Math.min(1 - size * k / 2 / L, hit.t));
+        const nW = { x: -hit.u.y, y: hit.u.x }, flip = hit.n.x * nW.x + hit.n.y * nW.y > 0 ? 0 : 1;
+        ghostG.setAttribute('opacity', '0.55');
+        ghostG.innerHTML = renderFloor([hit.wall, { id: 'ghost', plan_id: '', kind: tool as 'door', ref_id: hit.wall.id, pos, size, flip, rot: 0 }], { scale: k, selId: null });
+      }
+    } else if (rectDrag && (tool === 'stair' || tool.startsWith('furn:'))) {
+      ghostG.setAttribute('opacity', '0.6');
+      ghostG.innerHTML = renderFloor([{ id: 'ghost', plan_id: '', kind: tool === 'stair' ? 'stair' : 'furniture', sub: tool.slice(5), x1: Math.min(rectDrag.a.x, rectDrag.b.x), y1: Math.min(rectDrag.a.y, rectDrag.b.y), x2: Math.max(rectDrag.a.x, rectDrag.b.x), y2: Math.max(rectDrag.a.y, rectDrag.b.y), rot: 0 }], { scale: k, selId: null });
+      ghostG.innerHTML += `<text x="${(rectDrag.a.x + rectDrag.b.x) / 2}" y="${Math.min(rectDrag.a.y, rectDrag.b.y) - 0.1 * k}" text-anchor="middle" font-size="${0.25 * k}" font-family="Arial" font-weight="700" fill="#0066aa">${fm(Math.abs(rectDrag.b.x - rectDrag.a.x))} × ${fm(Math.abs(rectDrag.b.y - rectDrag.a.y))} m</text>`;
+    } else if (tool === 'scale' && scaleA && cursor) {
+      ghostG.innerHTML = `<path d="M${scaleA.x} ${scaleA.y} L${cursor.x} ${cursor.y}" stroke="#c2185b" stroke-width="${0.03 * k}"/><circle cx="${scaleA.x}" cy="${scaleA.y}" r="${0.06 * k}" fill="#c2185b"/>`;
+    } else ghostG.removeAttribute('opacity');
+    if (!(tool === 'window' || tool === 'door' || tool === 'stair' || tool.startsWith('furn:'))) ghostG.removeAttribute('opacity');
+  }
+
+  // ---- handvatten van de geselecteerde muur ----
+  function drawHandles() {
+    clear(handleG);
+    const w = shapeById(selShape); if (!w || w.kind !== 'wall' || tool !== 'select') return;
+    const r = 0.09 * scale();
+    for (const end of [1, 2] as const) {
+      const c = svg('circle', { cx: end === 1 ? w.x1! : w.x2!, cy: end === 1 ? w.y1! : w.y2!, r, fill: '#fff', stroke: '#0066aa', 'stroke-width': r * 0.35, style: 'cursor:crosshair' });
+      c.addEventListener('pointerdown', (e) => startEndpointDrag(e as PointerEvent, w, end));
+      handleG.append(c);
+    }
+  }
+  function startEndpointDrag(e: PointerEvent, w: Shape, end: 1 | 2) {
+    if (e.button !== 0) return; e.stopPropagation();
+    const k = end === 1 ? ['x1', 'y1'] as const : ['x2', 'y2'] as const, o = end === 1 ? ['x2', 'y2'] as const : ['x1', 'y1'] as const;
+    const from = { x: w[k[0]]!, y: w[k[1]]! };
+    // andere muren die op hetzelfde punt eindigen, schuiven mee
+    const linked: [Shape, 'x1' | 'x2', 'y1' | 'y2'][] = [];
+    for (const v of walls()) { if (v === w) continue; if (dist({ x: v.x1!, y: v.y1! }, from) < 2) linked.push([v, 'x1', 'y1']); if (dist({ x: v.x2!, y: v.y2! }, from) < 2) linked.push([v, 'x2', 'y2']); }
+    const other = { x: w[o[0]]!, y: w[o[1]]! };
+    const move = (ev: PointerEvent) => {
+      const p = toPlan(ev), q = snapPt(p, other, ev.shiftKey);
+      w[k[0]] = q.x; w[k[1]] = q.y; for (const [v, a, b] of linked) { v[a] = q.x; v[b] = q.y; }
+      drawShapes(); drawSide();
+    };
+    const up = async () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); await Promise.all([w, ...linked.map((l) => l[0])].map((x) => upsert('shape', x))); for (const x of [w, ...linked.map((l) => l[0])]) await clampOpenings(x); drawShapes(); };
+    window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
+  }
+
+  // ---- shapes selecteren / verslepen ----
+  shapesG.addEventListener('pointerdown', (e) => {
+    if (tool !== 'select' || (e as PointerEvent).button !== 0 || s.classList.contains('panning')) return;
+    const id = (e.target as Element).closest('[data-sid]')?.getAttribute('data-sid'); const sh = shapeById(id ?? null); if (!sh) return;
+    e.stopPropagation(); selShape = sh.id; selSym = null; drawShapes(); drawSyms(); drawSide();
+    const start = toPlan(e as PointerEvent), orig = { x1: sh.x1, y1: sh.y1, x2: sh.x2, y2: sh.y2, pos: sh.pos }; let moved = false;
+    const wall = sh.ref_id ? shapeById(sh.ref_id) : null;
+    const move = (ev: PointerEvent) => {
+      const p = toPlan(ev), gs = snapOn && !ev.shiftKey ? 0.05 * scale() : 0.0001;
+      if (wall && (sh.kind === 'window' || sh.kind === 'door')) {
+        const [a, b] = wallPts(wall), L = dist(a, b), hw = ((sh.size ?? 0.9) * scale()) / 2;
+        sh.pos = Math.max(hw / L, Math.min(1 - hw / L, projectOnSeg(p, a, b).t)); moved = true;
+      } else {
+        const dx = Math.round((p.x - start.x) / gs) * gs, dy = Math.round((p.y - start.y) / gs) * gs;
+        if (!dx && !dy && !moved) return; moved = true;
+        if (sh.x1 != null) { sh.x1 = orig.x1! + dx; sh.y1 = orig.y1! + dy; }
+        if (sh.x2 != null) { sh.x2 = orig.x2! + dx; sh.y2 = orig.y2! + dy; }
+      }
+      drawShapes();
+    };
+    const up = async () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); if (moved) await upsert('shape', sh); };
+    window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
+  });
+
+  // ---- symbolen ----
+  const wallAnchored = (type: string) => { const e = symbolEntry(type); return !!e && e.anchor.x < 0.5; };
+  function placeSym(type: string, p: Pt & { s: number }, raw = false) {
+    if (wallAnchored(type) && !raw) { const q = snapToWallSurface(walls(), p, scale(), 26 / p.s); if (q) return q; }
+    return { x: p.x, y: p.y, rot: null as number | null };
+  }
   function drawSyms() {
     clear(layer);
     for (const sym of symbols) {
       const col = circuitColor(sym.circuit_id, order);
       const g = svg('g', { transform: `translate(${sym.x * W} ${sym.y * H}) rotate(${sym.rot})`, style: `color:${col};cursor:pointer` });
       const e = symbolEntry(sym.type), k = S / 10, sz = e && areiSize(e.planFile);
-      // het ankerpunt (bij stopcontacten: de staart) ligt op (sym.x, sym.y); de krans loopt mee met het symbool
       const cx = e && sz ? sz.w * k * (0.5 - e.anchor.x) : 0, r = sz ? Math.max(sz.w, sz.h) * k * 0.62 : S * 0.75;
-      g.append(svg('circle', { cx, r, fill: sym.id === selId ? 'rgba(0,102,170,.25)' : '#ffffff99', stroke: sym.circuit_id ? col : '#e07800', 'stroke-width': sym.id === selId ? 3 : 1.5, 'stroke-dasharray': sym.circuit_id ? '' : '4 3', 'vector-effect': 'non-scaling-stroke' }));
+      g.append(svg('circle', { class: 'halo', cx, r, fill: sym.id === selSym ? 'rgba(0,102,170,.25)' : '#ffffff99', stroke: sym.circuit_id ? col : '#e07800', 'stroke-width': sym.id === selSym ? 3 : 1.5, 'stroke-dasharray': sym.circuit_id ? '' : '4 3', 'vector-effect': 'non-scaling-stroke' }));
       const inner = svg('g'); inner.innerHTML = e ? areiSymbol(e.planFile, 0, 0, k, 0, e.anchor, 2.2) : `<circle r="${S * 0.4}" fill="none" stroke="currentColor"/>`; g.append(inner);
-      g.addEventListener('pointerdown', (e) => startDrag(e, sym));
+      g.addEventListener('pointerdown', (ev) => startSymDrag(ev as PointerEvent, sym));
       layer.append(g);
       if (sym.label) layer.append(svg('text', { x: sym.x * W + S * 0.9, y: sym.y * H + 4, 'font-size': S * 0.55 * LBL, 'font-weight': 600, fill: col, stroke: '#fff', 'stroke-width': 3, 'paint-order': 'stroke' }, sym.label));
     }
   }
-
-  function startDrag(e: PointerEvent, sym: Symbol_) {
+  function startSymDrag(e: PointerEvent, sym: Symbol_) {
     if (e.button !== 0 || s.classList.contains('panning')) return;
-    e.stopPropagation(); selId = sym.id; tool = null; drawPal(); drawSide(); drawSyms();
-    const start = pz.toSvg(e.clientX, e.clientY), ox = sym.x, oy = sym.y; let moved = false;
-    const move = (ev: PointerEvent) => { const p = pz.toSvg(ev.clientX, ev.clientY); sym.x = ox + (p.x - start.x) / W; sym.y = oy + (p.y - start.y) / H; moved = true; drawSyms(); };
+    e.stopPropagation(); selSym = sym.id; selShape = null; tool = 'select'; drawPal(); drawSide(); drawSyms(); drawShapes();
+    const start = toPlan(e), ox = sym.x, oy = sym.y; let moved = false;
+    const move = (ev: PointerEvent) => {
+      const p = toPlan(ev); moved = true;
+      if (wallAnchored(sym.type)) { const q = placeSym(sym.type, { x: p.x, y: p.y, s: p.s }, ev.shiftKey); sym.x = q.x / W; sym.y = q.y / H; if (q.rot != null) sym.rot = q.rot; }
+      else { sym.x = ox + (p.x - start.x) / W; sym.y = oy + (p.y - start.y) / H; }
+      drawSyms();
+    };
     const up = async () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); if (moved) await upsert('symbol', sym); };
     window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
   }
 
-  s.addEventListener('pointerdown', async (e) => {
-    if (e.button !== 0 || s.classList.contains('panning') || !tool) return;
-    const p = pz.toSvg(e.clientX, e.clientY);
-    const sym = await upsert('symbol', { plan_id: plan.id, type: tool, x: p.x / W, y: p.y / H, rot: 0, circuit_id: activeCircuit }) as Symbol_;
-    symbols.push(sym); selId = sym.id; drawSyms(); drawSide();
-  });
-  s.addEventListener('contextmenu', (e) => { e.preventDefault(); tool = null; drawPal(); });
+  // ---- klikken met een tekentool ----
+  async function addShape(o: Partial<Shape>) { const sh = await upsert('shape', { plan_id: plan.id, flip: 0, rot: 0, ...o }) as Shape; shapes.push(sh); return sh; }
 
+  s.addEventListener('pointermove', (e) => {
+    cursor = toPlan(e);
+    if (tool === 'wall') cursor = snapPt(cursor as Pt & { s: number }, drawing, e.shiftKey);
+    else if (rectDrag) rectDrag.b = snapPt(cursor as Pt & { s: number }, null, e.shiftKey);
+    else if (tool === 'scale') cursor = snapPt(cursor as Pt & { s: number }, scaleA, e.shiftKey);
+    if (tool !== 'select' && !tool.startsWith('sym:')) drawGhost();
+  });
+  s.addEventListener('pointerleave', () => { cursor = null; drawGhost(); });
+  s.addEventListener('contextmenu', (e) => { e.preventDefault(); if (drawing || scaleA) { drawing = null; scaleA = null; lenBuf = ''; drawGhost(); } else setTool('select'); });
+  s.addEventListener('dblclick', () => { if (tool === 'wall') { drawing = null; lenBuf = ''; drawGhost(); } });
+
+  s.addEventListener('pointerdown', async (e) => {
+    if (e.button !== 0 || s.classList.contains('panning')) return;
+    const p = toPlan(e), k = scale();
+    if (tool === 'select') { if (selShape || selSym) { selShape = null; selSym = null; drawShapes(); drawSyms(); drawSide(); } return; }
+    if (tool === 'wall') {
+      const q = snapPt(p, drawing, e.shiftKey);
+      if (!drawing) { drawing = q; drawGhost(); return; }
+      let end = q;
+      if (lenBuf) { const L = NUM(lenBuf) * k, d = dist(drawing, q) || 1; end = { x: drawing.x + ((q.x - drawing.x) / d) * L, y: drawing.y + ((q.y - drawing.y) / d) * L }; lenBuf = ''; }
+      if (dist(drawing, end) < 0.05 * k) return;
+      await addShape({ kind: 'wall', x1: drawing.x, y1: drawing.y, x2: end.x, y2: end.y, thick: wallThick });
+      drawing = end; drawShapes(); drawGhost(); return;
+    }
+    if (tool === 'window' || tool === 'door') {
+      const hit = nearestWall(walls(), p, wallThick * k + 20 / p.s); if (!hit) { toast('Klik op een muur', 'error'); return; }
+      const [a, b] = wallPts(hit.wall), L = dist(a, b), size = tool === 'door' ? 0.9 : 1.2;
+      if (L < size * k) { toast('Muur is te kort voor dit element', 'error'); return; }
+      const nW = { x: -hit.u.y, y: hit.u.x };
+      const sh = await addShape({ kind: tool, ref_id: hit.wall.id, pos: Math.max(size * k / 2 / L, Math.min(1 - size * k / 2 / L, hit.t)), size, flip: hit.n.x * nW.x + hit.n.y * nW.y > 0 ? 0 : 1 });
+      selShape = sh.id; drawShapes(); drawGhost(); drawSide(); return;
+    }
+    if (tool === 'stair' || tool.startsWith('furn:')) {
+      const a = snapPt(p, null, e.shiftKey); rectDrag = { a, b: a };
+      const up = async () => {
+        window.removeEventListener('pointerup', up);
+        const d = rectDrag!; rectDrag = null;
+        let x1 = Math.min(d.a.x, d.b.x), y1 = Math.min(d.a.y, d.b.y), x2 = Math.max(d.a.x, d.b.x), y2 = Math.max(d.a.y, d.b.y);
+        if (x2 - x1 < 0.15 * k && y2 - y1 < 0.15 * k) { const f = FURNITURE.find((x) => `furn:${x.id}` === tool); const w = (f?.w ?? 1.0) * k, hh = (f?.h ?? 2.6) * k; x1 = d.a.x; y1 = d.a.y; x2 = x1 + w; y2 = y1 + hh; }
+        const sh = await addShape(tool === 'stair' ? { kind: 'stair', x1, y1, x2, y2, label: 'op' } : { kind: 'furniture', sub: tool.slice(5), x1, y1, x2, y2 });
+        selShape = sh.id; ghostG.innerHTML = ''; drawShapes(); drawSide();
+      };
+      window.addEventListener('pointerup', up); return;
+    }
+    if (tool === 'text') {
+      const t = prompt('Tekst (bv. KEUKEN)'); if (!t) return;
+      const sh = await addShape({ kind: 'text', x1: p.x, y1: p.y, label: t, size: 0.4 }); selShape = sh.id; drawShapes(); drawSide(); return;
+    }
+    if (tool === 'scale') {
+      const q = snapPt(p, scaleA, e.shiftKey);
+      if (!scaleA) { scaleA = q; return; }
+      const px = dist(scaleA, q); scaleA = null; ghostG.innerHTML = '';
+      if (px < 5) return;
+      const m = NUM(prompt('Hoeveel meter is deze afstand in werkelijkheid?', '3') ?? ''); if (!(m > 0)) return;
+      plan.scale = px / m; await upsert('plan', plan); updScale(); toast(`Schaal ingesteld: 1 m = ${Math.round(plan.scale)} px`); setTool('select'); return;
+    }
+    if (tool.startsWith('sym:')) {
+      const id = tool.slice(4), q = placeSym(id, p, e.shiftKey);
+      const sym = await upsert('symbol', { plan_id: plan.id, type: id, x: q.x / W, y: q.y / H, rot: q.rot ?? 0, circuit_id: activeCircuit }) as Symbol_;
+      symbols.push(sym); selSym = sym.id; drawSyms(); drawSide();
+    }
+  });
+
+  // ---------- zijpaneel ----------
   function drawSide() {
     clear(side);
-    const sym = symbols.find((x) => x.id === selId);
-    // legende / overzicht per kring
+    const sym = symbols.find((x) => x.id === selSym), sh = shapeById(selShape);
+    const k = scale();
+    if (sh) {
+      const fields: FieldDef[] = [], vals: Record<string, any> = { ...sh };
+      let title = '';
+      if (sh.kind === 'wall') {
+        title = 'Muur'; vals.len = +(dist(...wallPts(sh)) / k).toFixed(3);
+        fields.push({ key: 'len', label: 'Lengte (m)', type: 'number', step: 0.01 }, { key: 'thick', label: 'Dikte (m)', type: 'select', options: THICKS, numeric: true, allowEmpty: false });
+      } else if (sh.kind === 'window' || sh.kind === 'door') {
+        title = sh.kind === 'door' ? 'Deur' : 'Raam';
+        fields.push({ key: 'size', label: 'Breedte (m)', type: 'number', step: 0.05 });
+        if (sh.kind === 'door') fields.push({ key: 'swing', label: 'Draait naar andere kant', type: 'checkbox' }, { key: 'hinge', label: 'Scharnier aan andere kant', type: 'checkbox' });
+        vals.swing = (sh.flip ?? 0) & 1; vals.hinge = ((sh.flip ?? 0) >> 1) & 1;
+      } else if (sh.kind === 'stair' || sh.kind === 'furniture') {
+        title = sh.kind === 'stair' ? 'Trap' : 'Meubel'; vals.bw = +(Math.abs(sh.x2! - sh.x1!) / k).toFixed(2); vals.bh = +(Math.abs(sh.y2! - sh.y1!) / k).toFixed(2);
+        if (sh.kind === 'furniture') fields.push({ key: 'sub', label: 'Soort', type: 'select', options: FURNITURE.map((f) => ({ value: f.id, label: f.label })), allowEmpty: false });
+        fields.push({ key: 'label', label: 'Opschrift' }, { key: 'bw', label: 'Breedte (m)', type: 'number', step: 0.05 }, { key: 'bh', label: 'Diepte (m)', type: 'number', step: 0.05 }, { key: 'rot', label: 'Rotatie (°)', type: 'number' });
+      } else if (sh.kind === 'text') {
+        title = 'Tekst'; fields.push({ key: 'label', label: 'Tekst', span: 2 }, { key: 'size', label: 'Grootte (m)', type: 'number', step: 0.05 });
+      }
+      const form = buildForm(fields, vals);
+      Object.values(form.inputs).forEach((i) => i.addEventListener('change', async () => {
+        const v = form.read();
+        if (sh.kind === 'wall') {
+          if (v.len && v.len > 0) { // lengte aanpassen: tweede eindpunt schuift mee (met aansluitende muren)
+            const [a, b] = wallPts(sh), d = dist(a, b) || 1, nb = { x: a.x + ((b.x - a.x) / d) * v.len * k, y: a.y + ((b.y - a.y) / d) * v.len * k };
+            const linked = walls().filter((x) => x !== sh && (dist({ x: x.x1!, y: x.y1! }, b) < 2 || dist({ x: x.x2!, y: x.y2! }, b) < 2));
+            for (const x of linked) { if (dist({ x: x.x1!, y: x.y1! }, b) < 2) { x.x1 = nb.x; x.y1 = nb.y; } else { x.x2 = nb.x; x.y2 = nb.y; } await upsert('shape', x); }
+            sh.x2 = nb.x; sh.y2 = nb.y;
+            await upsert('shape', sh); for (const x of [sh, ...linked]) await clampOpenings(x);
+          }
+          sh.thick = v.thick ?? 0.2;
+        } else if (sh.kind === 'window' || sh.kind === 'door') {
+          sh.size = v.size || sh.size; if (sh.kind === 'door') sh.flip = (v.swing ? 1 : 0) | (v.hinge ? 2 : 0);
+        } else if (sh.kind === 'stair' || sh.kind === 'furniture') {
+          if (sh.kind === 'furniture') sh.sub = v.sub; sh.label = v.label; sh.rot = v.rot ?? 0;
+          const x0 = Math.min(sh.x1!, sh.x2!), y0 = Math.min(sh.y1!, sh.y2!);
+          sh.x1 = x0; sh.y1 = y0; sh.x2 = x0 + (v.bw || vals.bw) * k; sh.y2 = y0 + (v.bh || vals.bh) * k;
+        } else { sh.label = v.label; sh.size = v.size ?? 0.4; }
+        await upsert('shape', sh); drawShapes(); drawSide();
+      }));
+      side.append(h('div', { style: { display: 'flex', alignItems: 'center' } }, h('h3', null, title), h('span', { class: 'spacer' }), btn('', { icon: 'X', variant: 'ghost', onClick: () => { selShape = null; drawShapes(); drawSide(); } })),
+        form.el, btn('Verwijderen', { icon: 'Trash2', variant: 'danger', onClick: () => delShape(sh) }));
+      return;
+    }
     const counts = new Map<string, number>(); for (const x of symbols) if (x.circuit_id) counts.set(x.circuit_id, (counts.get(x.circuit_id) ?? 0) + 1);
     const unlinked = symbols.filter((x) => !x.circuit_id).length;
     if (!sym) {
-      side.append(h('div', null, h('h4', null, 'Plaatsen'), h('p', { class: 'muted' }, tool ? `Klik op het plan om "${symbolEntry(tool)?.label}" te plaatsen. Bij stopcontacten komt de staart op het klikpunt: klik op de muur en draai met R. Rechtsklik om te stoppen.` : 'Klik een symbool aan om het te bewerken, of kies er links een.')),
+      const t = TOOLS.find((x) => x.id === tool), f = FURNITURE.find((x) => `furn:${x.id}` === tool);
+      const hint = t ? t.hint : f ? 'Sleep een rechthoek, of klik voor het standaardformaat.' : tool === 'scale' ? 'Klik twee punten waarvan je de afstand kent (bv. de breedte van een deur of een muur) en geef die in meter in.'
+        : tool.startsWith('sym:') ? `Klik op het plan om "${symbolEntry(tool.slice(4))?.label}" te plaatsen. Stopcontacten klikken vanzelf tegen de dichtstbijzijnde muur (Shift = vrij). Rechtsklik om te stoppen.` : '';
+      side.append(h('div', null, h('h4', null, tool === 'select' ? 'Plan' : 'Tekenen'), h('p', { class: 'muted' }, hint || 'Klik een element of symbool aan om het te bewerken, of kies links een tool.'),
+        !plan.scale ? h('p', { style: { color: '#b35c00' } }, '⚠ Schaal niet ingesteld: maten zijn een schatting (plan = 15 m breed). Gebruik "Schaal instellen" bovenaan.') : null,
+        ...(tool === 'wall' ? [h('p', { class: 'hint' }, 'Tip: typ de lengte (bv. 3,5) en druk Enter om een muur op maat te zetten.')] : [])),
         h('div', null, h('h4', null, 'Kringen op dit plan'),
           h('div', { class: 'legend', style: { flexDirection: 'column', gap: '4px' } }, circuits.filter((c) => counts.has(c.id)).map((c) =>
             h('div', null, h('i', { style: { background: circuitColor(c.id, order) } }), `${c.nr ?? ''} ${c.name} — ${counts.get(c.id)}`)),
@@ -138,22 +433,53 @@ export async function renderPlan(root: HTMLElement, project: Project) {
       { key: 'label', label: 'Label' }, { key: 'rot', label: 'Rotatie (°)', type: 'number' },
       { key: 'notes', label: 'Notities', type: 'textarea', span: 2 },
     ];
-    const form = buildForm(fields, sym);
+    const form = buildForm(fields, { ...sym, type: symbolEntry(sym.type)?.id ?? sym.type });
     Object.values(form.inputs).forEach((i) => i.addEventListener('change', async () => {
       const v = form.read(); Object.assign(sym, v, { rot: v.rot ?? 0 }); await upsert('symbol', sym); drawSyms();
     }));
-    side.append(h('div', { style: { display: 'flex', alignItems: 'center' } }, h('h3', null, symbolEntry(sym.type)?.label ?? sym.type), h('span', { class: 'spacer' }), btn('', { icon: 'X', variant: 'ghost', onClick: () => { selId = null; drawSyms(); drawSide(); } })),
+    side.append(h('div', { style: { display: 'flex', alignItems: 'center' } }, h('h3', null, symbolEntry(sym.type)?.label ?? sym.type), h('span', { class: 'spacer' }), btn('', { icon: 'X', variant: 'ghost', onClick: () => { selSym = null; drawSyms(); drawSide(); } })),
       form.el,
-      btn('Verwijderen', { icon: 'Trash2', variant: 'danger', onClick: async () => { await softDelete('symbol', sym.id); symbols.splice(symbols.indexOf(sym), 1); selId = null; drawSyms(); drawSide(); } }));
+      btn('Verwijderen', { icon: 'Trash2', variant: 'danger', onClick: async () => { await softDelete('symbol', sym.id); symbols.splice(symbols.indexOf(sym), 1); selSym = null; drawSyms(); drawSide(); } }));
+  }
+
+  async function delShape(sh: Shape) {
+    const gone = [sh, ...(sh.kind === 'wall' ? shapes.filter((x) => x.ref_id === sh.id) : [])];
+    for (const x of gone) { await softDelete('shape', x.id); shapes.splice(shapes.indexOf(x), 1); }
+    selShape = null; drawShapes(); drawSide();
+  }
+
+  function exportSvg() {
+    const clone = s.cloneNode(true) as SVGSVGElement;
+    clone.querySelectorAll('.halo').forEach((n) => n.remove());
+    clone.setAttribute('viewBox', `0 0 ${W} ${H}`); clone.setAttribute('width', String(W)); clone.setAttribute('height', String(H)); clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    clone.querySelector('image')?.remove(); gridRect.isConnected && clone.querySelector('rect[fill^="url"]')?.remove();
+    download(`situatieplan-${plan.name}.svg`, clone.outerHTML, 'image/svg+xml');
   }
 
   window.addEventListener('keydown', async function onKey(e) {
     if (!root.isConnected) { window.removeEventListener('keydown', onKey); return; }
-    if ((e.target as HTMLElement).matches('input,textarea,select')) return;
-    const sym = symbols.find((x) => x.id === selId); if (!sym) return;
-    if (e.key === 'Delete' || e.key === 'Backspace') { await softDelete('symbol', sym.id); symbols.splice(symbols.indexOf(sym), 1); selId = null; drawSyms(); drawSide(); }
+    if ((e.target as HTMLElement).matches?.('input,textarea,select')) return;
+    if (tool === 'wall' && drawing) {
+      if (/^[0-9.,]$/.test(e.key)) { lenBuf += e.key; drawGhost(); e.preventDefault(); return; }
+      if (e.key === 'Backspace' && lenBuf) { lenBuf = lenBuf.slice(0, -1); drawGhost(); e.preventDefault(); return; }
+      if (e.key === 'Enter') {
+        if (lenBuf && cursor) {
+          const k = scale(), L = NUM(lenBuf) * k, d = dist(drawing, cursor) || 1;
+          const end = { x: drawing.x + ((cursor.x - drawing.x) / d) * L, y: drawing.y + ((cursor.y - drawing.y) / d) * L };
+          if (L > 0) { await addShape({ kind: 'wall', x1: drawing.x, y1: drawing.y, x2: end.x, y2: end.y, thick: wallThick }); drawing = end; cursor = end; }
+          lenBuf = ''; drawShapes();
+        } else drawing = null;
+        drawGhost(); return;
+      }
+    }
+    if (e.key === 'Escape') { drawing = null; scaleA = null; rectDrag = null; lenBuf = ''; drawGhost(); if (tool !== 'select') setTool('select'); else { selShape = null; selSym = null; drawShapes(); drawSyms(); drawSide(); } return; }
+    const sh = shapeById(selShape);
+    if (sh && (e.key === 'Delete' || e.key === 'Backspace')) { await delShape(sh); return; }
+    const sym = symbols.find((x) => x.id === selSym); if (!sym) return;
+    if (e.key === 'Delete' || e.key === 'Backspace') { await softDelete('symbol', sym.id); symbols.splice(symbols.indexOf(sym), 1); selSym = null; drawSyms(); drawSide(); }
     if (e.key.toLowerCase() === 'r') { sym.rot = (sym.rot + 90) % 360; await upsert('symbol', sym); drawSyms(); drawSide(); }
   });
 
-  drawPal(); drawSyms(); drawSide();
+  void sql;
+  drawPal(); drawAll(); drawSide();
 }
