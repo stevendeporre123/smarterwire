@@ -13,7 +13,11 @@ async function openDb() {
   try {
     if (self.name === 'mem') throw new Error('?mem: tijdelijke database (tests)');
     // OPFS SyncAccessHandle pool: persistent, offline, geen COOP/COEP-headers nodig
-    pool ??= await sqlite3.installOpfsSAHPoolVfs({ name: 'smarterwire', initialCapacity: 6 });
+    // bij herladen geeft de vorige worker zijn handles soms net te laat vrij: een paar keer opnieuw proberen
+    for (let i = 0; !pool; i++) {
+      try { pool = await sqlite3.installOpfsSAHPoolVfs({ name: 'smarterwire', initialCapacity: 6 }); }
+      catch (e) { if (i >= 5) throw e; await new Promise((r) => setTimeout(r, 400)); }
+    }
     db = new pool.OpfsSAHPoolDb(PATH);
     persistent = true;
   } catch (e) {
