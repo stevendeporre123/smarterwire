@@ -13,19 +13,29 @@ Browser-app om AREI-conforme eendraadschema's en situatieplannen te maken voor k
 
 ## Techniek
 - Vite + TypeScript (geen framework), SVG voor kast, plan en schema.
-- SQLite WASM in een Web Worker, opgeslagen in OPFS → volledig **offline**. Back-up/herstel van het hele `.sqlite3`-bestand via de knoppen bovenaan.
-- Elke tabel heeft `id` (uuid), `updated_at`, `deleted` → klaar voor last-write-wins sync met Cloudflare D1 (nog niet gebouwd).
-- `cloudflare/worker.ts`: proxy voor AI-fotoanalyse (sleutel blijft server-side).
+- **Cloudflare D1** is de enige opslag. De Worker (`cloudflare/worker.ts`) bevat de API: `/api/db/*` (SQL-statements, enkel SELECT/INSERT/UPDATE/DELETE), `/api/asset/:id` (foto's als BLOB in D1, max. ~2 MB, de app verkleint ze), project export/import en de AI-proxy (sleutel blijft server-side).
+- Schema = `cloudflare/migrations/*.sql` (wrangler d1 migrations).
+- Elke tabel heeft `id` (uuid), `updated_at`, `deleted` (soft delete).
+- **"Sync"** = project exporteren/importeren (`*.smarterwire.json`, incl. foto's) tussen omgevingen of toestellen. Bij importeren worden rijen met hetzelfde id samengevoegd: de laatst gewijzigde versie wint.
+- De app is niet meer offline bruikbaar. De API heeft **geen eigen login**: zet Cloudflare Access (of gelijkaardig) op het domein.
 
 ```bash
 npm install
-npm run dev          # http://localhost:5173
+npm run dev          # http://localhost:5173 – start ook de API met een lokale D1 (.wrangler/state), schema wordt vanzelf toegepast
 npm run build
 # AI-analyse lokaal: zet je sleutel in cloudflare/.dev.vars (zie .dev.vars.example).
-# `npm run dev` start de AI-proxy (poort 8787) vanzelf mee; zonder sleutel wordt hij overgeslagen.
-# Enkel de app, zonder proxy: npm run dev:app (of NO_AI=1 npm run dev)
-# Productie: cd cloudflare && npx wrangler secret put ANTHROPIC_API_KEY && npx wrangler deploy
+
+# Eerste keer productie:
+npx wrangler d1 create smarterwire          # database_id invullen in cloudflare/wrangler.toml
+npx wrangler secret put ANTHROPIC_API_KEY -c cloudflare/wrangler.toml
+npm run deploy                              # build + migraties (remote) + deploy
 ```
 
+### Oude offline back-up (.sqlite3) overnemen
+```bash
+node tools/sqlite-to-project.mjs smarterwire-2026-10-14.sqlite3 export/   # Node 22+, één bestand per project
+```
+Daarna in de app: **Importeer project**. (Installateurgegevens zijn niet per project en vul je opnieuw in.)
+
 ## Status
-Eerste werkende versie. Nog niet gedaan: sync, officiële AREI-symbolen als exacte set, AREI-controles (aantal punten per kring, doorsnede/zekering…), pinch-zoom op touch, PDF-kaft met meetgegevens.
+Eerste werkende versie. Nog niet gedaan: officiële AREI-symbolen als exacte set, AREI-controles (aantal punten per kring, doorsnede/zekering…), pinch-zoom op touch, PDF-kaft met meetgegevens.

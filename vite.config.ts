@@ -1,9 +1,9 @@
 import { defineConfig, type Plugin } from 'vite';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 
-/** Start de AI-proxy (wrangler dev, poort 8787) samen met de dev-server. Overslaan met NO_AI=1 (of `npm run dev:app`). */
-function aiProxy(): Plugin {
+/** Start de API (wrangler dev met lokale D1 en AI-proxy, poort 8787) samen met de dev-server. */
+function api(): Plugin {
   let child: ChildProcess | null = null;
   const stop = () => {
     if (!child?.pid) return;
@@ -13,15 +13,17 @@ function aiProxy(): Plugin {
     child = null;
   };
   return {
-    name: 'smarterwire-ai-proxy',
+    name: 'smarterwire-api',
     apply: 'serve',
     configureServer(server) {
-      if (process.env.NO_AI || server.config.mode === 'app') return;
       const vars = existsSync('cloudflare/.dev.vars') ? readFileSync('cloudflare/.dev.vars', 'utf8') : '';
-      if (!/ANTHROPIC_API_KEY=\S+/.test(vars)) { server.config.logger.warn('[ai] Geen ANTHROPIC_API_KEY in cloudflare/.dev.vars: de AI-proxy wordt niet gestart (AI-voorstel werkt dan niet).'); return; }
-      child = spawn('npx wrangler dev -c cloudflare/wrangler.toml', { stdio: ['ignore', 'inherit', 'inherit'], shell: true });
-      child.on('exit', (code) => { if (child) server.config.logger.warn(`[ai] AI-proxy gestopt (code ${code}). Staat poort 8787 al in gebruik?`); child = null; });
-      server.config.logger.info('[ai] AI-proxy start op http://127.0.0.1:8787');
+      if (!/ANTHROPIC_API_KEY=\S+/.test(vars)) server.config.logger.warn('[api] Geen ANTHROPIC_API_KEY in cloudflare/.dev.vars: AI-voorstel werkt niet (de database wel).');
+      // eerst het schema op de lokale D1 (.wrangler/state) zetten, dan de Worker starten
+      mkdirSync('dist', { recursive: true });
+      const cfg = '-c cloudflare/wrangler.toml';
+      child = spawn(`npx wrangler d1 migrations apply smarterwire --local ${cfg} && npx wrangler dev ${cfg}`, { stdio: ['ignore', 'inherit', 'inherit'], shell: true });
+      child.on('exit', (code) => { if (child) server.config.logger.warn(`[api] API gestopt (code ${code}). Staat poort 8787 al in gebruik?`); child = null; });
+      server.config.logger.info('[api] API start op http://127.0.0.1:8787');
       server.httpServer?.on('close', stop);
       process.once('exit', stop); process.once('SIGINT', () => { stop(); process.exit(0); }); process.once('SIGTERM', () => { stop(); process.exit(0); });
     },
@@ -29,11 +31,8 @@ function aiProxy(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [aiProxy()],
-  // sqlite-wasm laadt zijn .wasm zelf; niet voorbundelen
-  optimizeDeps: { exclude: ['@sqlite.org/sqlite-wasm'] },
-  worker: { format: 'es' },
-  // lokaal: de AI-proxy (`wrangler dev` in /cloudflare) draait op 8787
+  plugins: [api()],
+  // lokaal: de API (`wrangler dev`, D1 + AI-proxy) draait op 8787
   server: { proxy: { '/api': 'http://127.0.0.1:8787' } },
   build: { target: 'es2022' },
 });

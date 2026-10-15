@@ -1,6 +1,7 @@
-import { h, btn, icon } from '../lib/dom';
-import { dataTable, formModal, badge } from '../lib/ui';
+import { h, btn, icon, toast } from '../lib/dom';
+import { dataTable, formModal } from '../lib/ui';
 import { sql } from '../db/client';
+import { exportProject, importProject } from '../db/transfer';
 import { upsert } from '../db/repo';
 import { topbar } from './shell';
 import type { Project } from '../domain/model';
@@ -30,7 +31,6 @@ export function validateProject(v: Record<string, any>): boolean {
 }
 
 export async function renderProjects(app: HTMLElement) {
-  const info = await sql.info();
   const rows = await sql.query<Project & { circuits: number; boards: number; done: number }>(`
     SELECT p.*,
       (SELECT COUNT(*) FROM board b WHERE b.project_id=p.id AND b.deleted=0) boards,
@@ -52,7 +52,7 @@ export async function renderProjects(app: HTMLElement) {
   app.append(h('div', { class: 'shell' }, topbar(),
     h('div', { class: 'main' }, h('div', { class: 'page' },
       h('div', { class: 'page-head' }, h('h2', null, 'Projecten'), h('span', { class: 'spacer' }),
-        !info.persistent && badge('Tijdelijke opslag – OPFS niet beschikbaar', 'err'),
+        btn('Importeer project', { icon: 'Upload', variant: 'secondary', title: 'Project (.smarterwire.json) importeren', onClick: () => importProject(() => location.reload()) }),
         btn('Nieuw project', { icon: 'Plus', variant: 'primary', onClick: () => edit() })),
       rows.length ? dataTable({
         rows, onRow: open, search: (r) => `${r.name} ${r.address} ${r.owner} ${r.ean}`,
@@ -63,7 +63,9 @@ export async function renderProjects(app: HTMLElement) {
           { key: 'boards', label: 'Kasten', align: 'right' },
           { key: 'circuits', label: 'Kringen', align: 'right', render: (r) => (r.circuits ? `${r.done}/${r.circuits}` : '—') },
           { key: 'updated_at', label: 'Gewijzigd', render: (r) => new Date(r.updated_at).toLocaleDateString('nl-BE'), sort: (r) => r.updated_at },
-          { key: 'e', label: '', width: '40px', render: (r) => btn('', { icon: 'Pencil', variant: 'ghost', onClick: (e) => { e.stopPropagation(); edit(r); } }) },
+          { key: 'e', label: '', width: '80px', render: (r) => h('span', null,
+            btn('', { icon: 'Download', variant: 'ghost', title: 'Project exporteren', onClick: (e) => { e.stopPropagation(); exportProject(r).catch((x) => toast(x.message, 'error')); } }),
+            btn('', { icon: 'Pencil', variant: 'ghost', onClick: (e) => { e.stopPropagation(); edit(r); } })) },
         ],
       }) : h('div', { class: 'card empty-state' }, icon('ClipboardList', 40), h('h3', null, 'Nog geen projecten'),
         h('p', null, 'Start met een keuring: maak een project en voeg een foto van de zekeringskast toe.'),

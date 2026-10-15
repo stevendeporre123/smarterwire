@@ -29,33 +29,30 @@ export const list = <T = Row>(table: string, where = '1=1', bind: any[] = [], or
   sql.query<T>(`SELECT * FROM ${table} WHERE deleted=0 AND (${where}) ORDER BY ${order}`, bind);
 
 // ---------- assets (foto's, plattegronden) ----------
-const urlCache = new Map<string, string>();
+// Bytes staan in D1 (tabel asset) en worden via de Worker geserveerd; D1 laat max. 2 MB per rij toe.
+const MAX_BYTES = 1_800_000;
 
-/** Verkleint een afbeelding (max 2400px) en slaat ze op als JPEG-blob in SQLite. */
+/** Verkleint een afbeelding (max 2400px), slaat ze op als JPEG en geeft id + afmetingen terug. */
 export async function saveImage(file: Blob, maxPx = 2400): Promise<{ id: string; width: number; height: number }> {
   const bmp = await createImageBitmap(file);
-  const k = Math.min(1, maxPx / Math.max(bmp.width, bmp.height));
-  const width = Math.round(bmp.width * k), height = Math.round(bmp.height * k);
-  const canvas = document.createElement('canvas');
-  canvas.width = width; canvas.height = height;
-  canvas.getContext('2d')!.drawImage(bmp, 0, 0, width, height);
-  const blob: Blob = await new Promise((r) => canvas.toBlob((b) => r(b!), 'image/jpeg', 0.85));
-  const data = new Uint8Array(await blob.arrayBuffer());
-  const id = uid();
-  const s = upsertStmt('asset', { id, mime: 'image/jpeg', width, height, data });
-  await sql.run(s.sql, s.bind);
-  return { id, width, height };
+  let k = Math.min(1, maxPx / Math.max(bmp.width, bmp.height)), q = 0.85;
+  for (;;) {
+    const width = Math.round(bmp.width * k), height = Math.round(bmp.height * k);
+    const canvas = document.createElement('canvas');
+    canvas.width = width; canvas.height = height;
+    canvas.getContext('2d')!.drawImage(bmp, 0, 0, width, height);
+    const blob: Blob = await new Promise((r) => canvas.toBlob((b) => r(b!), 'image/jpeg', q));
+    if (blob.size > MAX_BYTES && (q > 0.5 || k > 0.3)) { if (q > 0.5) q -= 0.1; else k *= 0.8; continue; }
+    const id = uid();
+    const r = await fetch(`/api/asset/${id}`, { method: 'PUT', headers: { 'content-type': 'image/jpeg', 'x-width': String(width), 'x-height': String(height) }, body: blob });
+    if (!r.ok) throw new Error(`Foto opslaan mislukt (${r.status})`);
+    return { id, width, height };
+  }
 }
 
+/** Foto's zijn onveranderlijk (nieuw id bij elke upload) en worden door de browser gecachet. */
 export async function assetUrl(id: string | null | undefined): Promise<string | null> {
-  if (!id) return null;
-  const hit = urlCache.get(id);
-  if (hit) return hit;
-  const row = await sql.one<{ mime: string; data: Uint8Array }>('SELECT mime,data FROM asset WHERE id=?', [id]);
-  if (!row) return null;
-  const url = URL.createObjectURL(new Blob([row.data as BlobPart], { type: row.mime }));
-  urlCache.set(id, url);
-  return url;
+  return id ? `/api/asset/${id}` : null;
 }
 
 export async function assetSize(id: string) {
