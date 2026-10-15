@@ -6,8 +6,9 @@ import { uid } from '../lib/id';
 import { boardsOf, circuitsOf, allDevicesOfProject, type Project, type Circuit, type Device } from '../domain/model';
 import { buildDiagram } from '../domain/diagram';
 import {
-  CABLE_TYPES, FIRE_CLASSES, FUNCTIONS, INSTALL_MODES, CONDUIT_MODES, SECTIONS, STATUSES, SUPPLIES, supplyOf, isThreePhase, defaultModules, deviceTitle, DEVICE_KINDS,
+  CABLE_TYPES, FIRE_CLASSES, FUNCTIONS, INSTALL_MODES, CONDUIT_MODES, SECTIONS, STATUSES, CABLE_PRESETS, SUPPLIES, supplyOf, isThreePhase, defaultModules, deviceTitle, DEVICE_KINDS,
 } from '../domain/devices';
+import { cableLabel } from '../domain/devices';
 import { CATALOG, FUNC_ORDER, symbolEntry, symbolGeom, symbolMarkup, splitType, joinType, type SymbolEntry } from '../domain/areisymbols';
 import { schemaLoadsOf, planSymbolRows, toDiagramLoads, type SchemaLoad, type PlanSymbolRow } from '../domain/loads';
 import { ensureCircuits, unlinkDevice } from '../domain/circuits';
@@ -30,6 +31,15 @@ export async function renderSchema(root: HTMLElement, project: Project) {
   const reloadData = async () => { [circuits, devices, planSyms, manual] = await Promise.all([circuitsOf(project.id), allDevicesOfProject(project.id), planSymbolRows(project.id), schemaLoadsOf(project.id)]); };
   await reloadData();
   let favs = await getSetting<Fav[]>('planFavs', [{ tool: 'sym:Stopcontact', key: 's' }, { tool: 'sym:Verlichtingstoestel', key: 'l' }, { tool: 'sym:Schakelaar algemeen symbool', key: 'e' }]);
+
+  // standaardwaarden bij het plaatsen van een kabel uit het palet (blijven bewaard)
+  const cabParams = await getSetting<Record<string, any>>('cableParams', { wires: 3, has_earth: 1, section_mm2: 2.5, cable_type: 'XVB', fire_class: 'Cca', install: null, conduit: null });
+  const cabFields: FieldDef[] = [
+    { key: 'wires', label: 'Aantal aders', type: 'number' }, { key: 'has_earth', label: 'Bevat aarding (G)', type: 'checkbox' },
+    { key: 'section_mm2', label: 'Doorsnede (mm²)', type: 'select', options: SECTIONS, numeric: true }, { key: 'cable_type', label: 'Kabeltype', type: 'select', options: CABLE_TYPES },
+    { key: 'fire_class', label: 'Brandklasse', type: 'select', options: FIRE_CLASSES }, { key: 'install', label: 'Plaatsing', type: 'select', options: INSTALL_MODES },
+    { key: 'conduit', label: 'Los of in buis', type: 'select', options: CONDUIT_MODES, numeric: true, span: 2 },
+  ];
 
   let which: 'bestaand' | 'nieuw' = boards.some((b) => b.kind === 'nieuw') ? 'nieuw' : 'bestaand';
   let tool = 'select', sel: Sel = null, gang = 1, palQuery = '', dragging = false, justDragged = false;
@@ -160,6 +170,8 @@ export async function renderSchema(root: HTMLElement, project: Project) {
       if (slotEl && slotEl.getAttribute('data-slot') !== 'bus') await placeLoad({ newTypes: set.types }, slotEl.getAttribute('data-cid')!, Number(slotEl.getAttribute('data-idx')), slotEl.getAttribute('data-slot') === 'chain');
       else if (cEl) await placeLoad({ newTypes: set.types }, cEl.getAttribute('data-cid')!, rowsOfCircuit(cEl.getAttribute('data-cid')!).length);
       else toast('Klik op een oranje invoegpunt op een kring', 'error');
+    } else if (tool.startsWith('cab:')) {
+      if (cEl) await applyCable(cEl.getAttribute('data-cid')!); else toast('Klik op een kring om de kabel te plaatsen', 'error');
     } else if (tool === 'kring' || tool === 'diff' || tool === 'spd' || setKind() === 'circuit') {
       const preset = setKind() === 'circuit' ? setById(tool.slice(4)) as CircuitSet : undefined;
       const kind = tool === 'diff' ? 'differentieel' : tool === 'spd' ? 'overspanning' : 'automaat';
@@ -168,6 +180,15 @@ export async function renderSchema(root: HTMLElement, project: Project) {
       else toast('Klik op een oranje invoegpunt op de bus', 'error');
     }
   });
+  /** Zet de kabel uit het palet (met de ingestelde parameters) op een kring. Lege parameters laten de bestaande waarde staan. */
+  async function applyCable(circuitId: string) {
+    const c = circuits.find((x) => x.id === circuitId); if (!c) return;
+    const p = cabParams, patch: Record<string, any> = { wires: p.wires ?? null, has_earth: p.has_earth ? 1 : 0, section_mm2: p.section_mm2 ?? null };
+    for (const k of ['cable_type', 'fire_class', 'install', 'conduit']) if (p[k] != null && p[k] !== '') patch[k] = p[k];
+    await upsert('circuit', { ...c, ...patch });
+    sel = { kind: 'circuit', id: c.id }; await after(`Kabel ${cableLabel({ ...c, ...patch }).replace(/ · .*/, '')} geplaatst op kring ${c.nr ?? ''}`);
+  }
+
   // een onderdeel met de muis oppakken en op een oranje invoegpunt loslaten (ook op een andere kring)
   out.addEventListener('pointerdown', (e) => {
     if (tool !== 'select' || (e as PointerEvent).button !== 0) return;
@@ -199,13 +220,18 @@ export async function renderSchema(root: HTMLElement, project: Project) {
       const g = symbolGeom(e.id, 'schema')!, ic = svg('svg', { width: 26, height: 22, viewBox: `0 0 ${g.w + 2} ${g.h + 2}`, preserveAspectRatio: 'xMidYMid meet' });
       ic.innerHTML = symbolMarkup(e.id, 'schema', (g.w + 2) / 2, (g.h + 2) / 2, 1, 0, 1.6); return ic; } })),
   ];
+  items.push(...CABLE_PRESETS.map((k) => ({ tool: `cab:${k.id}`, label: `Kabel ${k.id.replace('.', ',')}`, group: 'Kabels', kw: 'kabel leiding draad aders', icon: () => icon('Cable', 18) })),
+    { tool: 'cab:custom', label: 'Kabel (eigen waarden)', group: 'Kabels', kw: 'kabel leiding draad aders', icon: () => icon('Cable', 18) });
   items.splice(BUILD.length, 0, ...SETS.map((st) => ({ tool: `set:${st.id}`, label: st.label, group: 'Sets', kw: 'set combinatie', icon: () => icon('Layers', 18) })));
-  const GROUPS = ['Schema', 'Sets', ...FUNC_ORDER];
+  const GROUPS = ['Schema', 'Sets', 'Kabels', ...FUNC_ORDER];
   const closed = new Set<string>(JSON.parse(localStorage.getItem('smarterwire.schemaclosed') || '[]'));
   const norm = (x: string) => x.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
   const favOf = (t: string) => favs.find((f) => f.tool === t);
   const multiTool = () => !!(tool.startsWith('sym:') && symbolEntry(tool.slice(4))?.multi);
-  const setTool = (t: string) => { tool = t; drawPal(); draw(); drawSide(); };
+  const setTool = (t: string) => {
+    tool = t;
+    const pre = CABLE_PRESETS.find((k) => `cab:${k.id}` === t);
+    if (pre) { Object.assign(cabParams, { wires: pre.wires, has_earth: pre.has_earth, section_mm2: pre.section_mm2 }); setSetting('cableParams', cabParams); } drawPal(); draw(); drawSide(); };
 
   const searchInput = h('input', { type: 'search', class: 'table-search', placeholder: 'Zoek symbool of tool…', value: palQuery, onInput: (e: Event) => { palQuery = (e.target as HTMLInputElement).value; drawPalList(); } }) as HTMLInputElement;
   const palList = h('div'), gangRow = h('div', { class: 'gang-row', title: 'Aantal stopcontacten of schakelaars in één toestel' });
@@ -309,6 +335,12 @@ export async function renderSchema(root: HTMLElement, project: Project) {
   function drawSide() {
     clear(side);
     const head = (title: string, sub?: string) => h('div', null, h('div', { style: { display: 'flex', alignItems: 'center' } }, h('h3', null, title), h('span', { class: 'spacer' }), btn('', { icon: 'X', variant: 'ghost', onClick: () => select(null) })), sub ? h('p', { class: 'muted' }, sub) : null);
+    if (!sel && tool.startsWith('cab:')) {
+      const form = buildForm(cabFields, cabParams);
+      Object.values(form.inputs).forEach((i) => i.addEventListener('change', () => { Object.assign(cabParams, form.read()); setSetting('cableParams', cabParams); }));
+      side.append(h('div', null, h('h4', null, 'Kabel plaatsen'), h('p', { class: 'muted' }, 'Klik op een kring in het schema: de kabel met onderstaande eigenschappen komt op die kring. Lege velden (plaatsing, buis…) laten de bestaande waarde ongemoeid. Esc = stoppen.'), form.el));
+      return;
+    }
     if (!sel) {
       const t = BUILD.find((x) => x.id === tool);
       side.append(h('div', null, h('h4', null, 'Eigenschappen'),
@@ -338,7 +370,7 @@ export async function renderSchema(root: HTMLElement, project: Project) {
       { key: 'nr', label: 'Kring' }, { key: 'func', label: 'Functie', type: 'select', options: FUNCTIONS },
       { key: 'name', label: 'Omschrijving', span: 2 },
       { key: 'cable_type', label: 'Kabeltype', type: 'select', options: CABLE_TYPES }, { key: 'fire_class', label: 'Brandklasse', type: 'select', options: FIRE_CLASSES },
-      { key: 'section_mm2', label: 'Doorsnede (mm²)', type: 'select', options: SECTIONS, numeric: true }, { key: 'wires', label: 'Aantal aders', type: 'number' },
+      { key: 'section_mm2', label: 'Doorsnede (mm²)', type: 'select', options: SECTIONS, numeric: true }, { key: 'wires', label: 'Aantal aders', type: 'number' }, { key: 'has_earth', label: 'Bevat aarding (G)', type: 'checkbox' },
       { key: 'install', label: 'Plaatsing', type: 'select', options: INSTALL_MODES }, { key: 'conduit', label: 'Los of in buis', type: 'select', options: CONDUIT_MODES, numeric: true },
       { key: 'rooms', label: 'Ruimtes', advanced: true, span: 2 }, { key: 'level', label: 'Verdieping', advanced: true }, { key: 'status', label: 'Status', type: 'select', options: STATUSES, allowEmpty: false, advanced: true },
       { key: 'lock_group', label: 'Samen houden (gedeelde nul)', advanced: true, span: 2 }, { key: 'notes', label: 'Notities', type: 'textarea', advanced: true, span: 2 },

@@ -80,6 +80,11 @@ export const supplyText = (s: Supply) => (s === '3N400' ? '3 x 400V + N ~ 50Hz' 
 /** "20A Voeding - 4 polig" */
 export const supplyExtra = (s: Supply, amp?: number | null) => `${amp ? amp + 'A ' : ''}Voeding - ${s === '3N400' ? 4 : s === '3x230' ? 3 : 2} polig`;
 export const SECTIONS = [1.5, 2.5, 4, 6, 10, 16];
+
+/** Veelgebruikte kabels voor het palet van het eendraadschema: aantal aders (incl. aarding bij G), aarding, doorsnede. */
+export const CABLE_PRESETS: { id: string; wires: number; has_earth: number; section_mm2: number }[] =
+  ([[3, 1, 1.5], [3, 1, 2.5], [3, 1, 4], [3, 1, 6], [3, 1, 10], [5, 1, 1.5], [5, 1, 2.5], [5, 1, 4], [5, 1, 6], [5, 1, 10], [4, 0, 10], [4, 0, 16], [4, 1, 10], [4, 1, 16]] as const)
+    .map(([wires, has_earth, section_mm2]) => ({ id: `${wires}${has_earth ? 'G' : 'x'}${section_mm2}`, wires, has_earth, section_mm2 }));
 export const STATUSES = ['onbekend', 'gedocumenteerd', 'gecontroleerd'];
 
 /** Gangbare maximum-zekering per kabeldoorsnede (voorstel; altijd zelf nakijken). */
@@ -107,8 +112,8 @@ export function cableMissing(c: { cable_type?: string | null; section_mm2?: numb
 }
 
 /** "VOB Eca 3G2,5 · in buis" */
-export function cableLabel(c: { cable_type?: string | null; section_mm2?: number | null; fire_class?: string | null; install?: string | null; conduit?: number | null; wires?: number | null }): string {
-  const core = c.section_mm2 ? `${c.wires ? c.wires + 'G' : ''}${dec(c.section_mm2)}` : '';
+export function cableLabel(c: { cable_type?: string | null; section_mm2?: number | null; fire_class?: string | null; install?: string | null; conduit?: number | null; wires?: number | null; has_earth?: number | null }): string {
+  const core = c.section_mm2 ? `${c.wires ? c.wires + (c.has_earth === 0 ? 'x' : 'G') : ''}${dec(c.section_mm2)}` : '';
   const main = [c.cable_type, c.fire_class && c.fire_class !== 'Onbekend' ? c.fire_class : '', core].filter(Boolean).join(' ');
   const place = [c.install?.toLowerCase(), c.conduit == null ? '' : c.conduit ? 'in buis' : 'los'].filter(Boolean).join(', ');
   return [main, place].filter(Boolean).join(' · ');
