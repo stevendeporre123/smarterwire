@@ -23,11 +23,11 @@ Browser-app om AREI-conforme eendraadschema's en situatieplannen te maken voor k
 npm install
 npm run dev          # http://localhost:5173 – start ook de API met een lokale D1 (.wrangler/state), schema wordt vanzelf toegepast
 npm run build
-# AI-analyse lokaal: zet je sleutel in cloudflare/.dev.vars (zie .dev.vars.example).
+# AI-analyse lokaal: zet je sleutel in .dev.vars in de hoofdmap (zie cloudflare/.dev.vars.example).
 
 # Eerste keer productie:
-npx wrangler d1 create smarterwire          # database_id invullen in cloudflare/wrangler.toml
-npx wrangler secret put ANTHROPIC_API_KEY -c cloudflare/wrangler.toml
+npx wrangler d1 create smarterwire          # database_id invullen in wrangler.toml
+npx wrangler secret put ANTHROPIC_API_KEY
 npm run deploy                              # build + migraties (remote) + deploy
 ```
 

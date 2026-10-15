@@ -7,9 +7,9 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "ai": "npx wrangler dev -c cloudflare/wrangler.toml",
-    "deploy": "npm run build && npm run db:migrate && npx wrangler deploy -c cloudflare/wrangler.toml",
-    "db:migrate": "npx wrangler d1 migrations apply smarterwire --remote -c cloudflare/wrangler.toml"
+    "ai": "npx wrangler dev",
+    "deploy": "npm run build && npm run db:migrate && npx wrangler deploy",
+    "db:migrate": "npx wrangler d1 migrations apply smarterwire --remote"
   },
   "dependencies": {
     "@fontsource/poppins": "^5.1.0",

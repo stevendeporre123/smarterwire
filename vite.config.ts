@@ -16,11 +16,11 @@ function api(): Plugin {
     name: 'smarterwire-api',
     apply: 'serve',
     configureServer(server) {
-      const vars = existsSync('cloudflare/.dev.vars') ? readFileSync('cloudflare/.dev.vars', 'utf8') : '';
-      if (!/ANTHROPIC_API_KEY=\S+/.test(vars)) server.config.logger.warn('[api] Geen ANTHROPIC_API_KEY in cloudflare/.dev.vars: AI-voorstel werkt niet (de database wel).');
+      const vars = existsSync('.dev.vars') ? readFileSync('.dev.vars', 'utf8') : '';
+      if (!/ANTHROPIC_API_KEY=\S+/.test(vars)) server.config.logger.warn('[api] Geen ANTHROPIC_API_KEY in .dev.vars: AI-voorstel werkt niet (de database wel).');
       // eerst het schema op de lokale D1 (.wrangler/state) zetten, dan de Worker starten
       mkdirSync('dist', { recursive: true });
-      const cfg = '-c cloudflare/wrangler.toml';
+      const cfg = '';
       child = spawn(`npx wrangler d1 migrations apply smarterwire --local ${cfg} && npx wrangler dev ${cfg}`, { stdio: ['ignore', 'inherit', 'inherit'], shell: true });
       child.on('exit', (code) => { if (child) server.config.logger.warn(`[api] API gestopt (code ${code}). Staat poort 8787 al in gebruik?`); child = null; });
       server.config.logger.info('[api] API start op http://127.0.0.1:8787');
