@@ -1,4 +1,5 @@
-import { h, clear, btn } from '../lib/dom';
+import { h, clear, btn, toast } from '../lib/dom';
+import { exportProject } from '../db/transfer';
 import { upsert } from '../db/repo';
 import { formModal } from '../lib/ui';
 import { projectFields, validateProject } from './projects';
@@ -29,6 +30,7 @@ export async function renderProject(app: HTMLElement, id: string, tab: string) {
     h('nav', { class: 'tabs' }, TABS.map((t) => h('a', { class: `tab ${t.id === tab ? 'active' : ''}`, href: `#/p/${id}/${t.id}` }, icon(t.icon, 16), t.label)),
       h('span', { class: 'spacer' }),
       btn('PDF', { icon: 'FileDown', variant: 'primary', title: 'Eendraadschema, situatieplannen en lijst van de kringen als PDF', onClick: () => openPdfExport(project) }),
+      btn('Exporteer', { icon: 'Download', variant: 'ghost', title: 'Project met foto\'s exporteren (.smarterwire.json)', onClick: () => exportProject(project).catch((e) => toast(e.message, 'error')) }),
       btn('Projectgegevens', { icon: 'FileText', variant: 'ghost', onClick: () => formModal({ title: 'Projectgegevens', fields: projectFields, values: { ...project, supply: project.supply ?? '1x230' }, wide: true,
         onSave: async (v) => { if (!validateProject(v)) return false; await upsert('project', { ...project, ...v }); location.reload(); } }) })),
     body));
