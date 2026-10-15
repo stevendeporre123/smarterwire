@@ -24,6 +24,9 @@ async function route() {
   }
 }
 
+const built = new Date(__BUILD_TIME__).toLocaleString('nl-BE', { dateStyle: 'short', timeStyle: 'medium' });
+document.body.append(h('footer', { class: 'build-info', title: __BUILD_TIME__ }, `Build ${built}`));
+
 window.addEventListener('hashchange', route);
 route();
 

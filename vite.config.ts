@@ -32,6 +32,8 @@ function api(): Plugin {
 
 export default defineConfig({
   plugins: [api()],
+  // tijdstip van de build, getoond in de footer (controle of de deploy gelukt is)
+  define: { __BUILD_TIME__: JSON.stringify(new Date().toISOString()) },
   // lokaal: de API (`wrangler dev`, D1 + AI-proxy) draait op 8787
   server: { proxy: { '/api': 'http://127.0.0.1:8787' } },
   build: { target: 'es2022' },
