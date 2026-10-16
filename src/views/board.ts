@@ -210,7 +210,7 @@ export async function renderBoard(root: HTMLElement, project: Project) {
 
   // --- virtuele kast ---
   function drawVirtual() {
-    const U = 38, ROW_H = 190, PAD = 40;
+    const U = 38, ROW_H = 270, PAD = 40;
     const rows = new Map<number, Device[]>();
     for (const d of devices) (rows.get(d.row_no) ?? rows.set(d.row_no, []).get(d.row_no)!).push(d);
     const rowKeys = [...rows.keys()].sort((a, b) => a - b);
@@ -244,6 +244,8 @@ export async function renderBoard(root: HTMLElement, project: Project) {
         }
         const warn = isFeeder(d.kind) && !cs.length;
         g.append(svg('text', { x: x + w / 2, y: y + 138, 'text-anchor': 'middle', 'font-size': 10, fill: warn ? '#e07800' : '#008000', 'font-weight': 600 }, warn ? '?' : cs.map((c) => c.nr || '•').join('+')));
+        // omschrijving van de kring onder de modules (verticaal, afgekapt)
+        if (cs.length) g.append(svg('text', { x: 0, y: 0, transform: `translate(${x + w / 2 + 3} ${y + 148}) rotate(90)`, 'font-size': 9, fill: '#2b312b' }, cs.map((c) => c.name).join(' / ').slice(0, 26)));
         s.append(g);
         x += w + 4;
       }

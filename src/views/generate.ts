@@ -1,7 +1,8 @@
 import { h, toast } from '../lib/dom';
-import { formModal, confirmDialog, alertDialog } from '../lib/ui';
-import { boardsOf, circuitsOf, type Project } from '../domain/model';
-import { DIFF_TYPES } from '../domain/devices';
+import { formModal, confirmDialog, alertDialog, modal } from '../lib/ui';
+import { btn } from '../lib/dom';
+import { boardsOf, circuitsOf, allDevicesOfProject, type Project } from '../domain/model';
+import { DIFF_TYPES, deviceTitle, devicePlaces } from '../domain/devices';
 import { generateNewBoards, DEFAULT_GEN } from '../domain/newboard';
 
 /** Bouwt de nieuwe kast(en) opnieuw op vanuit de kringen (hoofddifferentieel, 30 mA-groepen, rijen). Vervangt bestaande voorstellen. */
@@ -15,6 +16,9 @@ export async function openGenerate(project: Project, onDone: () => void) {
     { key: 'diffRating', label: 'Differentieel (A)', type: 'number' },
     { key: 'mainDiffRating', label: 'Hoofddifferentieel 300 mA (A)', type: 'number' },
     { key: 'mainDiffType', label: 'Type hoofddifferentieel', type: 'select', options: DIFF_TYPES, allowEmpty: false },
+    { key: 'mainDiffSelective', label: 'Hoofddifferentieel selectief (type S)', type: 'checkbox' },
+    { key: 'diffType', label: 'Type 30 mA-differentiëlen', type: 'select', options: ['A', 'F', 'B'], allowEmpty: false },
+    { key: 'reservePct', label: 'Reserve in de kast (% vrije modules)', type: 'number' },
     { key: 'rowModules', label: 'Breedte van de nieuwe kast (modules per rij)', type: 'number' },
     { key: 'rows', label: 'Aantal rijen', type: 'number' },
     { key: 'bigPerDiff', label: 'Grote verbruikers per differentieel', type: 'number' },
@@ -30,8 +34,26 @@ export async function openGenerate(project: Project, onDone: () => void) {
     onSave: async (v) => {
       const r = await generateNewBoards(project, { ...DEFAULT_GEN, ...v } as any);
       toast(`${r.diffs} differentieel(en) voorgesteld`);
-      if (r.warnings.length) await alertDialog('Opmerkingen', [...new Set(r.warnings)].join('\n'));
       const nb = (await boardsOf(project.id)).find((x) => x.kind === 'nieuw'); if (nb) localStorage.setItem(`smarterwire.board.${project.id}`, nb.id);
       onDone();
+      if (r.warnings.length) await alertDialog('Opmerkingen', [...new Set(r.warnings)].join('\n'));
+      await showMapping(project);
     } });
+}
+
+/** Overzicht van de bestaande zekering naar de nieuwe (kring, automaat, differentieel, fase) na het opbouwen. */
+export async function showMapping(project: Project) {
+  const [circuits, devices] = await Promise.all([circuitsOf(project.id), allDevicesOfProject(project.id)]);
+  const byId = new Map(devices.map((d) => [d.id, d])), at = new Map<string, string>();
+  for (const b of new Set(devices.map((d) => d.board_id))) for (const [id, pl] of devicePlaces(devices.filter((d) => d.board_id === b))) at.set(id, pl);
+  const rows = circuits.filter((c) => c.new_device_id).map((c) => {
+    const o = c.device_id ? byId.get(c.device_id) : undefined, n = byId.get(c.new_device_id!), p = n?.parent_id ? byId.get(n.parent_id) : undefined;
+    return { c, old: o ? `${at.get(o.id)} · ${deviceTitle(o)}` : '—', nu: n ? `${at.get(n.id)} · ${deviceTitle(n)}${n.phase ? ' · ' + n.phase : ''}` : '—', diff: p ? deviceTitle(p) : '—' };
+  });
+  if (!rows.length) return;
+  const th = (t: string) => h('th', null, t), td = (t: string) => h('td', null, t);
+  const table = h('table', { class: 'table' }, h('thead', null, h('tr', null, ['Kring', 'Omschrijving', 'Oude zekering', 'Nieuwe automaat', 'Differentieel'].map(th))),
+    h('tbody', null, rows.map((r) => h('tr', null, td(r.c.nr ?? ''), td(r.c.name), td(r.old), td(r.nu), td(r.diff)))));
+  modal({ title: 'Oud → nieuw', wide: true, body: h('div', null, h('p', { class: 'hint' }, 'Elke kring behoudt zijn nummer; de nieuwe automaat staat onder het genoemde differentieel. Zekeringwaarden volgen de kabeldoorsnede: altijd zelf nakijken.'), h('div', { class: 'table-scroll' }, table)),
+    actions: (close) => [h('span', { class: 'spacer' }), btn('Sluiten', { variant: 'primary', onClick: close })] });
 }

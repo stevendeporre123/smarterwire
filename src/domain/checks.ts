@@ -23,7 +23,7 @@ const BIG: [RegExp, string][] = [
   [/wasmachine/i, 'wasmachine'], [/droogkast|droogtrommel|droger/i, 'droogkast'], [/vaatwas/i, 'vaatwasser'], [/kookplaat|kookfornuis|fornuis|inductie/i, 'kookplaat'],
   [/oven/i, 'oven'], [/boiler|waterverwarmer/i, 'boiler'], [/warmtepomp|airco/i, 'warmtepomp'], [/laadpaal|laadstation/i, 'laadpaal'], [/verwarmingstoestel|elektrische verwarming|convector/i, 'verwarming'],
 ];
-const bigKinds = (text: string) => new Set(BIG.filter(([re]) => re.test(text)).map(([, k]) => k));
+export const bigKinds = (text: string) => new Set(BIG.filter(([re]) => re.test(text)).map(([, k]) => k));
 
 /** Beschermend differentieel van een toestel (zelf een aardlekautomaat, of het eerste differentieel erboven). */
 function diffOf(d: Device | undefined, byId: Map<string, Device>): Device | undefined {

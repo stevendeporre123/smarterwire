@@ -2,6 +2,7 @@ import { q, run, type Op } from '../db/client';
 import { putOp, setOp, whereOp } from '../db/repo';
 import { uid } from '../lib/id';
 import { DEFAULT_RATING_FOR_SECTION } from './devices';
+import { bigKinds } from './checks';
 import { boardsOf, circuitsOf, allDevicesOfProject, type Board, type Circuit, type Device, type Project } from './model';
 
 export interface GenOptions {
@@ -9,6 +10,9 @@ export interface GenOptions {
   diffRating: number;
   mainDiffRating: number;   // hoofddifferentieel 300 mA aan het begin van de keten (de hoofdautomaat staat buiten de kast, aan de meter)
   mainDiffType: string;
+  mainDiffSelective: boolean; // hoofddifferentieel type S (selectief) zodat de 30 mA-differentiëlen eronder eerst uitschakelen
+  diffType: string;         // type van de 30 mA-differentiëlen (A of F)
+  reservePct: number;       // % vrije modules die in de kast overblijft
   rowModules: number;       // breedte van de nieuwe kast in modules per rij
   rows: number;             // aantal rijen
   splitByLevel: boolean;    // groeperen per verdieping
@@ -16,7 +20,7 @@ export interface GenOptions {
   bigOwnDiff: boolean;      // grote verbruikers op eigen differentieel
   bigPerDiff: number;
 }
-export const DEFAULT_GEN: GenOptions = { maxPerDiff: 8, diffRating: 40, mainDiffRating: 40, mainDiffType: 'A', rowModules: 18, rows: 4, splitByLevel: true, mergeLeftovers: true, bigOwnDiff: true, bigPerDiff: 1 };
+export const DEFAULT_GEN: GenOptions = { maxPerDiff: 8, diffRating: 40, mainDiffRating: 40, mainDiffType: 'A', mainDiffSelective: false, diffType: 'A', reservePct: 20, rowModules: 18, rows: 4, splitByLevel: true, mergeLeftovers: true, bigOwnDiff: true, bigPerDiff: 1 };
 
 export const BIG_FUNCS = new Set(['Kookplaat', 'Oven', 'Droogkast', 'Boiler', 'Verwarming', 'Airco / warmtepomp', 'Laadpaal']);
 
@@ -85,6 +89,7 @@ export async function generateNewBoards(project: Project, opt: GenOptions): Prom
         const n: Item = { cs: [c], level: levelOf(c), big }; locks.set(c.lock_group, n); items.push(n);
       } else items.push({ cs: [c], level: levelOf(c), big });
     }
+    for (const c of mine) { const k = bigKinds(`${c.name} ${c.func ?? ''}`); if (k.size > 1) warnings.push(`Kring ${c.nr ?? ''} "${c.name}": ${[...k].join(' + ')} op één kring; splits ze in aparte kringen (zie Bevindingen) en bouw daarna opnieuw op.`); }
     for (const it of items) if (it.cs.length > opt.maxPerDiff) warnings.push(`Samen-houden-groep "${it.cs[0].lock_group}" heeft ${it.cs.length} kringen (> ${opt.maxPerDiff})`);
 
     const lvlSort = (a: string, b: string) => (a === '' ? 1 : b === '' ? -1 : a.localeCompare(b, 'nl', { numeric: true }));
@@ -119,14 +124,14 @@ export async function generateNewBoards(project: Project, opt: GenOptions): Prom
     const polesAll = threePhase ? (project.supply === '3x230' ? '3P' : '4P') : '2P', modsAll = threePhase ? (project.supply === '3x230' ? 3 : 4) : 2;
     const groups: Dev[][] = [];
     const circuitStmts: Op[] = [];
-    if (isRoot) groups.push([{ id: mainId, board_id: nb.id, kind: 'differentieel', label: 'Hoofddifferentieel', poles: polesAll, rating_a: opt.mainDiffRating, sens_ma: 300, dtype: opt.mainDiffType || 'A', modules: modsAll, notes: 'hoofddifferentieel 300 mA' }]);
+    if (isRoot) groups.push([{ id: mainId, board_id: nb.id, kind: 'differentieel', label: opt.mainDiffSelective ? 'Hoofddifferentieel S' : 'Hoofddifferentieel', poles: polesAll, rating_a: opt.mainDiffRating, sens_ma: 300, dtype: opt.mainDiffType || 'A', modules: modsAll, notes: opt.mainDiffSelective ? 'hoofddifferentieel 300 mA, selectief (type S)' : 'hoofddifferentieel 300 mA' }]);
     const globalLoad: Record<string, number> = Object.fromEntries(phaseNames.map((p) => [p, 0]));
     let n = 1;
     for (const ch of chunks) {
       const diffId = uid();
       const diffLoad: Record<string, number> = Object.fromEntries(phaseNames.map((p) => [p, 0]));
       const lv = ch.level || '';
-      const group: Dev[] = [{ id: diffId, board_id: nb.id, parent_id: isRoot ? mainId : null, kind: 'differentieel', label: `ID${n}`, poles: polesAll, rating_a: opt.diffRating, sens_ma: 30, dtype: 'A', modules: modsAll,
+      const group: Dev[] = [{ id: diffId, board_id: nb.id, parent_id: isRoot ? mainId : null, kind: 'differentieel', label: `ID${n}`, poles: polesAll, rating_a: opt.diffRating, sens_ma: 30, dtype: opt.diffType || 'A', modules: modsAll,
         notes: [ch.big ? 'grote verbruiker(s)' : '', lv].filter(Boolean).join(' · ') || null }];
       for (const it of ch.items) {
         const usedInItem = new Set<string>();
@@ -154,7 +159,8 @@ export async function generateNewBoards(project: Project, opt: GenOptions): Prom
     }
 
     // in rijen leggen: een groep (differentieel + zijn automaten) blijft liefst op één rij; past ze niet meer, dan begint een nieuwe rij
-    const cols = Math.max(4, Math.round(opt.rowModules || 18)), rowCount: number[] = [0];
+    const fullCols = Math.max(4, Math.round(opt.rowModules || 18)), reserve = Math.min(60, Math.max(0, opt.reservePct || 0));
+    const cols = Math.max(4, Math.floor(fullCols * (1 - reserve / 100))), rowCount: number[] = [0];
     let row = 0, used = 0;
     const put = (d: Dev) => { if (used > 0 && used + d.modules > cols) { row++; used = 0; rowCount[row] = 0; } d.row_no = row; d.pos = rowCount[row]++; used += d.modules; };
     for (const g of groups) {
@@ -163,7 +169,11 @@ export async function generateNewBoards(project: Project, opt: GenOptions): Prom
       g.forEach(put);
     }
     const rowsUsed = row + 1;
-    if (rowsUsed > opt.rows) warnings.push(`${nb.name}: ${rowsUsed} rijen nodig bij ${cols} modules breed, maar er zijn er ${opt.rows} ingesteld. Maak de kast breder of voeg een rij toe.`);
+    const usedMods = groups.flat().reduce((s, d) => s + d.modules, 0), capacity = Math.max(opt.rows, rowsUsed) * fullCols;
+    warnings.push(`${nb.name}: ${usedMods} van ${capacity} modules in gebruik (≈ ${Math.round((1 - usedMods / capacity) * 100)}% reserve, gevraagd ${reserve}%).`);
+    if (rowsUsed > opt.rows) warnings.push(`${nb.name}: ${rowsUsed} rijen nodig bij ${fullCols} modules breed en ${reserve}% reserve, maar er zijn er ${opt.rows} ingesteld. Maak de kast breder, voeg een rij toe of verlaag de reserve.`);
+    const sumA = groups.flat().filter((d) => d.kind === 'automaat').reduce((s, d) => s + (d.rating_a ?? 0), 0);
+    warnings.push(`${nb.name}: som van de automaten ${sumA} A${project.supply_amp ? ` op een aansluiting van ${project.supply_amp} A` : ' (aansluiting niet ingevuld in de projectgegevens)'}. Geen belastingsstudie: de gelijktijdigheid moet je zelf inschatten.`);
     stmts.push(...groups.flat().map((d) => putOp('device', d)), ...circuitStmts);
     if (threePhase) warnings.push(`${nb.name}: belasting (A) per fase ≈ ${phaseNames.map((p) => `${p}: ${globalLoad[p]}`).join(', ')}`);
   }
