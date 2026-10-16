@@ -1,6 +1,6 @@
 import { h, svg, btn, icon, toast, clear, loading, download } from '../lib/dom';
 import { buildForm, formModal, panZoom, confirmDialog, promptDialog, type FieldDef } from '../lib/ui';
-import { upsert, softDelete, saveImage, assetUrl, assetSize } from '../db/repo';
+import { upsert as dbUpsert, softDelete as dbSoftDelete, saveImage, assetUrl, assetSize } from '../db/repo';
 import { plansOf, symbolsOf, shapesOf, circuitsOf, boardsOf, type Plan, type Project, type Symbol_, type Shape } from '../domain/model';
 import { circuitColor } from '../domain/symbols';
 import { CATALOG, FUNC_ORDER, symbolEntry, symbolGeom, symbolMarkup, splitType, joinType, type SymbolEntry } from '../domain/areisymbols';
@@ -21,23 +21,36 @@ const NUM = (s: string) => Number(s.replace(',', '.'));
 export async function renderPlan(root: HTMLElement, project: Project) {
   const plans = await plansOf(project.id);
   const reload = () => { loading(root); return renderPlan(root, project); };
+
+  // ---------- geschiedenis (ongedaan maken / opnieuw) ----------
+  // Elke wijziging aan vormen, symbolen of nog-te-plaatsen onderdelen komt langs deze twee functies; kort daarna wordt een momentopname bewaard.
+  const HIST_TABLES = ['shape', 'symbol', 'schema_load'];
+  let applying = false, snapTimer: number | undefined;
+  function upsert<T extends Record<string, any>>(table: string, obj: T) { const r = dbUpsert(table, obj); if (HIST_TABLES.includes(table)) r.then(snapSoon, () => {}); return r; }
+  function softDelete(table: string, id: string) { const r = dbSoftDelete(table, id); if (HIST_TABLES.includes(table)) r.then(snapSoon, () => {}); return r; }
   const fileInput = h('input', { type: 'file', accept: 'image/*', style: { display: 'none' } }) as HTMLInputElement;
 
   const addPhotoPlan = () => {
     fileInput.onchange = async () => {
       const f = fileInput.files?.[0]; if (!f) return;
-      const name = await promptDialog({ title: 'Nieuw plan', label: 'Naam van het plan', value: `Verdieping ${plans.length}` }); if (!name) return;
+      const name = await promptDialog({ title: 'Nieuw plan', label: 'Naam van het plan', value: newPlanName() }); if (!name) return;
       const img = await saveImage(f, 3200);
       const p = await upsert('plan', { project_id: project.id, name, asset_id: img.id, level: String(plans.length), w: img.width, h: img.height });
       localStorage.setItem(LS(project.id), p.id); reload();
     };
     fileInput.click();
   };
-  const addBlankPlan = async () => {
-    const name = await promptDialog({ title: 'Nieuw plan', label: 'Naam van het plan', value: `Verdieping ${plans.length}` }); if (!name) return;
-    const p = await upsert('plan', { project_id: project.id, name, level: String(plans.length), w: 3000, h: 2100, scale: 150 });
-    localStorage.setItem(LS(project.id), p.id); reload();
-  };
+  const newPlanName = () => (plans.length ? `Verdieping ${plans.length}` : 'Gelijkvloers');
+  const addBlankPlan = () => formModal({
+    title: 'Nieuw leeg plan', saveLabel: 'Aanmaken',
+    fields: [{ key: 'name', label: 'Naam', span: 2, required: true }, { key: 'width_m', label: 'Breedte (m)', type: 'number', step: 0.5 }, { key: 'height_m', label: 'Diepte (m)', type: 'number', step: 0.5 }],
+    values: { name: newPlanName(), width_m: 12, height_m: 8 },
+    onSave: async (v) => {
+      const wm = Math.min(100, Math.max(2, Number(v.width_m) || 12)), hm = Math.min(100, Math.max(2, Number(v.height_m) || 8));
+      const p = await upsert('plan', { project_id: project.id, name: v.name, level: String(plans.length), w: Math.round(wm * 100), h: Math.round(hm * 100), scale: 100 });
+      localStorage.setItem(LS(project.id), p.id); reload();
+    },
+  });
 
   if (!plans.length) {
     root.append(h('div', { class: 'page' }, h('div', { class: 'card empty-state' }, icon('Map', 40), h('h3', null, 'Maak een plan'),
@@ -49,6 +62,35 @@ export async function renderPlan(root: HTMLElement, project: Project) {
   let planId = localStorage.getItem(LS(project.id)); if (!plans.find((p) => p.id === planId)) planId = plans[0].id;
   const plan = plans.find((p) => p.id === planId)!;
   const [symbols, shapes, circuits, boards, pending] = await Promise.all([symbolsOf(plan.id), shapesOf(plan.id), circuitsOf(project.id), boardsOf(project.id), schemaLoadsOf(project.id)]);
+  const snapshot = () => JSON.stringify({ shape: shapes, symbol: symbols, schema_load: pending });
+  const hist: string[] = [snapshot()]; let hi = 0;
+  function snapSoon() {
+    if (applying) return;
+    clearTimeout(snapTimer);
+    snapTimer = window.setTimeout(() => {
+      const snap = snapshot(); if (snap === hist[hi]) return;
+      hist.splice(hi + 1); hist.push(snap); if (hist.length > 100) hist.shift(); hi = hist.length - 1; updUndo();
+    }, 150);
+  }
+  async function restore(json: string) {
+    applying = true;
+    try {
+      const want = JSON.parse(json) as Record<string, any[]>, cur: Record<string, any[]> = { shape: shapes, symbol: symbols, schema_load: pending };
+      for (const table of HIST_TABLES) {
+        const w = new Map(want[table].map((r) => [r.id, r])), c = new Map(cur[table].map((r) => [r.id, r]));
+        for (const [id, r] of w) if (!c.has(id) || JSON.stringify(c.get(id)) !== JSON.stringify(r)) await dbUpsert(table, { ...r, deleted: 0 });
+        for (const id of c.keys()) if (!w.has(id)) await dbSoftDelete(table, id);
+        cur[table].splice(0, cur[table].length, ...want[table]);
+      }
+    } finally { applying = false; }
+    selSym = null; selShape = null; drawing = null; drawAll(); drawSide(); updUndo(); updStatus();
+  }
+  async function undo() { clearTimeout(snapTimer); const now = snapshot(); if (now !== hist[hi]) { hist.splice(hi + 1); hist.push(now); hi = hist.length - 1; } if (hi > 0) { hi--; await restore(hist[hi]); } }
+  async function redo() { clearTimeout(snapTimer); if (hi < hist.length - 1) { hi++; await restore(hist[hi]); } }
+  const undoBtn = btn('', { icon: 'Undo2', variant: 'ghost', title: 'Ongedaan maken (Ctrl+Z)', onClick: () => undo() });
+  const redoBtn = btn('', { icon: 'Redo2', variant: 'ghost', title: 'Opnieuw (Ctrl+Shift+Z of Ctrl+Y)', onClick: () => redo() });
+  function updUndo() { (undoBtn as HTMLButtonElement).disabled = hi <= 0; (redoBtn as HTMLButtonElement).disabled = hi >= hist.length - 1; }
+  updUndo();
   const others = (await planSymbolRows(project.id)).filter((r) => !symbols.some((x) => x.id === r.id));   // symbolen op andere plannen tellen mee voor het adres
 
   /** Adres van een symbool binnen zijn kring: kringnummer + volgnummer in de volgorde van het eendraadschema (bv. A1, E4). */
@@ -123,7 +165,8 @@ export async function renderPlan(root: HTMLElement, project: Project) {
       btn('', { icon: 'FilePlus', variant: 'ghost', title: 'Leeg plan toevoegen', onClick: addBlankPlan }),
       btn('', { icon: 'Pencil', variant: 'ghost', title: 'Plan hernoemen', onClick: () => formModal({ title: 'Plan', fields: [{ key: 'name', label: 'Naam', span: 2 }, { key: 'level', label: 'Niveau', span: 2 }], values: plan,
         onSave: async (v) => { await upsert('plan', { ...plan, ...v }); reload(); }, onDelete: async () => { await softDelete('plan', plan.id); reload(); } }) }),
-      scaleBtn,
+      scaleBtn, undoBtn, redoBtn,
+      btn('', { icon: 'Maximize', variant: 'ghost', title: 'Passend zoomen op de tekening', onClick: () => fitContent() }),
       h('span', { class: 'hint' }, 'Muurdikte'), h('select', { onChange: (e: Event) => { wallThick = Number((e.target as HTMLSelectElement).value); localStorage.setItem(`${LS_OPT}.thick`, String(wallThick)); } },
         THICKS.map((t) => h('option', { value: t, selected: t === wallThick }, `${t * 100} cm`))),
       check('Magneet', 'snap', () => snapOn, (v) => (snapOn = v), 'Kleven aan raster en muurpunten (Shift = tijdelijk uit)'),
@@ -147,7 +190,7 @@ export async function renderPlan(root: HTMLElement, project: Project) {
   // ---------- palet ----------
   const BUILD: { id: string; label: string; icon: string; hint: string }[] = [
     { id: 'select', label: 'Selecteren', icon: 'MousePointer2', hint: 'Klik om te selecteren en te verslepen.' },
-    { id: 'wall', label: 'Muur', icon: 'BrickWall', hint: 'Klik beginpunt, klik volgende punten. Typ een lengte in meter + Enter. Dubbelklik, Enter of Esc = stoppen.' },
+    { id: 'wall', label: 'Muur', icon: 'BrickWall', hint: 'Klik het beginpunt en klik de volgende punten, of sleep een muur van begin- naar eindpunt (daarna ga je verder vanaf dat punt). Typ een lengte in meter + Enter. Esc, Enter of dubbelklik = ketting stoppen (de muurtool blijft actief); nog een Esc = terug naar Selecteren. Ctrl+Z = ongedaan maken.' },
     { id: 'window', label: 'Raam', icon: 'PanelTop', hint: 'Klik op een muur om een raam te plaatsen.' },
     { id: 'door', label: 'Deur', icon: 'DoorOpen', hint: 'Klik op een muur om een deur te plaatsen; de kant waar je klikt is de draairichting.' },
     { id: 'stair', label: 'Trap', icon: 'Footprints', hint: 'Sleep een rechthoek, of klik voor een standaardtrap.' },
@@ -222,6 +265,14 @@ export async function renderPlan(root: HTMLElement, project: Project) {
   s.append(shapesG, layer, ghostG, handleG);
   canvas.append(s);
 
+  function fitContent() {
+    const xs: number[] = [], ys: number[] = [];
+    for (const sh of shapes) for (const [x, y] of [[sh.x1, sh.y1], [sh.x2, sh.y2]]) if (x != null && y != null) { xs.push(x); ys.push(y); }
+    for (const sy of symbols) { xs.push(sy.x * W); ys.push(sy.y * H); }
+    if (!xs.length || (url && showBg)) { pz.reset(); return; }
+    const x1 = Math.min(...xs), y1 = Math.min(...ys), x2 = Math.max(...xs), y2 = Math.max(...ys);
+    pz.fit({ x: x1, y: y1, w: Math.max(x2 - x1, 2 * scale()), h: Math.max(y2 - y1, 2 * scale()) });
+  }
   const toPlan = (e: PointerEvent | MouseEvent): Pt & { s: number } => pz.toSvg(e.clientX, e.clientY);
 
   function drawAll() {
@@ -410,7 +461,20 @@ export async function renderPlan(root: HTMLElement, project: Project) {
     if (tool === 'select') { if (selShape || selSym) { selShape = null; selSym = null; drawShapes(); drawSyms(); drawSide(); } return; }
     if (isLine(tool)) {
       const q = snapPt(p, drawing, e.shiftKey);
-      if (!drawing) { drawing = q; drawGhost(); return; }
+      if (!drawing) {
+        drawing = q; drawGhost();
+        // slepen = één muur van begin- naar eindpunt; loslaten op dezelfde plek = klik (volgend punt met een nieuwe klik)
+        const sx = e.clientX, sy = e.clientY;
+        const up = async (ev: PointerEvent) => {
+          window.removeEventListener('pointerup', up);
+          if (!drawing || Math.hypot(ev.clientX - sx, ev.clientY - sy) < 8) return;
+          const end = snapPt(toPlan(ev), drawing, ev.shiftKey);
+          if (dist(drawing, end) < 0.05 * scale()) return;
+          await addShape(lineProps(drawing, end)); drawing = end; drawShapes(); drawGhost();
+        };
+        window.addEventListener('pointerup', up);
+        return;
+      }
       let end = q;
       if (lenBuf) { const L = NUM(lenBuf) * k, d = dist(drawing, q) || 1; end = { x: drawing.x + ((q.x - drawing.x) / d) * L, y: drawing.y + ((q.y - drawing.y) / d) * L }; lenBuf = ''; }
       if (dist(drawing, end) < 0.05 * k) return;
@@ -604,6 +668,7 @@ export async function renderPlan(root: HTMLElement, project: Project) {
   window.addEventListener('keydown', async function onKey(e) {
     if (!root.isConnected) { window.removeEventListener('keydown', onKey); return; }
     if ((e.target as HTMLElement).matches?.('input,textarea,select')) return;
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key.toLowerCase() === 'z' || e.key.toLowerCase() === 'y')) { e.preventDefault(); if (e.key.toLowerCase() === 'y' || e.shiftKey) await redo(); else await undo(); return; }
     if (pendingKey) {   // sneltoets opnemen voor een favoriet
       e.preventDefault();
       const f = favOf(pendingKey);
@@ -632,7 +697,7 @@ export async function renderPlan(root: HTMLElement, project: Project) {
       const fav = favs.find((f) => f.key === e.key.toLowerCase());
       if (fav) { e.preventDefault(); setTool(fav.tool); return; }
     }
-    if (e.key === 'Escape') { drawing = null; scaleA = null; rectDrag = null; lenBuf = ''; drawGhost(); if (tool !== 'select') setTool('select'); else { selShape = null; selSym = null; drawShapes(); drawSyms(); drawSide(); } return; }
+    if (e.key === 'Escape') { const inProgress = !!(drawing || scaleA || rectDrag || lenBuf); drawing = null; scaleA = null; rectDrag = null; lenBuf = ''; drawGhost(); if (inProgress && tool !== 'select') return; if (tool !== 'select') setTool('select'); else { selShape = null; selSym = null; drawShapes(); drawSyms(); drawSide(); } return; }
     const sh = shapeById(selShape);
     if (sh && (e.key === 'Delete' || e.key === 'Backspace')) { await delShape(sh); return; }
     const sym = symbols.find((x) => x.id === selSym); if (!sym) return;
@@ -640,5 +705,5 @@ export async function renderPlan(root: HTMLElement, project: Project) {
     if (e.key.toLowerCase() === 'r') { sym.rot = (sym.rot + 90) % 360; await upsert('symbol', sym); drawSyms(); drawSide(); }
   });
 
-  drawPal(); drawAll(); drawSide();
+  drawPal(); drawAll(); drawSide(); fitContent();
 }

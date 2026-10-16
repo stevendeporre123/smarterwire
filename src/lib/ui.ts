@@ -217,5 +217,7 @@ export function panZoom(svgEl: SVGSVGElement, w: number, h_: number) {
   return {
     toSvg: (cx: number, cy: number) => toSvg(cx, cy),
     reset: () => { vb = { x: 0, y: 0, w, h: h_ }; apply(); },
+    /** Zoom op een rechthoek (met wat marge). */
+    fit: (b: { x: number; y: number; w: number; h: number }) => { const pad = Math.max(b.w, b.h) * 0.08; vb = { x: b.x - pad, y: b.y - pad, w: b.w + 2 * pad, h: b.h + 2 * pad }; apply(); },
   };
 }
