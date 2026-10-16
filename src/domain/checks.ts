@@ -14,7 +14,7 @@ export interface Finding {
   source: string;
 }
 export interface CheckLoad { circuit_id?: string | null; type: string; n?: number | null }
-export interface CheckInput { circuits: Circuit[]; devices: Device[]; loads: CheckLoad[]; projectSupplyAmp?: number | null }
+export interface CheckInput { circuits: Circuit[]; devices: Device[]; loads: CheckLoad[]; projectSupplyAmp?: number | null; earthOhm?: number | null }
 
 const SRC = 'Vuistregel (AREI-artikel nog te verifiëren)';
 /** Maximale zekering per kabeldoorsnede (mm² → A), indicatief voor gangbare leggingen. */
@@ -105,6 +105,9 @@ export function runChecks(inp: CheckInput): Finding[] {
       why: 'Grote verbruikers (wasmachine, droogkast, kookplaat, oven, boiler…) krijgen elk een eigen kring.', fix: 'Splits de kring: geef elk toestel zijn eigen zekering en kabel.' });
     else if (kinds.size === 1 && hasSockets && sockets > 1) add({ rule: 'grote-verbruiker-stopcontacten', level: 'info', state: 'bestaand', circuitId: c.id,
       title: `${label(c)}: ${[...kinds][0]} deelt de kring met ${sockets} stopcontacten`, why: 'Een grote verbruiker hoort op een eigen kring.', fix: 'Voorzie een eigen kring voor dit toestel.' });
+    // meetwaarden
+    if (c.insulation_mohm != null && c.insulation_mohm < 1) add({ rule: 'isolatie', level: c.insulation_mohm < 0.5 ? 'fout' : 'waarschuwing', state: 'bestaand', circuitId: c.id,
+      title: `${label(c)}: isolatieweerstand ${c.insulation_mohm} MΩ`, why: 'Een isolatieweerstand onder 1 MΩ (gemeten op 500 V) wijst op slijtage of vocht in de bekabeling.', fix: 'Zoek de oorzaak (beschadigde kabel, vocht, toestel), herstel en meet opnieuw.' });
     // ontbrekende gegevens
     const missing = cableMissing(c);
     if (missing.length) add({ rule: 'gegevens-ontbreken', level: 'info', state: 'bestaand', circuitId: c.id,
@@ -117,11 +120,17 @@ export function runChecks(inp: CheckInput): Finding[] {
   for (const d of inp.devices) {
     if (!isFeeder(d.kind) && d.kind !== 'differentieel') continue;
     const state = inp.circuits.some((c) => c.new_device_id === d.id) ? 'nieuw' : 'bestaand';
+    if ((d.kind === 'differentieel' || d.kind === 'aardlekautomaat') && d.trip_ma != null && d.sens_ma != null && d.trip_ma > d.sens_ma) add({ rule: 'diff-test-stroom', level: 'fout', state, deviceId: d.id,
+      title: `Differentieel ${deviceTitle(d)} schakelt pas uit bij ${d.trip_ma} mA`, why: `Een differentieel van ${d.sens_ma} mA moet uitschakelen bij een lekstroom van hooguit ${d.sens_ma} mA.`, fix: 'Vervang het differentieel.' });
+    if ((d.kind === 'differentieel' || d.kind === 'aardlekautomaat') && d.trip_ms != null && d.trip_ms > 300) add({ rule: 'diff-test-tijd', level: 'waarschuwing', state, deviceId: d.id,
+      title: `Differentieel ${deviceTitle(d)}: uitschakeltijd ${d.trip_ms} ms`, why: 'Een niet-selectief differentieel moet bij nominale lekstroom binnen 300 ms uitschakelen.', fix: 'Controleer het type (selectief?) en vervang het differentieel als het traag blijft.' });
     if (d.kind === 'differentieel' && d.dtype === 'AC') add({ rule: 'differentieel-ac', level: 'waarschuwing', state, deviceId: d.id,
       title: `Differentieel ${deviceTitle(d)} is type AC`,
       why: 'Type AC detecteert geen pulserende gelijkstroom, zoals bij elektronische toestellen (wasmachine, droogkast, laadpaal, vriezer met omvormer). Voor die toestellen is minstens type A nodig.',
       fix: 'Vervang door een type A (of F) differentieel, zeker voor kringen met wasmachine, droogkast, kookplaat of laadpaal.' });
   }
+  if (inp.earthOhm != null && inp.earthOhm > 100) add({ rule: 'aardingsweerstand', level: 'waarschuwing', state: 'bestaand', title: `Aardingsweerstand ${inp.earthOhm} Ω`,
+    why: 'Een aardingsweerstand boven 100 Ω is doorgaans te hoog voor een betrouwbare werking van de differentiëlen.', fix: 'Verbeter de aarding (extra paal of lintaarde) en meet opnieuw.' });
   // kast zonder hoofdbeveiliging
   const boardsSeen = new Set(inp.devices.map((d) => d.board_id));
   for (const b of boardsSeen) {

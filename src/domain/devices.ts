@@ -63,8 +63,8 @@ export function deviceFieldKeys(kind: string, s: Supply): string[] {
   const phase = isThreePhase(s) ? ['phase'] : [];
   switch (kind) {
     case 'hoofd': return ['label', 'poles', 'modules', 'rating_a'];
-    case 'differentieel': return ['label', 'poles', 'modules', 'rating_a', 'sens_ma', 'dtype', 'parent_id'];
-    case 'aardlekautomaat': return ['label', 'poles', 'modules', 'rating_a', 'curve', 'sens_ma', 'dtype', 'breaking_ka', ...phase, 'parent_id'];
+    case 'differentieel': return ['label', 'poles', 'modules', 'rating_a', 'sens_ma', 'dtype', 'trip_ma', 'trip_ms', 'parent_id'];
+    case 'aardlekautomaat': return ['label', 'poles', 'modules', 'rating_a', 'curve', 'sens_ma', 'dtype', 'trip_ma', 'trip_ms', 'breaking_ka', ...phase, 'parent_id'];
     case 'automaat': return ['label', 'poles', 'modules', 'rating_a', 'curve', 'breaking_ka', ...phase, 'parent_id'];
     case 'smelt': return ['label', 'modules', 'rating_a', ...phase, 'parent_id'];
     case 'overspanning': return ['label', 'poles', 'modules', 'parent_id'];

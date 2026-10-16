@@ -19,6 +19,8 @@ export function deviceForm(d: Device, o: { supply: Supply; devices: Device[]; on
     curve: { key: 'curve', label: 'Curve', type: 'select', options: CURVES },
     sens_ma: { key: 'sens_ma', label: 'Gevoeligheid (mA)', type: 'select', options: [10, 30, 100, 300, 500], numeric: true },
     dtype: { key: 'dtype', label: 'Type diff.', type: 'select', options: DIFF_TYPES },
+    trip_ma: { key: 'trip_ma', label: 'Gemeten uitschakelstroom (mA)', type: 'number' },
+    trip_ms: { key: 'trip_ms', label: 'Gemeten uitschakeltijd (ms)', type: 'number' },
     breaking_ka: { key: 'breaking_ka', label: 'Onderbrekingsvermogen (kA)', type: 'select', options: [3, 4.5, 6, 10], numeric: true },
     phase: { key: 'phase', label: 'Fase', type: 'select', options: supplyPhases(supply) },
     parent_id: { key: 'parent_id', label: 'Beschermd door', type: 'select', span: 2, options: parents.map((p) => ({ value: p.id, label: deviceTitle(p) + ` (rij ${p.row_no + 1})` })) },

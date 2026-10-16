@@ -3,7 +3,7 @@ import { h, btn, icon, clear } from './dom';
 // ---------- formulier ----------
 export type FieldDef = {
   key: string; label: string;
-  type?: 'text' | 'number' | 'select' | 'textarea' | 'checkbox' | 'password';
+  type?: 'text' | 'number' | 'select' | 'textarea' | 'checkbox' | 'password' | 'date';
   options?: (string | number | { value: string | number; label: string })[];
   allowEmpty?: boolean; advanced?: boolean; placeholder?: string; step?: number; required?: boolean; span?: 1 | 2; list?: string[]; numeric?: boolean;
 };

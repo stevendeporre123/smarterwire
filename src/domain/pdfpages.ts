@@ -283,7 +283,7 @@ function mappingSheets(d: PdfData): Sheet[] {
 }
 
 function attentionSheets(d: PdfData): Sheet[] {
-  const fs = runChecks({ circuits: d.circuits, devices: d.devices, loads: d.symbols, projectSupplyAmp: d.project.supply_amp }).filter((f) => f.level !== 'info' || f.state === 'nieuw');
+  const fs = runChecks({ circuits: d.circuits, devices: d.devices, loads: d.symbols, projectSupplyAmp: d.project.supply_amp, earthOhm: d.project.earth_ohm }).filter((f) => f.level !== 'info' || f.state === 'nieuw');
   const sheets: Sheet[] = [];
   const per = Math.floor((CH - 14) / 12.5), col: Record<string, string> = { fout: '#c00', waarschuwing: '#b35c00', info: '#555' };
   const items = fs.length ? fs : null;
@@ -317,6 +317,29 @@ function bomSheets(d: PdfData): Sheet[] {
   return sheets;
 }
 
+// ---------- bijlage: metingen ----------
+function measureSheets(d: PdfData): Sheet[] {
+  const cs = d.circuits.filter((c) => c.insulation_mohm != null || c.loop_ohm != null).sort((a, b) => natural(a.nr ?? '', b.nr ?? ''));
+  const rcds = d.devices.filter((x) => (x.kind === 'differentieel' || x.kind === 'aardlekautomaat') && (x.trip_ma != null || x.trip_ms != null));
+  const p = d.project;
+  if (!cs.length && !rcds.length && p.earth_ohm == null) return [];
+  let b = txt(CX, CY + 5, 'Aarding', { bold: true, size: 3.4 }) + txt(CX + 4, CY + 11, `${p.earth_type || 'Type onbekend'} · aardingsweerstand: ${p.earth_ohm != null ? p.earth_ohm + ' Ω' : 'niet gemeten'}`, { size: 3 });
+  let y = CY + 20;
+  if (rcds.length) {
+    b += txt(CX, y, 'Differentieeltest', { bold: true, size: 3.4 });
+    rcds.slice(0, 8).forEach((x, i) => { b += txt(CX + 4, y + 6 + i * 5, `${deviceTitle(x)}: uitschakelstroom ${x.trip_ma ?? '—'} mA · uitschakeltijd ${x.trip_ms ?? '—'} ms`, { size: 3 }); });
+    y += 8 + Math.min(8, rcds.length) * 5 + 4;
+  }
+  if (cs.length) {
+    const RH = 5.6, per = Math.max(3, Math.floor((CY + CH - y - 14) / RH)), X = [CX, CX + 16, CX + 130, CX + 175, CX + 220];
+    b += rect(CX, y, CW, 6.4, { fill: '#e6e9ee' }) + ['Kring', 'Omschrijving', 'Isolatie (MΩ)', 'Lus (Ω)', 'Datum'].map((hd, k) => txt(X[k] + 2, y + 4.4, hd, { bold: true, size: 2.9 })).join('');
+    cs.slice(0, per).forEach((c, r) => { const yy = y + 6.4 + r * RH; if (r % 2 === 0) b += rect(CX, yy, CW, RH, { fill: '#f3f5f8' });
+      b += txt(X[0] + 2, yy + 4, c.nr ?? '', { bold: true, size: 3.2 }) + txt(X[1] + 2, yy + 4, clip(c.name, 60), { size: 2.9 }) + txt(X[2] + 2, yy + 4, String(c.insulation_mohm ?? '—'), { size: 2.9 }) + txt(X[3] + 2, yy + 4, String(c.loop_ohm ?? '—'), { size: 2.9 }) + txt(X[4] + 2, yy + 4, c.measured_at ?? '', { size: 2.9 }); });
+    if (cs.length > per) b += txt(CX, CY + CH - 1, `… en ${cs.length - per} kring(en) meer (zie de app)`, { size: 2.4, fill: '#555' });
+  }
+  return [{ title: 'Metingen', body: b }];
+}
+
 /** Alle pagina's als volledige SVG-strings (A4 liggend). */
 export function buildPdfPages(d: PdfData, o: PdfOptions): string[] {
   if (o.proposal) {
@@ -328,5 +351,6 @@ export function buildPdfPages(d: PdfData, o: PdfOptions): string[] {
   if (o.plans) for (const pp of d.plans) { const s = planSheet(d, pp, o.photoOnPlans); if (s) sheets.push(s); }
   if (o.photos) sheets.push(...photoSheets(d));
   if (o.list) for (const st of o.states) sheets.push(...listSheets(d, st, multi));
+  if (o.list && o.states.includes('bestaand')) sheets.push(...measureSheets(d));
   return sheets.map((s, i) => framePage(d, s, i + 1, sheets.length));
 }

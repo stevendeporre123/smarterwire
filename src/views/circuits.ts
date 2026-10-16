@@ -44,6 +44,9 @@ export async function editCircuit(project: Project, circuit: Partial<Circuit>, o
     { key: 'status', label: 'Status (gedocumenteerd volgt vanzelf uit de kabelgegevens)', type: 'select', options: STATUSES, allowEmpty: false, advanced: true },
     { key: 'feeds_board_id', label: 'Voedt onderverdeler', type: 'select', options: old.filter((b) => b.id !== hostBoard).map((b) => ({ value: b.id, label: b.name })), advanced: true },
     { key: 'lock_group', label: 'Samen houden (gedeelde nul)', placeholder: 'zelfde tekst = zelfde differentieel', advanced: true },
+    { key: 'insulation_mohm', label: 'Isolatieweerstand (MΩ)', type: 'number', advanced: true },
+    { key: 'loop_ohm', label: 'Lusimpedantie (Ω)', type: 'number', advanced: true },
+    { key: 'measured_at', label: 'Datum meting', type: 'date', advanced: true },
     { key: 'notes', label: 'Notities / opmerkingen keuring', type: 'textarea', span: 2, advanced: true },
   ];
   const idx = ctx.list && circuit.id ? ctx.list.findIndex((c) => c.id === circuit.id) : -1;
@@ -113,7 +116,7 @@ export async function renderCircuits(root: HTMLElement, project: Project) {
   const devs = new Map<string, Device>();
   const boardName = new Map(boards.map((b) => [b.id, b.name]));
   for (const b of boards) for (const d of await devicesOf(b.id)) devs.set(d.id, d);
-  const found = runChecks({ circuits, devices: [...devs.values()], loads: await projectLoads(project.id), projectSupplyAmp: project.supply_amp });
+  const found = runChecks({ circuits, devices: [...devs.values()], loads: await projectLoads(project.id), projectSupplyAmp: project.supply_amp, earthOhm: project.earth_ohm });
   const foundBy = new Map<string, Finding[]>();
   for (const f of found) if (f.circuitId) (foundBy.get(f.circuitId) ?? foundBy.set(f.circuitId, []).get(f.circuitId)!).push(f);
   const symCounts = new Map<string, number>((await q('symCounts', { project: project.id }))

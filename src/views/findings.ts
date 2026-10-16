@@ -12,7 +12,7 @@ const LEVELS: { id: Level; label: string; kind: 'err' | 'warn' | 'info' }[] = [
 /** Alle controles voor een project uitvoeren. */
 export async function projectFindings(project: Project): Promise<Finding[]> {
   const [circuits, devices, loads] = await Promise.all([circuitsOf(project.id), allDevicesOfProject(project.id), projectLoads(project.id)]);
-  return runChecks({ circuits, devices, loads, projectSupplyAmp: project.supply_amp });
+  return runChecks({ circuits, devices, loads, projectSupplyAmp: project.supply_amp, earthOhm: project.earth_ohm });
 }
 
 export async function renderFindings(root: HTMLElement, project: Project) {

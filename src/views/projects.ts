@@ -19,6 +19,8 @@ export const projectFields = [
   { key: 'supply_cable', label: 'Voedingskabel', placeholder: 'bv. XVB Cca 4x10' },
   { key: 'inspector', label: 'Keuringsinstelling', list: INSPECTORS },
   { key: 'inspector_info', label: 'Adres en contact keuringsinstelling', type: 'textarea' as const, placeholder: 'Straat en nummer\npostcode gemeente\nondernemingsnummer…', span: 2 as const },
+  { key: 'earth_type', label: 'Type aarding', type: 'select' as const, options: ['Aardingslus', 'Lintaarde (funderingsaarde)', 'Aardingspaal', 'Andere'] },
+  { key: 'earth_ohm', label: 'Aardingsweerstand (Ω)', type: 'number' as const, placeholder: 'gemeten' },
   { key: 'notes', label: 'Notities', type: 'textarea' as const, span: 2 as const },
 ];
 
