@@ -43,7 +43,7 @@ function framePage(d: PdfData, sh: Sheet, n: number, total: number): string {
   const ty = TB_Y + 4;
   // plaats van de installatie
   out.push(txt(col(0).x + 2, ty, 'Plaats van de elektrische installatie', { bold: true }));
-  [p.owner ?? '', ...lines(p.address)].filter(Boolean).slice(0, 6).forEach((l, i) => out.push(txt(col(0).x + 4, ty + 3.6 * (i + 1), clip(l, Math.floor(col(0).w / 1.3)))));
+  [p.owner ?? '', ...lines(p.address), p.ean ? `EAN ${p.ean}` : ''].filter(Boolean).slice(0, 6).forEach((l, i) => out.push(txt(col(0).x + 4, ty + 3.6 * (i + 1), clip(l, Math.floor(col(0).w / 1.3)))));
   // installateur
   const ic = col(1), logoW = d.installer.logo ? 22 : 0;
   out.push(txt(ic.x + 2, ty, 'Installateur', { bold: true }));
@@ -60,7 +60,8 @@ function framePage(d: PdfData, sh: Sheet, n: number, total: number): string {
   const pc = col(3);
   out.push(txt(pc.x + 2, ty, `p. ${n}/${total}`, { bold: true }), txt(pc.x + 2, ty + 3.6, clip(sh.title, Math.floor(pc.w / 1.3)), { bold: true }),
     `<path d="M${pc.x} ${ty + 5.2} H${PW - FM}" stroke="#000" stroke-width="0.3"/>`, txt(pc.x + 2, ty + 9, supplyText(s)),
-    `<path d="M${pc.x} ${ty + 10.8} H${PW - FM}" stroke="#000" stroke-width="0.3"/>`, txt(pc.x + 2, ty + 14.4, supplyExtra(s, p.supply_amp)));
+    `<path d="M${pc.x} ${ty + 10.8} H${PW - FM}" stroke="#000" stroke-width="0.3"/>`, txt(pc.x + 2, ty + 14.4, supplyExtra(s, p.supply_amp)),
+    `<path d="M${pc.x} ${ty + 16.2} H${PW - FM}" stroke="#000" stroke-width="0.3"/>`, txt(pc.x + 2, ty + 20, `Datum: ${new Date().toLocaleDateString('nl-BE')}`));
   return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 ${PW} ${PH}" width="${PW}mm" height="${PH}mm" font-family="Arial, Helvetica, sans-serif">
 <rect width="${PW}" height="${PH}" fill="#fff"/>
 ${out.join('\n')}
@@ -75,7 +76,7 @@ const place = (svg: string, x: number, y: number, w: number, h: number) =>
 function schemaSheets(d: PdfData, which: 'bestaand' | 'nieuw', multi: boolean): Sheet[] {
   const boards = d.boards.filter((b) => b.kind === which).map((board) => ({ board, devices: d.devices.filter((x) => x.board_id === board.id) }));
   if (!boards.length) return [];
-  const base = { title: '', boards, circuits: d.circuits, symbols: d.symbols, which, supply: supplyOf(d.project), ean: d.project.ean, supplyCable: d.project.supply_cable };
+  const base = { title: '', boards, circuits: d.circuits, symbols: d.symbols, which, supply: supplyOf(d.project), ean: d.project.ean, supplyCable: d.project.supply_cable, supplyAmp: d.project.supply_amp };
   const full = buildDiagram(base);
   // pagina-indeling: breek af op het einde van een kring of groep, bij voorkeur tussen groepen (laagste niveau), anders zo ver mogelijk
   const ranges: { x0: number; x1: number; cont: boolean }[] = [];

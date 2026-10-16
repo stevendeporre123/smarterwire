@@ -1,5 +1,5 @@
 import type { Board, Circuit, Device } from './model';
-import { IN_WALL_MODES, cableLabel, deviceTitle, isGroupParent, isFeeder, polesLabel, supplyLabel, isThreePhase, type Supply } from './devices';
+import { IN_WALL_MODES, supplyExtra, cableLabel, deviceTitle, isGroupParent, isFeeder, polesLabel, supplyLabel, isThreePhase, type Supply } from './devices';
 import { symbolGeom, symbolMarkup, areiSymbol, isApplianceType } from './areisymbols';
 import { esc } from '../lib/dom';
 
@@ -22,7 +22,7 @@ const BUS_PAD = 22;
 const BREAKER_TOP = 40; // hoogte van de beveiliging boven de bus
 const CABLE_TOP = 205;  // vanaf hier beginnen de verbruikers (daaronder: beveiliging, kabelsymbolen en kabeltekst)
 const ROW = 44;         // hoogte per rij met verbruikers
-const NAME_LEN = 110;
+const NAME_LEN = 180;
 
 type Item =
   | { t: 'circuit'; d: Device; x: number; cs: Circuit[]; end: number; w: number }
@@ -50,6 +50,8 @@ function breakerSymbol(x: number, y: number, kind: 'automaat' | 'diff' | 'schake
 export function buildDiagram(opts: {
   title: string; boards: DiagramBoard[]; circuits: Circuit[]; symbols: DiagramSymbol[]; which: 'bestaand' | 'nieuw';
   supply: Supply; meta?: string[]; ean?: string | null;
+  /** stroom van de aansluiting (A), getoond bij de teller */
+  supplyAmp?: number | null;
   /** voedingskabel naar de hoofdbeveiliging, bv. "XVB Cca 4x10" */
   supplyCable?: string | null;
   /** alleen het deel tussen x0 en x1 (voor PDF-pagina's); zonder titel, legende en gegevens */
@@ -259,7 +261,7 @@ export function buildDiagram(opts: {
       if (opts.showSlots === 'load' && cs[0]) parts.push(slot(`data-slot="chain" data-cid="${cs[0].id}" data-idx="${i}"`, cx + (label ? 24 : 14), ry));
     });
     if (opts.showSlots === 'load' && cs[0]) for (let k = 0; k <= rows.length; k++) parts.push(slot(`data-slot="load" data-cid="${cs[0].id}" data-idx="${k}"`, x, y0 - CABLE_TOP - (k - 0.5) * ROW - 10));
-    if (name) parts.push(vtext(x + 4, topY - 8, clip(name, 24), 't-c'));
+    if (name) parts.push(vtext(x + 4, topY - 8, clip(name, name.length > 22 ? 36 : 24), name.length > 22 ? 't-c-s' : 't-c'));
   };
 
   const drawSpd = (it: Extract<Item, { t: 'spd' }>, y0: number) => {
@@ -291,7 +293,7 @@ export function buildDiagram(opts: {
         parts.push(hit(`data-did="${d.id}"`, it.stubX - 12, my - 56, 150, 70, d.id === opts.selDevice));
         parts.push(`<rect x="${it.stubX - 4}" y="${my - 52}" width="8" height="62" fill="#fff"/>`, breakerSymbol(it.stubX, my, 'diff'));
         parts.push(`<text x="${it.stubX + 16}" y="${my - 22}" class="t-b">${esc(t1)}</text>`, `<text x="${it.stubX + 16}" y="${my - 9}" class="t-s">${esc(t2)}</text>`);
-        if (d.label) parts.push(`<text x="${it.stubX + 16}" y="${my - 36}" class="t-s">${esc(clip(d.label, 18))}</text>`);
+        if (d.label) parts.push(`<text x="${it.stubX + 16}" y="${my - 36}" class="t-s">${esc(clip(d.label, 30))}</text>`);
         drawBus(it.bus, y0, it.stubX);
       }
     }
@@ -314,15 +316,19 @@ export function buildDiagram(opts: {
       // voeding: kabel van de teller → hoofddifferentieel (horizontaal onder de bus) → bus
       const baseY = y0 + 52, ex = b.x0 + 290, runL = b.x0 + 62, dx = runL + 90;
       parts.push(hit('data-sup="1"', runL - 6, baseY - 12, 96, 44, !!opts.selSupply));
-      parts.push(`<path d="M${ex} ${y0} V${baseY} H${dx + 46}" class="ln"/>`, `<path d="M${runL} ${baseY} H${dx}" class="ln"/>`);
-      if (opts.supplyCable) parts.push(`<text x="${runL + 2}" y="${baseY + 14}" class="t-s">${esc(clip(opts.supplyCable, 20))}</text>`);
-      if (opts.ean) parts.push(`<text x="${runL + 2}" y="${baseY + 46}" class="t-s">EAN ${esc(opts.ean)}</text>`);
+      parts.push(`<path d="M${ex} ${y0} V${baseY} H${dx + 46}" class="ln"/>`, `<path d="M${runL - 2} ${baseY} H${dx}" class="ln"/>`);
+      // teller: kWh-meter vóór de hoofdbeveiliging, met de aansluiting (A, polen) eronder
+      parts.push(`<rect x="${runL - 32}" y="${baseY - 9}" width="30" height="18" class="box"/><text x="${runL - 17}" y="${baseY + 3.5}" class="t-icc" text-anchor="middle">kWh</text>`,
+        `<text x="${runL - 17}" y="${baseY - 14}" class="t-b" text-anchor="middle">Teller</text>`,
+        `<text x="${runL - 32}" y="${baseY + 22}" class="t-s">${esc(supplyExtra(opts.supply, opts.supplyAmp))}</text>`);
+      if (opts.supplyCable) parts.push(`<text x="${runL + 2}" y="${baseY - 6}" class="t-s">${esc(clip(opts.supplyCable, 20))}</text>`);
+      if (opts.ean) parts.push(`<text x="${runL - 32}" y="${baseY + 46}" class="t-s">EAN ${esc(opts.ean)}</text>`);
       if (b.head) {
         const [t1, t2] = protText(b.head);
         parts.push(hit(`data-did="${b.head.id}"`, dx - 8, baseY - 40, 150, 76, b.head.id === opts.selDevice));
         parts.push(`<g transform="translate(${dx} ${baseY}) rotate(90) translate(${-dx} ${-baseY})">${breakerSymbol(dx, baseY, b.head.kind === 'differentieel' ? 'diff' : 'automaat')}</g>`,
           `<text x="${dx}" y="${baseY - 10}" class="t-b">${esc(t1)}</text>`, `<rect x="${dx + 6}" y="${baseY + 6}" width="28" height="12" class="box-s"/><text x="${dx + 20}" y="${baseY + 15}" class="t-icc" text-anchor="middle">3000</text>`, `<text x="${dx + 6}" y="${baseY + 31}" class="t-s">${esc(t2)}</text>`);
-      } else parts.push(`<path d="M${dx} ${baseY} H${dx + 46}" class="ln"/>`);
+      } else parts.push(`<path d="M${dx} ${baseY} H${dx + 46}" class="ln"/>`, `<text x="${dx}" y="${baseY - 8}" class="t-w">Hoofdbeveiliging ontbreekt</text>`);
     }
     if (boards.length > 1) parts.push(`<text x="${b.x0 - 20}" y="${y0 + 200}" class="t-h2">${esc(blk.board.name)}</text>`);
   }
@@ -351,6 +357,7 @@ export function buildDiagram(opts: {
 .t-s{font-size:9.5px;fill:#000}
 .t-icc{font-size:9px;fill:#000}
 .t-c{font-size:11px;font-weight:600;fill:#000}
+.t-c-s{font-size:9px;font-weight:600;fill:#000}
 .t-nr{font-size:15px;font-weight:700;fill:#000}
 .t-addr{font-size:9px;font-style:italic;fill:#1d4f91}
 .t-w{font-size:11px;font-weight:600;fill:#c00}

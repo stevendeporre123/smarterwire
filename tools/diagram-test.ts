@@ -19,4 +19,4 @@ const sym = (cid: string, type: string, label = '') => ({ circuit_id: cid, type,
 const symbols = [sym('c1', 'lichtpunt', 'living'), sym('c1', 'lichtpunt', 'living'), sym('c1', 'schakelaar', 'living'), sym('c1', 'wissel', 'gang'), sym('c1', 'lichtpunt_wand', 'keuken'),
   sym('c2', 'stopcontact', 'living'), sym('c2', 'stopcontact', 'living'), sym('c2', 'stopcontact', 'living'), sym('c2', 'stopcontact2', 'tv'), sym('c3', 'stopcontact', 'keuken'), sym('c3', 'stopcontact_ik', 'keuken'),
   sym('c4', 'kookplaat', 'keuken'), sym('c5', 'boiler', 'berging'), sym('c5', 'stopcontact', 'berging')];
-document.getElementById('o')!.innerHTML = buildSingleLineSvg({ title: 'Eendraadschema – test', boards: [{ board: b, devices }], circuits, symbols, which: 'nieuw', supply: '1x230', ean: '541449200000000000', meta: ['Testproject'] });
+document.getElementById('o')!.innerHTML = buildSingleLineSvg({ title: 'Eendraadschema – test', boards: [{ board: b, devices }], circuits, symbols, which: 'nieuw', supply: '1x230', supplyAmp: 40, ean: '541449200000000000', meta: ['Testproject'] });

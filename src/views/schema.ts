@@ -60,7 +60,7 @@ export async function renderSchema(root: HTMLElement, project: Project) {
     const bs = boards.filter((b) => b.kind === which);
     const withDevs = bs.map((board) => ({ board, devices: devices.filter((d) => d.board_id === board.id) }));
     current = buildDiagram({
-      title: `Eendraadschema – ${which === 'nieuw' ? 'nieuwe toestand' : 'bestaande toestand'}`, boards: withDevs, circuits, symbols: allLoads(), which, supply: supply(), ean: project.ean, supplyCable: project.supply_cable,
+      title: `Eendraadschema – ${which === 'nieuw' ? 'nieuwe toestand' : 'bestaande toestand'}`, boards: withDevs, circuits, symbols: allLoads(), which, supply: supply(), ean: project.ean, supplyCable: project.supply_cable, supplyAmp: project.supply_amp,
       selCircuit: sel?.kind === 'circuit' ? sel.id : null, selDevice: sel?.kind === 'device' ? sel.id : null, selSupply: sel?.kind === 'supply', selLoad: sel?.kind === 'load' ? sel.id : null, showSlots: slotMode(),
       meta: [project.name, [project.owner, project.address?.replace(/\n/g, ', ')].filter(Boolean).join(' · '), project.inspector ?? '', new Date().toLocaleDateString('nl-BE')].filter(Boolean) as string[],
     }).svg;
