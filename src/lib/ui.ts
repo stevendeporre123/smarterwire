@@ -119,6 +119,8 @@ export function formModal(opts: {
   title: string; fields: FieldDef[]; values: Record<string, any>;
   onSave: (v: Record<string, any>) => Promise<void | false> | void | false;
   onDelete?: () => Promise<void> | void; wide?: boolean; extra?: HTMLElement; saveLabel?: string;
+  /** Tweede opslaan-knop (bv. "Opslaan & volgende"): bewaart via `onSave`, sluit en roept daarna dit aan met de opgeslagen waarden. */
+  saveNext?: { label: string; then: (v: Record<string, any>) => void };
 }) {
   const form = buildForm(opts.fields, opts.values);
   const body = h('div', null, form.el, opts.extra);
@@ -128,6 +130,7 @@ export function formModal(opts: {
       opts.onDelete ? btn('Verwijderen', { icon: 'Trash2', variant: 'danger', onClick: async () => { if (await confirmDialog({ title: 'Verwijderen', message: 'Zeker verwijderen?' })) { await opts.onDelete!(); close(); } } }) : h('span'),
       h('span', { class: 'spacer' }),
       btn('Annuleren', { variant: 'ghost', onClick: close }),
+      ...(opts.saveNext ? [btn(opts.saveNext.label, { icon: 'ChevronsRight', variant: 'secondary', onClick: async () => { const v = form.read(); if ((await opts.onSave(v)) !== false) { close(); opts.saveNext!.then(v); } } })] : []),
       btn(opts.saveLabel ?? 'Opslaan', { icon: 'Check', variant: 'primary', onClick: async () => { if ((await opts.onSave(form.read())) !== false) close(); } }),
     ],
   });
