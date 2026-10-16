@@ -35,7 +35,7 @@ export async function renderPlan(root: HTMLElement, project: Project) {
       const f = fileInput.files?.[0]; if (!f) return;
       const name = await promptDialog({ title: 'Nieuw plan', label: 'Naam van het plan', value: newPlanName() }); if (!name) return;
       const img = await saveImage(f, 3200);
-      const p = await upsert('plan', { project_id: project.id, name, asset_id: img.id, level: String(plans.length), w: img.width, h: img.height });
+      const p = await upsert('plan', { project_id: project.id, name, asset_id: img.id, level: name, w: img.width, h: img.height });
       localStorage.setItem(LS(project.id), p.id); reload();
     };
     fileInput.click();
@@ -47,7 +47,7 @@ export async function renderPlan(root: HTMLElement, project: Project) {
     values: { name: newPlanName(), width_m: 12, height_m: 8 },
     onSave: async (v) => {
       const wm = Math.min(100, Math.max(2, Number(v.width_m) || 12)), hm = Math.min(100, Math.max(2, Number(v.height_m) || 8));
-      const p = await upsert('plan', { project_id: project.id, name: v.name, level: String(plans.length), w: Math.round(wm * 100), h: Math.round(hm * 100), scale: 100 });
+      const p = await upsert('plan', { project_id: project.id, name: v.name, level: v.name, w: Math.round(wm * 100), h: Math.round(hm * 100), scale: 100 });
       localStorage.setItem(LS(project.id), p.id); reload();
     },
   });
@@ -163,7 +163,7 @@ export async function renderPlan(root: HTMLElement, project: Project) {
     h('div', { class: 'toolbar', style: { flexWrap: 'wrap' } }, planSel, fileInput,
       btn('', { icon: 'Plus', variant: 'ghost', title: 'Plan toevoegen (foto)', onClick: addPhotoPlan }),
       btn('', { icon: 'FilePlus', variant: 'ghost', title: 'Leeg plan toevoegen', onClick: addBlankPlan }),
-      btn('', { icon: 'Pencil', variant: 'ghost', title: 'Plan hernoemen', onClick: () => formModal({ title: 'Plan', fields: [{ key: 'name', label: 'Naam', span: 2 }, { key: 'level', label: 'Niveau', span: 2 }], values: plan,
+      btn('', { icon: 'Pencil', variant: 'ghost', title: 'Plan hernoemen', onClick: () => formModal({ title: 'Plan', fields: [{ key: 'name', label: 'Naam', span: 2 }, { key: 'level', label: 'Verdieping (zo heet ze bij de kringen)', span: 2 }], values: plan,
         onSave: async (v) => { await upsert('plan', { ...plan, ...v }); reload(); }, onDelete: async () => { await softDelete('plan', plan.id); reload(); } }) }),
       scaleBtn, undoBtn, redoBtn,
       btn('', { icon: 'Maximize', variant: 'ghost', title: 'Passend zoomen op de tekening', onClick: () => fitContent() }),

@@ -3,7 +3,7 @@ import { buildForm, badge, confirmDialog, type FieldDef } from '../lib/ui';
 import { upsert, putOp, setOp, whereOp, softDelete } from '../db/repo';
 import { run, type Op } from '../db/client';
 import { uid } from '../lib/id';
-import { boardsOf, circuitsOf, allDevicesOfProject, type Project, type Circuit, type Device } from '../domain/model';
+import { boardsOf, circuitsOf, plansOf, allDevicesOfProject, type Project, type Circuit, type Device } from '../domain/model';
 import { buildDiagram } from '../domain/diagram';
 import {
   CABLE_TYPES, FIRE_CLASSES, FUNCTIONS, INSTALL_MODES, CONDUIT_MODES, SECTIONS, STATUSES, CABLE_PRESETS, EARTH_MODES, autoStatus, SUPPLIES, supplyOf, isThreePhase, defaultModules, deviceTitle, DEVICE_KINDS,
@@ -22,7 +22,7 @@ interface Fav { tool: string; key?: string }
 interface PalItem { tool: string; label: string; group: string; icon: () => Element; kw?: string }
 
 export async function renderSchema(root: HTMLElement, project: Project) {
-  const boards = await boardsOf(project.id);
+  const boards = await boardsOf(project.id), plans = await plansOf(project.id);
   if (!boards.length) {
     root.append(h('div', { class: 'page' }, h('div', { class: 'card empty-state' }, icon('Workflow', 40), h('h3', null, 'Nog geen schema'), h('p', null, 'Voeg eerst een zekeringskast toe en documenteer enkele kringen.'))));
     return;
@@ -372,7 +372,7 @@ export async function renderSchema(root: HTMLElement, project: Project) {
       { key: 'cable_type', label: 'Kabeltype', type: 'select', options: CABLE_TYPES }, { key: 'fire_class', label: 'Brandklasse', type: 'select', options: FIRE_CLASSES },
       { key: 'section_mm2', label: 'Doorsnede (mm²)', type: 'select', options: SECTIONS, numeric: true }, { key: 'wires', label: 'Aantal aders', type: 'number' }, { key: 'has_earth', label: 'Aarding (beschermgeleider)', type: 'select', options: EARTH_MODES },
       { key: 'install', label: 'Plaatsing', type: 'select', options: INSTALL_MODES }, { key: 'conduit', label: 'Los of in buis', type: 'select', options: CONDUIT_MODES, numeric: true },
-      { key: 'rooms', label: 'Ruimtes', advanced: true, span: 2 }, { key: 'level', label: 'Verdieping', advanced: true }, { key: 'status', label: 'Status', type: 'select', options: STATUSES, allowEmpty: false, advanced: true },
+      { key: 'rooms', label: 'Ruimtes', advanced: true, span: 2 }, { key: 'level', label: 'Verdieping', type: 'select', options: [...new Set([...plans.map((p) => p.level || p.name), ...(c.level ? [c.level] : [])])], advanced: true }, { key: 'status', label: 'Status', type: 'select', options: STATUSES, allowEmpty: false, advanced: true },
       { key: 'lock_group', label: 'Samen houden (gedeelde nul)', advanced: true, span: 2 }, { key: 'notes', label: 'Notities', type: 'textarea', advanced: true, span: 2 },
     ];
     side.append(head(`Kring ${c.nr ?? ''}`, c.name), autoForm(form, c, 'circuit'));

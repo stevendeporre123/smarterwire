@@ -5,6 +5,13 @@ import { q, run } from '../db/client';
 import { boardsOf, devicesOf, circuitsOf, plansOf, type Circuit, type Device, type Project } from '../domain/model';
 import { CABLE_TYPES, FIRE_CLASSES, FUNCTIONS, INSTALL_MODES, CONDUIT_MODES, SECTIONS, STATUSES, EARTH_MODES, autoStatus, cableLabel, cableMissing, deviceTitle, devicePlaces, isFeeder, supplyOf, supplyVoltages } from '../domain/devices';
 
+/** Verdiepingen = de aangemaakte plannen (geen vrije tekst meer: typfouten gaven dubbele groepen). Een bestaande afwijkende waarde blijft kiesbaar. */
+const levelOptions = (plans: { name: string; level?: string | null }[], current?: string | null) => {
+  const v = [...new Set(plans.map((p) => p.level || p.name))];
+  if (current && !v.includes(current)) v.push(current);
+  return v;
+};
+
 /** Kabelgegevens die je van een andere kring kunt overnemen. */
 const COPY_KEYS = ['cable_type', 'fire_class', 'section_mm2', 'wires', 'has_earth', 'install', 'conduit', 'level'] as const;
 
@@ -29,7 +36,7 @@ export async function editCircuit(project: Project, circuit: Partial<Circuit>, o
     { key: 'install', label: 'Plaatsing *', type: 'select', options: INSTALL_MODES },
     { key: 'conduit', label: 'Los of in buis', type: 'select', options: CONDUIT_MODES, numeric: true },
     // --- zelden nodig ---
-    { key: 'level', label: 'Verdieping', list: plans.map((p) => p.level || p.name), advanced: true },
+    { key: 'level', label: 'Verdieping', type: 'select', options: levelOptions(plans, circuit.level), advanced: true },
     { key: 'rooms', label: 'Ruimtes', placeholder: 'living, keuken…', advanced: true },
     ...(supply === '3N400' ? [{ key: 'voltage', label: 'Spanning (V)', type: 'select' as const, options: supplyVoltages(supply), numeric: true, allowEmpty: false, advanced: true }] : []),
     { key: 'status', label: 'Status (gedocumenteerd volgt vanzelf uit de kabelgegevens)', type: 'select', options: STATUSES, allowEmpty: false, advanced: true },
@@ -66,7 +73,7 @@ async function bulkEdit(project: Project, chosen: Circuit[], onDone: () => void)
   const plans = await plansOf(project.id);
   const fields: FieldDef[] = [
     { key: 'func', label: 'Functie', type: 'select', options: FUNCTIONS },
-    { key: 'level', label: 'Verdieping', list: plans.map((p) => p.level || p.name) },
+    { key: 'level', label: 'Verdieping', type: 'select', options: levelOptions(plans) },
     { key: 'cable_type', label: 'Kabeltype', type: 'select', options: CABLE_TYPES },
     { key: 'fire_class', label: 'Brandklasse', type: 'select', options: FIRE_CLASSES },
     { key: 'section_mm2', label: 'Doorsnede (mm²)', type: 'select', options: SECTIONS, numeric: true },
