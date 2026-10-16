@@ -91,44 +91,56 @@ function review(project: Project, board: Board, feeders: Device[], circuits: Cir
   });
 }
 
-/** Snel: foto van de beschrijvingen nemen/kiezen, bewaren bij de kast en meteen koppelen. */
-export async function captureLabels(project: Project, board: Board, camera: boolean, onDone: () => void) {
-  const f = await pick(camera); if (!f) return;
-  const stop = busy('Foto wordt opgeslagen…');
-  let id: string;
-  try { id = (await saveImage(f)).id; await upsert('board_photo', { board_id: board.id, asset_id: id, kind: 'beschrijving' }); }
-  catch (e: any) { toast(e?.message ?? 'Foto opslaan mislukt', 'error'); return; }
-  finally { stop(); }
-  await linkLabels(project, board, id, onDone);
+export interface GalleryOpts {
+  onDone: () => void;
+  /** hoofdfoto van de kast (voor het herkennen van de toestellen) */
+  mainUrl: string | null;
+  setMain: (f: File) => Promise<void>;
+  recognise: () => void;
 }
 
-/** Galerij van alle foto's van een kast (extra foto's, beschrijvingen, bekabeling, typeplaatjes). */
-export async function openGallery(project: Project, board: Board, onDone: () => void) {
+/** Eén plek voor alle foto's van een kast: de hoofdfoto (toestellen herkennen) en extra foto's (beschrijvingen koppelen, bekabeling, typeplaatjes). */
+export async function openGallery(project: Project, board: Board, o: GalleryOpts) {
   const photos = await list<BoardPhoto>('board_photo', board.id);
-  let kind = 'kast';
-  const grid = h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '10px', marginTop: '10px' } });
-  const kindSel = h('select', { onChange: (e: Event) => { kind = (e.target as HTMLSelectElement).value; } }, Object.entries(PHOTO_KINDS).map(([v, l]) => h('option', { value: v, selected: v === kind }, l))) as HTMLSelectElement;
-  const add = async (camera: boolean) => {
+  let kind = 'beschrijving';
+  let closeFn: (() => void) | undefined;
+  const reopen = () => { closeFn?.(); openGallery(project, board, o); };
+  const kindSel = h('select', { title: 'Soort foto', onChange: (e: Event) => { kind = (e.target as HTMLSelectElement).value; } },
+    ['beschrijving', 'bekabeling', 'typeplaatje', 'kast', 'overig'].map((v) => h('option', { value: v, selected: v === kind }, PHOTO_KINDS[v]))) as HTMLSelectElement;
+  const addExtra = async (camera: boolean) => {
     const f = await pick(camera); if (!f) return;
     const stop = busy('Foto wordt opgeslagen…');
-    try { const img = await saveImage(f); await upsert('board_photo', { board_id: board.id, asset_id: img.id, kind }); toast('Foto toegevoegd'); }
-    catch (e: any) { toast(e?.message ?? 'Foto opslaan mislukt', 'error'); stop(); return; }
-    stop(); closeFn?.(); openGallery(project, board, onDone);
+    let id: string;
+    try { id = (await saveImage(f)).id; await upsert('board_photo', { board_id: board.id, asset_id: id, kind }); }
+    catch (e: any) { toast(e?.message ?? 'Foto opslaan mislukt', 'error'); return; }
+    finally { stop(); }
+    if (kind === 'beschrijving') { closeFn?.(); await linkLabels(project, board, id, o.onDone); } else { toast('Foto toegevoegd'); reopen(); }
   };
-  let closeFn: (() => void) | undefined;
+  const setMain = async (camera: boolean) => { const f = await pick(camera); if (!f) return; closeFn?.(); await o.setMain(f); };
+
+  const grid = h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '10px', marginTop: '10px' } });
   for (const p of photos) {
     const url = await assetUrl(p.asset_id);
     grid.append(h('figure', { style: { margin: 0 } },
       h('a', { href: url ?? '#', target: '_blank', rel: 'noopener' }, h('img', { src: url ?? '', alt: PHOTO_KINDS[p.kind] ?? p.kind, style: { width: '100%', height: '110px', objectFit: 'cover', borderRadius: '6px', border: '1px solid #ccc' } })),
       h('figcaption', { class: 'hint', style: { display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' } }, PHOTO_KINDS[p.kind] ?? p.kind,
-        p.kind === 'beschrijving' ? btn('Koppelen', { icon: 'Link', variant: 'ghost', title: 'Beschrijvingen lezen en aan de zekeringen koppelen', onClick: () => { closeFn?.(); linkLabels(project, board, p.asset_id, onDone); } }) : null,
-        btn('', { icon: 'Trash2', variant: 'ghost', title: 'Foto verwijderen', onClick: async () => { if (await confirmDialog({ title: 'Foto verwijderen', message: 'Deze foto verwijderen?' })) { await softDelete('board_photo', p.id); closeFn?.(); openGallery(project, board, onDone); } } }))));
+        p.kind === 'beschrijving' ? btn('Koppelen', { icon: 'Link', variant: 'ghost', title: 'Beschrijvingen lezen en aan de zekeringen koppelen', onClick: () => { closeFn?.(); linkLabels(project, board, p.asset_id, o.onDone); } }) : null,
+        btn('', { icon: 'Trash2', variant: 'ghost', title: 'Foto verwijderen', onClick: async () => { if (await confirmDialog({ title: 'Foto verwijderen', message: 'Deze foto verwijderen?' })) { await softDelete('board_photo', p.id); reopen(); } } }))));
   }
-  if (!photos.length) grid.append(h('p', { class: 'hint' }, 'Nog geen extra foto\'s. De hoofdfoto van de kast staat in de kastweergave; hier komen foto\'s van de beschrijvingen, bekabeling en typeplaatjes.'));
+  if (!photos.length) grid.append(h('p', { class: 'hint' }, 'Nog geen extra foto’s.'));
+
   modal({
-    title: `Foto's – ${board.name}`, wide: true,
-    body: h('div', null, h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' } }, h('span', { class: 'hint' }, 'Soort:'), kindSel,
-      btn('Camera', { icon: 'Camera', onClick: () => add(true) }), btn('Foto kiezen', { icon: 'Upload', onClick: () => add(false) })), grid),
+    title: `Foto’s – ${board.name}`, wide: true,
+    body: h('div', null,
+      h('h4', null, 'Hoofdfoto van de kast'),
+      h('div', { style: { display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' } },
+        o.mainUrl ? h('img', { src: o.mainUrl, alt: 'Hoofdfoto', style: { height: '64px', borderRadius: '6px', border: '1px solid #ccc' } }) : null,
+        btn('Camera', { icon: 'Camera', onClick: () => setMain(true) }), btn(o.mainUrl ? 'Andere foto' : 'Foto kiezen', { icon: 'Upload', onClick: () => setMain(false) }),
+        o.mainUrl ? btn('Toestellen herkennen (AI)', { icon: 'Sparkles', variant: 'accent', onClick: () => { closeFn?.(); o.recognise(); } }) : null),
+      h('p', { class: 'hint' }, 'Na een nieuwe hoofdfoto worden de toestellen meteen herkend als de kast nog leeg is.'),
+      h('h4', { style: { marginTop: '16px' } }, 'Extra foto’s'),
+      h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' } }, kindSel, btn('Camera', { icon: 'Camera', onClick: () => addExtra(true) }), btn('Foto kiezen', { icon: 'Upload', onClick: () => addExtra(false) })),
+      h('p', { class: 'hint' }, 'Bij “Beschrijvingen / legende” leest de AI de strookjes en koppelt ze meteen aan de zekeringen.'), grid),
     onClose: () => { closeFn = undefined; },
     actions: (close) => { closeFn = close; return [h('span', { class: 'spacer' }), btn('Sluiten', { variant: 'primary', onClick: close })]; },
   });

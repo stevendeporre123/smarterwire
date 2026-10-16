@@ -137,6 +137,30 @@ export function formModal(opts: {
   return form;
 }
 
+// ---------- uitklapmenu (⋯) ----------
+export interface MenuItem { label: string; icon?: string; danger?: boolean; header?: boolean; onClick?: () => void }
+/** Knop met uitklapmenu. Het menu is vast gepositioneerd, zodat het niet afgeknipt wordt door scrollende balken. */
+export function menuButton(o: { icon?: string; label?: string; title?: string; variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'accent' }, items: MenuItem[]) {
+  const pop = h('div', { class: 'menu-pop', role: 'menu' });
+  pop.hidden = true;
+  const close = () => { pop.hidden = true; document.removeEventListener('pointerdown', away, true); document.removeEventListener('keydown', key, true); };
+  const away = (e: Event) => { if (!wrap.contains(e.target as Node)) close(); };
+  const key = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
+  const trigger = btn(o.label ?? '', { icon: o.icon ?? 'Ellipsis', variant: o.variant ?? 'ghost', title: o.title, onClick: () => {
+    if (!pop.hidden) { close(); return; }
+    pop.hidden = false;
+    const r = trigger.getBoundingClientRect();
+    pop.style.top = `${r.bottom + 4}px`; pop.style.right = `${Math.max(8, window.innerWidth - r.right)}px`;
+    document.addEventListener('pointerdown', away, true); document.addEventListener('keydown', key, true);
+  } });
+  for (const it of items) {
+    pop.append(it.header ? h('div', { class: 'menu-head' }, it.label)
+      : h('button', { type: 'button', role: 'menuitem', class: `menu-item ${it.danger ? 'danger' : ''}`, onClick: () => { close(); it.onClick?.(); } }, it.icon ? icon(it.icon, 16) : null, it.label));
+  }
+  const wrap = h('span', { class: 'menu' }, trigger, pop);
+  return wrap;
+}
+
 // ---------- tabel met zoek & sorteer ----------
 export type Col<T> = { key: string; label: string; render?: (r: T) => Node | string; sort?: (r: T) => string | number; width?: string; align?: 'right' };
 

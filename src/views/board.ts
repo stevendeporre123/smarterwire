@@ -1,5 +1,5 @@
 import { h, svg, btn, icon, toast, clear, loading, busy } from '../lib/dom';
-import { buildForm, formModal, modal, panZoom, badge, choose, confirmDialog, type FieldDef } from '../lib/ui';
+import { buildForm, formModal, modal, panZoom, badge, choose, confirmDialog, menuButton, type FieldDef, type MenuItem } from '../lib/ui';
 import { upsert, softDelete, saveImage, assetUrl, assetSize, putOp } from '../db/repo';
 import { run } from '../db/client';
 import { boardsOf, devicesOf, circuitsOf, type Board, type Device, type Project, type Circuit } from '../domain/model';
@@ -10,11 +10,13 @@ import { deviceForm } from './deviceform';
 import { openGenerate } from './generate';
 import { generateNewBoards, DEFAULT_GEN } from '../domain/newboard';
 import { openBom } from './bom';
-import { captureLabels, openGallery } from './boardphotos';
+import { openGallery } from './boardphotos';
 import { editCircuit } from './circuits';
 import { analyzeBoardPhoto } from '../lib/ai';
 import { uid } from '../lib/id';
 
+/** Na het kiezen van een hoofdfoto: de toestellen meteen laten herkennen zodra de kast opnieuw getekend is. */
+let pendingAi: string | null = null;
 const LS_BOARD = (pid: string) => `smarterwire.board.${pid}`;
 
 /** Leid rij en positie af uit de rechthoeken op de foto. */
@@ -98,40 +100,39 @@ export async function renderBoard(root: HTMLElement, project: Project) {
   // ---------- toolbar ----------
   const boardSel = h('select', { onChange: (e: Event) => { localStorage.setItem(LS_BOARD(project.id), (e.target as HTMLSelectElement).value); reload(); } },
     boards.map((b) => h('option', { value: b.id, selected: b.id === board.id }, `${b.kind === 'nieuw' ? '★ ' : ''}${b.name}`)));
-  const onPhoto = (inp: HTMLInputElement) => async () => {
-    const f = inp.files?.[0]; if (!f) return;
+  /** Hoofdfoto van de kast vervangen; staan er nog geen toestellen, dan worden ze meteen herkend. */
+  const setMain = async (f: File) => {
     const stop = busy('Foto wordt opgeslagen…');
-    try { const img = await saveImage(f); await upsert('board', { ...board, asset_id: img.id }); toast('Foto opgeladen'); reload(); } catch (e: any) { toast(e?.message ?? 'Foto opslaan mislukt', 'error'); } finally { stop(); }
+    try { const img = await saveImage(f); await upsert('board', { ...board, asset_id: img.id }); if (!devices.length) pendingAi = board.id; toast('Foto opgeladen'); reload(); }
+    catch (e: any) { toast(e?.message ?? 'Foto opslaan mislukt', 'error'); } finally { stop(); }
   };
-  const fileInput = h('input', { type: 'file', accept: 'image/*', style: { display: 'none' } }) as HTMLInputElement;
-  fileInput.onchange = onPhoto(fileInput);
-  // op telefoon of tablet opent dit meteen de camera
-  const camInput = h('input', { type: 'file', accept: 'image/*', capture: 'environment', style: { display: 'none' } }) as HTMLInputElement;
-  camInput.setAttribute('capture', 'environment'); camInput.onchange = onPhoto(camInput);
+  const deriveParents = async () => {
+    const ch = guessParents(devices);
+    if (ch.length) await run(ch.map((d) => putOp('device', d)));
+    const rest = devices.filter((d) => d.kind !== 'hoofd' && !d.parent_id);
+    toast(!ch.length ? (rest.length ? `Niets gekoppeld: bij ${rest.length} toestel(len) staat geen differentieel links in dezelfde rij en is er geen hoofdschakelaar` : `Alle ${devices.filter((d) => d.kind !== 'hoofd').length} toestellen waren al gekoppeld`)
+      : `${ch.length} nieuw gekoppeld${devices.length - 1 - ch.length > 0 ? `, de rest ongewijzigd` : ''}`);
+    refresh();
+  };
   const viewBtns = h('div', { style: { display: 'flex', gap: '4px' } });
+  const hint = feedHint();
   const toolbar = h('div', { class: 'toolbar' }, boardSel,
     btn('', { icon: 'Plus', variant: 'ghost', title: 'Kast of onderverdeler toevoegen', onClick: () => newBoard('bestaand') }),
-    btn('', { icon: 'Pencil', variant: 'ghost', title: 'Kast hernoemen', onClick: () => formModal({ title: 'Kast bewerken', fields: [{ key: 'name', label: 'Naam', span: 2 }, { key: 'location', label: 'Locatie', span: 2 }, { key: 'notes', label: 'Notities', type: 'textarea', span: 2 }], values: board,
+    btn('', { icon: 'Pencil', variant: 'ghost', title: 'Kast hernoemen of verwijderen', onClick: () => formModal({ title: 'Kast bewerken', fields: [{ key: 'name', label: 'Naam', span: 2 }, { key: 'location', label: 'Locatie', span: 2 }, { key: 'notes', label: 'Notities', type: 'textarea', span: 2 }], values: board,
       onSave: async (v) => { await upsert('board', { ...board, ...v }); toast('Kast opgeslagen'); reload(); },
       onDelete: async () => { await softDelete('board', board.id); localStorage.removeItem(LS_BOARD(project.id)); reload(); } }) }),
-    h('span', { class: 'hint' }, board.kind === 'nieuw' ? 'ontwerp nieuwe kast' : 'bestaande toestand', feedHint()),
+    hint ? h('span', { class: 'hint hide-sm' }, hint.replace(/^ · /, '')) : null,
     h('span', { class: 'spacer' }), viewBtns);
-
   if (board.kind === 'bestaand') {
-    toolbar.append(fileInput, camInput, btn(photoUrl ? 'Andere foto' : 'Foto opladen', { icon: 'Upload', onClick: () => fileInput.click() }), btn('Camera', { icon: 'Camera', title: 'Foto nemen met de camera (telefoon/tablet)', onClick: () => camInput.click() }));
-    toolbar.append(btn('Beschrijvingen', { icon: 'ScanText', title: 'Foto nemen van de beschrijvingen (strookjes, legende): AI leest ze en koppelt ze aan de zekeringen', onClick: () => captureLabels(project, board, true, () => refresh()) }),
-      btn('Foto’s', { icon: 'Images', title: 'Alle foto’s van deze kast: extra foto’s, beschrijvingen, bekabeling, typeplaatjes', onClick: () => openGallery(project, board, () => refresh()) }));
-    if (photoUrl) toolbar.append(btn('AI-voorstel', { icon: 'Sparkles', variant: 'accent', title: 'Toestellen herkennen met AI (proxy vereist)', onClick: runAi }),
-      btn('Ouders afleiden', { icon: 'GitBranch', title: 'Beschermend differentieel automatisch afleiden uit de positie', onClick: async () => {
-        const ch = guessParents(devices);
-        if (ch.length) await run(ch.map((d) => putOp('device', d)));
-        const rest = devices.filter((d) => d.kind !== 'hoofd' && !d.parent_id);
-        toast(!ch.length ? (rest.length ? `Niets gekoppeld: bij ${rest.length} toestel(len) staat geen differentieel links in dezelfde rij en is er geen hoofdschakelaar` : `Alle ${devices.filter((d) => d.kind !== 'hoofd').length} toestellen waren al gekoppeld`)
-          : `${ch.length} nieuw gekoppeld${devices.length - 1 - ch.length > 0 ? `, de rest ongewijzigd` : ''}`);
-        refresh(); } }));
+    toolbar.append(btn('Foto’s', { icon: 'Images', variant: 'secondary', title: 'Foto’s van de kast: hoofdfoto (toestellen herkennen), beschrijvingen koppelen, bekabeling, typeplaatjes',
+      onClick: () => openGallery(project, board, { onDone: () => refresh(), mainUrl: photoUrl, setMain, recognise: () => runAi() }) }));
   }
-  toolbar.append(btn('+ Toestel', { icon: 'Plus', title: 'Toestel manueel toevoegen (zonder foto)', onClick: () => addDeviceManual() }),
-    btn('Alles wissen', { icon: 'Trash2', variant: 'ghost', title: 'Alle toestellen van deze kast verwijderen', onClick: () => clearAll() }));
+  const more: MenuItem[] = [
+    { label: 'Toestel toevoegen', icon: 'Plus', onClick: () => addDeviceManual() },
+    ...(board.kind === 'bestaand' ? [{ label: 'Ouders afleiden', icon: 'GitBranch', onClick: deriveParents }] : []),
+    { label: 'Alle toestellen wissen', icon: 'Trash2', danger: true, onClick: () => clearAll() },
+  ];
+  toolbar.append(menuButton({ title: 'Meer: toestel toevoegen, ouders afleiden, alles wissen' }, more));
   if (board.kind === 'nieuw') toolbar.append(btn('Materiaallijst', { icon: 'ClipboardList', title: 'Materiaallijst van de nieuwe kast (CSV)', onClick: () => openBom(project) }));
   toolbar.append(btn(board.kind === 'nieuw' ? 'Opnieuw genereren' : 'Nieuwe kast voorstellen', { icon: 'WandSparkles', variant: 'accent', title: 'Voorstel voor alle kasten: elke kring eigen automaat, per 30 mA-differentieel', onClick: genNew }));
 
@@ -143,9 +144,9 @@ export async function renderBoard(root: HTMLElement, project: Project) {
 
   function setViewButtons() {
     clear(viewBtns);
-    if (photoUrl) viewBtns.append(btn('Foto', { icon: 'Image', variant: 'secondary', onClick: () => { view = 'foto'; draw(); } }));
-    if (photoUrl && view === 'foto') viewBtns.append(btn('Labels', { icon: showTags ? 'Eye' : 'EyeOff', variant: 'ghost', title: 'Opschriften op de foto tonen/verbergen (het geselecteerde toestel toont altijd zijn opschrift)', onClick: () => { showTags = !showTags; localStorage.setItem('smarterwire.tags', showTags ? '1' : '0'); draw(); } }));
-    viewBtns.append(btn('Virtueel', { icon: 'LayoutPanelTop', onClick: () => { view = 'virtueel'; draw(); } }));
+    if (!photoUrl) return;   // zonder foto is er enkel de virtuele kast
+    viewBtns.append(btn('Foto', { icon: 'Image', variant: 'secondary', title: 'Kast op de foto: toestellen omkaderen', onClick: () => { view = 'foto'; draw(); } }),
+      btn('Virtueel', { icon: 'LayoutPanelTop', variant: 'secondary', title: 'Virtuele kast: rijen en modules', onClick: () => { view = 'virtueel'; draw(); } }));
     [...viewBtns.children].forEach((c) => c.classList.toggle('active', c.textContent === (view === 'foto' ? 'Foto' : 'Virtueel')));
   }
 
@@ -217,6 +218,7 @@ export async function renderBoard(root: HTMLElement, project: Project) {
     }
     canvas.append(s, h('div', { class: 'hint', style: { position: 'absolute', left: '10px', bottom: '8px', background: 'rgba(255,255,255,.85)', padding: '2px 8px', borderRadius: '6px' } },
       'Sleep om een toestel te omkaderen · wiel = zoom · spatie of middelknop = pannen'));
+    canvas.append(h('div', { class: 'canvas-tools' }, btn('Labels', { icon: showTags ? 'Eye' : 'EyeOff', variant: 'secondary', title: 'Opschriften boven de toestellen tonen/verbergen (het geselecteerde toestel toont altijd zijn opschrift)', onClick: () => { showTags = !showTags; localStorage.setItem('smarterwire.tags', showTags ? '1' : '0'); draw(); } })));
   }
 
   // --- virtuele kast ---
@@ -351,4 +353,5 @@ export async function renderBoard(root: HTMLElement, project: Project) {
   }
 
   draw(); drawSide();
+  if (pendingAi === board.id && photoUrl) { pendingAi = null; runAi(); }
 }

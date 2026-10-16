@@ -31,7 +31,16 @@ test('volledige flow: project → kast → kringen → schema → nieuwe kast �
   // kast met drie toestellen (zonder foto)
   await page.getByRole('button', { name: 'Bestaande kast toevoegen' }).click();
   await saved(page);
-  for (let i = 0; i < 3; i++) { await page.getByRole('button', { name: '+ Toestel' }).click(); await expect(page.getByText(`${i + 1} toestel`)).toBeVisible().catch(() => {}); }
+  for (let i = 0; i < 3; i++) {
+    await page.getByRole('button', { name: /Meer: toestel/ }).click();
+    await page.getByRole('menuitem', { name: 'Toestel toevoegen' }).click();
+    await expect(page.locator('.side h3')).toBeVisible();
+  }
+  // schermafdrukken van de werkbalk (bureaublad en gsm) ter controle
+  await page.screenshot({ path: 'test-results/kast-bureaublad.png' });
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page.screenshot({ path: 'test-results/kast-gsm.png' });
+  await page.setViewportSize({ width: 1280, height: 720 });
   // foto van de beschrijvingen → AI (gemockt) koppelt de teksten aan de zekeringen in volgorde
   await page.route('**/api/analyze-labels', async (route) => {
     const { devices } = JSON.parse(route.request().postData() ?? '{}') as { devices: { id: string }[] };
@@ -39,7 +48,8 @@ test('volledige flow: project → kast → kringen → schema → nieuwe kast �
     await route.fulfill({ json: { labels: devices.map((d, i) => ({ device_id: d.id, text: text[i], confidence: 0.9 })) } });
   });
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
-  const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.getByRole('button', { name: 'Beschrijvingen' }).click()]);
+  await page.getByRole('button', { name: /Foto.s/ }).click();
+  const [chooser] = await Promise.all([page.waitForEvent('filechooser'), modal(page).getByRole('button', { name: 'Camera' }).last().click()]);
   await chooser.setFiles({ name: 'legende.png', mimeType: 'image/png', buffer: png });
   await expect(modal(page).getByRole('heading', { name: /Beschrijvingen koppelen/ })).toBeVisible();
   await expect(modal(page).locator('tbody tr')).toHaveCount(3);

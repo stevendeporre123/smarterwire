@@ -1,5 +1,5 @@
 import { h, icon, btn, toast } from '../lib/dom';
-import { formModal } from '../lib/ui';
+import { formModal, menuButton, type MenuItem } from '../lib/ui';
 import { getMe, logout, changePassword } from '../lib/auth';
 import { getInstaller, setInstaller, type Installer } from '../domain/settings';
 
@@ -8,7 +8,6 @@ export function topbar(crumb?: string) {
     h('a', { class: 'brand', href: '#/' }, h('span', { class: 'brand-mark' }, icon('Zap', 18)), h('span', null, 'smarter', h('b', null, 'wire'))),
     crumb && h('div', { class: 'crumb' }, icon('ChevronRight', 14), h('strong', null, crumb)),
     h('span', { class: 'spacer' }),
-    btn('Installateur', { icon: 'HardHat', variant: 'ghost', title: 'Gegevens van de installateur (komen op de PDF)', onClick: editInstaller }),
     userMenu(),
   );
 }
@@ -40,13 +39,18 @@ async function editInstaller() {
 }
 const EMPTY = (): Installer => ({ name: '', address: '', phone: '', email: '', vat: '', logo: '' });
 
-/** E-mailadres van de ingelogde gebruiker, wachtwoord wijzigen en afmelden. */
+/** Eén accountmenu: installateurgegevens, wachtwoord wijzigen en afmelden. */
 function userMenu() {
-  const who = h('span', { class: 'hint' });
-  getMe().then((m) => { who.textContent = m.email; }).catch(() => {});
-  return h('span', { style: { display: 'inline-flex', alignItems: 'center', gap: '4px' } }, who,
-    btn('', { icon: 'KeyRound', variant: 'ghost', title: 'Wachtwoord wijzigen', onClick: editPassword }),
-    btn('', { icon: 'LogOut', variant: 'ghost', title: 'Afmelden', onClick: async () => { await logout(); location.hash = '#/'; location.reload(); } }));
+  const who = h('span', { class: 'hint hide-sm' });
+  const items: MenuItem[] = [
+    { label: '…', header: true },
+    { label: 'Installateur', icon: 'HardHat', onClick: editInstaller },
+    { label: 'Wachtwoord wijzigen', icon: 'KeyRound', onClick: editPassword },
+    { label: 'Afmelden', icon: 'LogOut', onClick: async () => { await logout(); location.hash = '#/'; location.reload(); } },
+  ];
+  const menu = menuButton({ icon: 'CircleUser', title: 'Account en installateurgegevens' }, items);
+  getMe().then((m) => { who.textContent = m.email; menu.querySelector('.menu-head')!.textContent = m.email; }).catch(() => {});
+  return h('span', { style: { display: 'inline-flex', alignItems: 'center', gap: '4px' } }, who, menu);
 }
 
 function editPassword() {
