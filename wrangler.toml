@@ -1,19 +1,19 @@
 name = "smarterwire"
-main = "worker.ts"
+main = "cloudflare/worker.ts"
 compatibility_date = "2025-01-01"
 
 # Persistente data. Aanmaken: npx wrangler d1 create smarterwire  -> database_id hieronder invullen.
-# Schema: npx wrangler d1 migrations apply smarterwire --remote -c cloudflare/wrangler.toml
+# Schema: npx wrangler d1 migrations apply smarterwire --remote 
 # (lokaal gebruikt `npm run dev` een eigen D1 in .wrangler/, het id doet er dan niet toe)
 [[d1_databases]]
 binding = "DB"
 database_name = "smarterwire"
-database_id = "VUL-IN-NA-WRANGLER-D1-CREATE"
-migrations_dir = "migrations"
+database_id = "05e9c7a4-6cbc-43f9-a15f-1b9876562c6b"
+migrations_dir = "cloudflare/migrations"
 
 # De gebouwde app (npm run build) wordt als statische assets geserveerd; enkel /api/* gaat langs de worker.
 [assets]
-directory = "../dist"
+directory = "./dist"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
 run_worker_first = ["/api/*"]
