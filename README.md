@@ -48,3 +48,6 @@ NB: de testpagina's in `tools/*-e2e.*` gebruikten de oude in-browser database en
 
 ## Status
 Eerste werkende versie. Nog niet gedaan: officiële AREI-symbolen als exacte set, AREI-controles (aantal punten per kring, doorsnede/zekering…), pinch-zoom op touch, PDF-kaft met meetgegevens.
+
+## Wijzigingen per issue
+- #8 "Ouders afleiden" zegt nu wat er gebeurde: hoeveel nieuw gekoppeld, "alles was al gekoppeld", of bij hoeveel toestellen geen differentieel gevonden werd.

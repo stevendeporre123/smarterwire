@@ -112,7 +112,12 @@ export async function renderBoard(root: HTMLElement, project: Project) {
     toolbar.append(fileInput, btn(photoUrl ? 'Andere foto' : 'Foto opladen', { icon: 'Camera', onClick: () => fileInput.click() }));
     if (photoUrl) toolbar.append(btn('AI-voorstel', { icon: 'Sparkles', variant: 'accent', title: 'Toestellen herkennen met AI (proxy vereist)', onClick: runAi }),
       btn('Ouders afleiden', { icon: 'GitBranch', title: 'Beschermend differentieel automatisch afleiden uit de positie', onClick: async () => {
-        const ch = guessParents(devices); await run(ch.map((d) => putOp('device', d))); toast(`${ch.length} toestel(len) gekoppeld`); refresh(); } }));
+        const ch = guessParents(devices);
+        if (ch.length) await run(ch.map((d) => putOp('device', d)));
+        const rest = devices.filter((d) => d.kind !== 'hoofd' && !d.parent_id);
+        toast(!ch.length ? (rest.length ? `Niets gekoppeld: bij ${rest.length} toestel(len) staat geen differentieel links in dezelfde rij en is er geen hoofdschakelaar` : `Alle ${devices.filter((d) => d.kind !== 'hoofd').length} toestellen waren al gekoppeld`)
+          : `${ch.length} nieuw gekoppeld${devices.length - 1 - ch.length > 0 ? `, de rest ongewijzigd` : ''}`);
+        refresh(); } }));
   }
   toolbar.append(btn('+ Toestel', { icon: 'Plus', title: 'Toestel manueel toevoegen (zonder foto)', onClick: () => addDeviceManual() }),
     btn('Alles wissen', { icon: 'Trash2', variant: 'ghost', title: 'Alle toestellen van deze kast verwijderen', onClick: () => clearAll() }));
