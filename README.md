@@ -34,6 +34,9 @@ npx wrangler secret put ANTHROPIC_API_KEY -c cloudflare/wrangler.toml
 npx wrangler secret put INVITE_CODE -c cloudflare/wrangler.toml     # optioneel, om registratie te beperken
 npm run deploy                              # build + migraties (remote) + deploy
 ```
+Via GitHub kan het ook zonder terminal: workflow **D1 aanmaken** maakt de productie- én de preview-database (`smarterwire-preview`, voor `wrangler preview` van branches met Cloudflare Workers Builds), vult de id's in en past de migraties toe.
+```bash
+```
 
 ### Oude offline back-up (.sqlite3) overnemen
 ```bash
