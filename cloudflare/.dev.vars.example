@@ -1,4 +1,4 @@
-# Lokale sleutel voor de AI-proxy (wrangler dev). Kopieer naar .dev.vars en vul je sleutel in; .dev.vars staat in .gitignore.
+# Lokale sleutel voor de AI-proxy (wrangler dev). Kopieer naar .dev.vars in de HOOFDMAP (naast wrangler.toml) en vul je sleutel in; .dev.vars staat in .gitignore.
 ANTHROPIC_API_KEY=
 # Optioneel: indien ingevuld kan men zich enkel registreren met deze code (testers uitnodigen).
 INVITE_CODE=
