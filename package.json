@@ -13,7 +13,9 @@
   },
   "dependencies": {
     "@fontsource/poppins": "^5.1.0",
-    "lucide": "^0.469.0"
+    "jspdf": "^4.2.1",
+    "lucide": "^0.469.0",
+    "svg2pdf.js": "^2.8.1"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261016.1",

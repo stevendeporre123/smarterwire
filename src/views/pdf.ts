@@ -1,4 +1,5 @@
-import { h, toast } from '../lib/dom';
+import { h, toast, busy, download } from '../lib/dom';
+import { pagesToPdf, pdfFileName } from '../lib/pdf';
 import { formModal } from '../lib/ui';
 import { assetUrl, assetSize } from '../db/repo';
 import { boardsOf, circuitsOf, plansOf, shapesOf, symbolsOf, allDevicesOfProject, type Project } from '../domain/model';
@@ -39,7 +40,7 @@ export async function openPdfExport(project: Project) {
   if (!project.inspector) warn.push('Keuringsinstelling ontbreekt in de projectgegevens.');
   if (!project.owner && !project.address) warn.push('Eigenaar en adres van de installatie ontbreken in de projectgegevens.');
   formModal({
-    title: 'PDF exporteren', wide: true, saveLabel: 'Exporteren',
+    title: 'PDF exporteren', wide: true, saveLabel: 'PDF downloaden',
     fields: [
       { key: 'state', label: 'Eendraadschema', type: 'select', allowEmpty: false, span: 2, options: [
         ...(hasNew ? [{ value: 'nieuw', label: 'Nieuwe toestand (ontwerp)' }] : []), ...(hasOld ? [{ value: 'bestaand', label: 'Bestaande toestand' }] : []), ...(hasNew && hasOld ? [{ value: 'beide', label: 'Beide' }] : [])] },
@@ -48,12 +49,18 @@ export async function openPdfExport(project: Project) {
     ],
     values: { state: hasNew ? 'nieuw' : 'bestaand', plans: data.plans.length ? 1 : 0, photoOnPlans: 0, photos: data.photos.length ? 1 : 0, list: 1 },
     extra: h('div', null, ...warn.map((w) => h('p', { style: { color: '#b35c00', margin: '4px 0' } }, '⚠ ' + w)),
-      h('p', { class: 'hint' }, 'Het afdrukvenster opent met A4 liggend. Kies als printer "Opslaan als PDF" en zet marges op "Geen".')),
+      h('p', { class: 'hint' }, 'Je krijgt een PDF-bestand (A4 liggend) als download.')),
     onSave: async (v) => {
       const o: PdfOptions = { states: v.state === 'beide' ? ['bestaand', 'nieuw'] : [v.state], plans: !!v.plans, photos: !!v.photos, list: !!v.list, photoOnPlans: !!v.photoOnPlans };
       const pages = buildPdfPages(data, o);
       if (!pages.length) { toast('Er is niets om te exporteren', 'error'); return false; }
-      printPages(pages);
+      const stop = busy('PDF wordt gemaakt…');
+      try {
+        const blob = await pagesToPdf(pages, { title: `${project.name} – eendraadschema` });
+        download(pdfFileName(project.name, v.state === 'beide' ? 'eendraadschema' : v.state === 'nieuw' ? 'nieuwe-toestand' : 'bestaande-toestand'), blob, 'application/pdf');
+        toast('PDF gedownload');
+      } catch (e: any) { console.error(e); toast(`PDF maken mislukt: ${e?.message ?? e}`, 'error'); return false; }
+      finally { stop(); }
     },
   });
 }
