@@ -3,7 +3,8 @@ import { pagesToPdf, pdfFileName } from '../lib/pdf';
 import { formModal } from '../lib/ui';
 import { assetUrl, assetSize } from '../db/repo';
 import { boardsOf, circuitsOf, plansOf, shapesOf, symbolsOf, allDevicesOfProject, type Project } from '../domain/model';
-import { getInstaller } from '../domain/settings';
+import { getInstaller, getSetting } from '../domain/settings';
+import type { BomEntry } from '../domain/bom';
 import { projectLoads } from '../domain/loads';
 import { buildPdfPages, type PdfData, type PdfOptions } from '../domain/pdfpages';
 
@@ -18,7 +19,7 @@ export async function loadPdfData(project: Project): Promise<PdfData> {
     const url = await assetUrl(board.asset_id), sz = await assetSize(board.asset_id!);
     return url && sz ? { board, url, w: sz.width, h: sz.height } : null;
   }))).filter((x): x is NonNullable<typeof x> => !!x);
-  return { project, installer, boards, devices, circuits, symbols, plans: pdfPlans, photos };
+  return { project, installer, boards, devices, circuits, symbols, plans: pdfPlans, photos, bomEntries: await getSetting<Record<string, BomEntry>>('bomEntries', {}) };
 }
 
 /** Zet de pagina's in het document en opent het afdrukvenster (kies "Opslaan als PDF"). */
@@ -42,22 +43,24 @@ export async function openPdfExport(project: Project) {
   formModal({
     title: 'PDF exporteren', wide: true, saveLabel: 'PDF downloaden',
     fields: [
-      { key: 'state', label: 'Eendraadschema', type: 'select', allowEmpty: false, span: 2, options: [
+      ...(hasNew ? [{ key: 'doc', label: 'Document', type: 'select' as const, allowEmpty: false, span: 2 as const, options: [{ value: 'dossier', label: 'Keuringsdossier (schema, plannen, foto\'s, lijst)' }, { value: 'voorstel', label: 'Voorstel nieuwe kast (klantdocument)' }] }] : []),
+      { key: 'state', label: 'Eendraadschema (keuringsdossier)', type: 'select', allowEmpty: false, span: 2, options: [
         ...(hasNew ? [{ value: 'nieuw', label: 'Nieuwe toestand (ontwerp)' }] : []), ...(hasOld ? [{ value: 'bestaand', label: 'Bestaande toestand' }] : []), ...(hasNew && hasOld ? [{ value: 'beide', label: 'Beide' }] : [])] },
       { key: 'plans', label: `Situatieplannen (${data.plans.length})`, type: 'checkbox' }, { key: 'photoOnPlans', label: 'Foto als achtergrond op het plan', type: 'checkbox' },
       { key: 'photos', label: `Foto's van de bestaande kast (${data.photos.length})`, type: 'checkbox' }, { key: 'list', label: 'Lijst van de kringen', type: 'checkbox' },
     ],
-    values: { state: hasNew ? 'nieuw' : 'bestaand', plans: data.plans.length ? 1 : 0, photoOnPlans: 0, photos: data.photos.length ? 1 : 0, list: 1 },
+    values: { doc: 'dossier', state: hasNew ? 'nieuw' : 'bestaand', plans: data.plans.length ? 1 : 0, photoOnPlans: 0, photos: data.photos.length ? 1 : 0, list: 1 },
     extra: h('div', null, ...warn.map((w) => h('p', { style: { color: '#b35c00', margin: '4px 0' } }, '⚠ ' + w)),
       h('p', { class: 'hint' }, 'Je krijgt een PDF-bestand (A4 liggend) als download.')),
     onSave: async (v) => {
-      const o: PdfOptions = { states: v.state === 'beide' ? ['bestaand', 'nieuw'] : [v.state], plans: !!v.plans, photos: !!v.photos, list: !!v.list, photoOnPlans: !!v.photoOnPlans };
+      const proposal = v.doc === 'voorstel';
+      const o: PdfOptions = { proposal, states: v.state === 'beide' ? ['bestaand', 'nieuw'] : [v.state], plans: !!v.plans, photos: !!v.photos, list: !!v.list, photoOnPlans: !!v.photoOnPlans };
       const pages = buildPdfPages(data, o);
       if (!pages.length) { toast('Er is niets om te exporteren', 'error'); return false; }
       const stop = busy('PDF wordt gemaakt…');
       try {
         const blob = await pagesToPdf(pages, { title: `${project.name} – eendraadschema` });
-        download(pdfFileName(project.name, v.state === 'beide' ? 'eendraadschema' : v.state === 'nieuw' ? 'nieuwe-toestand' : 'bestaande-toestand'), blob, 'application/pdf');
+        download(pdfFileName(project.name, proposal ? 'voorstel-nieuwe-kast' : v.state === 'beide' ? 'eendraadschema' : v.state === 'nieuw' ? 'nieuwe-toestand' : 'bestaande-toestand'), blob, 'application/pdf');
         toast('PDF gedownload');
       } catch (e: any) { console.error(e); toast(`PDF maken mislukt: ${e?.message ?? e}`, 'error'); return false; }
       finally { stop(); }

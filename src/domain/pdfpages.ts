@@ -2,7 +2,9 @@
 import type { Board, Circuit, Device, Plan, Project, Shape, Symbol_ } from './model';
 import type { Installer } from './settings';
 import { buildDiagram, type DiagramSymbol } from './diagram';
-import { cableLabel, polesLabel, supplyOf, supplyText, supplyExtra } from './devices';
+import { cableLabel, polesLabel, supplyOf, supplyText, supplyExtra, deviceTitle, devicePlaces } from './devices';
+import { runChecks } from './checks';
+import { buildBom, type BomEntry } from './bom';
 import { renderFloor, DEFAULT_PLAN_M } from './floorplan';
 import { symbolEntry, symbolMarkup } from './areisymbols';
 import { circuitColor } from './symbols';
@@ -12,8 +14,10 @@ export interface PdfPlan { plan: Plan; shapes: Shape[]; symbols: Symbol_[]; phot
 export interface PdfPhoto { board: Board; url: string; w: number; h: number }
 export interface PdfData {
   project: Project; installer: Installer; boards: Board[]; devices: Device[]; circuits: Circuit[]; symbols: DiagramSymbol[]; plans: PdfPlan[]; photos: PdfPhoto[];
+  /** merk/referentie per regel van de materiaallijst (door de installateur ingevuld) */
+  bomEntries?: Record<string, BomEntry>;
 }
-export interface PdfOptions { states: ('bestaand' | 'nieuw')[]; plans: boolean; photos: boolean; list: boolean; photoOnPlans: boolean }
+export interface PdfOptions { states: ('bestaand' | 'nieuw')[]; plans: boolean; photos: boolean; list: boolean; photoOnPlans: boolean; /** klantdocument "Voorstel nieuwe kast" i.p.v. het keuringsdossier */ proposal?: boolean }
 
 const PW = 297, PH = 210, FM = 5;               // pagina en kader
 const CX = 10, CY = 10, CW = 277;                // inhoudsgebied
@@ -189,8 +193,136 @@ function listSheets(d: PdfData, which: 'bestaand' | 'nieuw', multi: boolean): Sh
   return sheets;
 }
 
+// ---------- voorstel nieuwe kast (klantdocument) ----------
+const rect = (x: number, y: number, w: number, h: number, o: { fill?: string; stroke?: string; sw?: number } = {}) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${o.fill ?? 'none'}" stroke="${o.stroke ?? 'none'}" stroke-width="${o.sw ?? 0.3}"/>`;
+
+function coverSheet(d: PdfData): Sheet {
+  const p = d.project, nb = d.boards.filter((b) => b.kind === 'nieuw'), ds = d.devices.filter((x) => nb.some((b) => b.id === x.board_id));
+  const diffs = ds.filter((x) => x.kind === 'differentieel').length, autos = ds.filter((x) => x.kind === 'automaat' || x.kind === 'aardlekautomaat').length;
+  let b = txt(CX + 6, CY + 24, 'Voorstel nieuwe zekeringskast', { size: 11, bold: true });
+  const info: [string, string][] = [['Klant', p.client || p.owner || ''], ['Adres installatie', (p.address ?? '').replace(/\r?\n/g, ', ')], ['Datum', new Date().toLocaleDateString('nl-BE')],
+    ['Installateur', [d.installer.name, d.installer.phone, d.installer.email].filter(Boolean).join(' · ')]];
+  info.filter(([, v]) => v).forEach(([k, v], i) => { b += txt(CX + 6, CY + 44 + i * 9, k, { size: 3, fill: '#555' }) + txt(CX + 46, CY + 44 + i * 9, clip(v, 90), { size: 3.6, bold: true }); });
+  b += txt(CX + 6, CY + 92, 'Wat u in dit voorstel vindt', { size: 3.6, bold: true });
+  ['1. De opstelling van de nieuwe kast, rij per rij', '2. Het eendraadschema van de nieuwe toestand', '3. Per kring: wat er verandert tegenover de huidige kast en waarom', '4. Aandachtspunten die we bij de controle vaststelden', '5. Het materiaal dat we voorzien']
+    .forEach((l, i) => { b += txt(CX + 10, CY + 100 + i * 6.5, l, { size: 3.2 }); });
+  b += txt(CX + 6, CY + 144, `${d.circuits.filter((c) => c.new_device_id).length} kring(en) · ${diffs} differentieel(en) · ${autos} automaten`, { size: 3, fill: '#555' });
+  b += txt(CX + 6, CY + 152, 'Dit is een voorstel: zekeringwaarden volgen de kabeldoorsnede en worden ter plaatse nagekeken. Het vervangt de keuring niet.', { size: 2.6, fill: '#555' });
+  return { title: 'Voorstel nieuwe kast', body: b };
+}
+
+function boardLayoutSheets(d: PdfData): Sheet[] {
+  const out: Sheet[] = [], byDev = new Map<string, Circuit[]>();
+  for (const c of d.circuits) if (c.new_device_id) (byDev.get(c.new_device_id) ?? byDev.set(c.new_device_id, []).get(c.new_device_id)!).push(c);
+  for (const board of d.boards.filter((b) => b.kind === 'nieuw')) {
+    const ds = d.devices.filter((x) => x.board_id === board.id);
+    if (!ds.length) continue;
+    const rows = new Map<number, Device[]>();
+    for (const x of ds) (rows.get(x.row_no) ?? rows.set(x.row_no, []).get(x.row_no)!).push(x);
+    const keys = [...rows.keys()].sort((a, b) => a - b), widest = Math.max(...keys.map((k) => rows.get(k)!.reduce((s, x) => s + (x.modules || 1), 0)));
+    const U = Math.min(11, (CW - 24) / Math.max(widest, 8)), RH = 64, per = Math.max(1, Math.floor((CH - 8) / RH));
+    for (let i = 0; i < keys.length; i += per) {
+      let b = txt(CX, CY + 3, `${board.name}${keys.length > per ? ` (rij ${keys[i] + 1}–${keys[Math.min(i + per, keys.length) - 1] + 1})` : ''}`, { bold: true, size: 3.2 });
+      keys.slice(i, i + per).forEach((rk, r) => {
+        const y0 = CY + 8 + r * RH;
+        b += txt(CX, y0 + 11, `R${rk + 1}`, { size: 2.6, fill: '#555' }) + rect(CX + 8, y0 + 12.5, widest * U + 4, 1.2, { fill: '#b5bdb5' });
+        let x = CX + 10;
+        for (const dev of rows.get(rk)!.sort((a, b) => a.pos - b.pos)) {
+          const w = Math.max(0.5, dev.modules || 1) * U - 0.6, main = dev.kind === 'differentieel' || dev.kind === 'hoofd', cs = byDev.get(dev.id) ?? [];
+          b += rect(x, y0, w, 24, { fill: main ? '#e3f0e3' : '#ececec', stroke: main ? '#008000' : '#555e55', sw: 0.35 });
+          b += txt(x + w / 2, y0 + 7, `${dev.curve ?? ''}${dev.rating_a ?? ''}`, { size: Math.min(3.2, w / 2.6), bold: true, anchor: 'middle' }) + txt(x + w / 2, y0 + 11.5, dev.sens_ma ? `${dev.sens_ma}mA` : '', { size: 2, anchor: 'middle', fill: '#555' });
+          b += rect(x + w / 2 - 1.6, y0 + 14, 3.2, 6, { fill: '#2b312b' });
+          if (dev.phase) b += txt(x + w / 2, y0 + 23, dev.phase, { size: 1.9, anchor: 'middle', fill: '#0066aa' });
+          const nm = main ? (dev.label ?? deviceTitle(dev)) : cs.map((c) => c.name).join(' / ');
+          if (cs.length) b += txt(x + w / 2, y0 + 28, cs.map((c) => c.nr ?? '').join('+'), { size: 2.8, bold: true, anchor: 'middle', fill: '#008000' });
+          if (nm) b += `<text x="0" y="0" transform="translate(${x + w / 2 + 0.8} ${y0 + 31}) rotate(90)" font-size="2.2">${esc(clip(nm, 24))}</text>`;
+          x += w + 0.6;
+        }
+      });
+      out.push({ title: 'Opstelling nieuwe kast', body: b });
+    }
+  }
+  return out;
+}
+
+/** Wat er verandert van de oude naar de nieuwe zekering, in gewone taal. */
+function changeText(o: Device | undefined, n: Device | undefined, op: Device | undefined, np: Device | undefined): string {
+  if (!n) return '';
+  if (!o) return 'nieuwe zekering';
+  const bits: string[] = [];
+  const spec = (x: Device) => `${x.curve ?? ''}${x.rating_a ?? '?'}A`;
+  if (spec(o) !== spec(n)) bits.push(`${spec(o)} → ${spec(n)}`);
+  const oldSens = op?.kind === 'differentieel' ? op.sens_ma : undefined;
+  if (!op || op.kind !== 'differentieel') bits.push('nu met 30 mA-bescherming');
+  else if ((oldSens ?? 0) > 30 && np?.sens_ma === 30) bits.push(`${oldSens} mA → 30 mA`);
+  if (op?.dtype === 'AC' && np?.dtype && np.dtype !== 'AC') bits.push(`differentieel type AC → ${np.dtype}`);
+  if (n.phase) bits.push(`fase ${n.phase}`);
+  return bits.join(', ') || 'ongewijzigd';
+}
+
+function mappingSheets(d: PdfData): Sheet[] {
+  const byId = new Map(d.devices.map((x) => [x.id, x])), at = new Map<string, string>();
+  for (const b of d.boards) for (const [id, pl] of devicePlaces(d.devices.filter((x) => x.board_id === b.id))) at.set(id, pl);
+  const rows = d.circuits.filter((c) => c.new_device_id && byId.has(c.new_device_id)).sort((a, b) => natural(a.nr ?? '', b.nr ?? ''));
+  if (!rows.length) return [];
+  const RH = 6.8, per = Math.floor((CH - 9) / RH), X = [CX, CX + 14, CX + 74, CX + 116, CX + 158, CX + 190];
+  const sheets: Sheet[] = [];
+  for (let i = 0; i < rows.length; i += per) {
+    let b = rect(CX, CY, CW, 7, { fill: '#e6e9ee' }) + ['Kring', 'Omschrijving', 'Nu (oude zekering)', 'Nieuw (automaat)', 'Differentieel', 'Wat verandert er'].map((hd, k) => txt(X[k] + 2, CY + 4.8, hd, { bold: true, size: 2.9 })).join('');
+    rows.slice(i, i + per).forEach((c, r) => {
+      const y = CY + 7 + r * RH, o = c.device_id ? byId.get(c.device_id) : undefined, n = byId.get(c.new_device_id!)!, np = n.parent_id ? byId.get(n.parent_id) : undefined, op = o?.parent_id ? byId.get(o.parent_id) : undefined;
+      if (r % 2 === 0) b += rect(CX, y, CW, RH, { fill: '#f3f5f8' });
+      const name = /^Kring /.test(c.name) ? '' : c.name;
+      b += txt(X[0] + 2, y + 4.4, c.nr ?? '', { bold: true, size: 3.4 }) + txt(X[1] + 2, y + 4.4, clip(name, 34), { size: 2.9 })
+        + txt(X[2] + 2, y + 4.4, clip(o ? `${at.get(o.id) ?? ''} · ${deviceTitle(o)}` : '—', 26), { size: 2.9 }) + txt(X[3] + 2, y + 4.4, clip(`${at.get(n.id) ?? ''} · ${deviceTitle(n)}`, 26), { size: 2.9 })
+        + txt(X[4] + 2, y + 4.4, clip(np ? deviceTitle(np) : '—', 20), { size: 2.9 }) + txt(X[5] + 2, y + 4.4, clip(changeText(o, n, op, np), 62), { size: 2.9 });
+    });
+    sheets.push({ title: 'Oud → nieuw per kring', body: b });
+  }
+  return sheets;
+}
+
+function attentionSheets(d: PdfData): Sheet[] {
+  const fs = runChecks({ circuits: d.circuits, devices: d.devices, loads: d.symbols, projectSupplyAmp: d.project.supply_amp }).filter((f) => f.level !== 'info' || f.state === 'nieuw');
+  const sheets: Sheet[] = [];
+  const per = Math.floor((CH - 14) / 12.5), col: Record<string, string> = { fout: '#c00', waarschuwing: '#b35c00', info: '#555' };
+  const items = fs.length ? fs : null;
+  if (!items) return [{ title: 'Aandachtspunten', body: txt(CX, CY + 6, 'Aandachtspunten', { bold: true, size: 3.6 }) + txt(CX, CY + 16, 'De ingebouwde controles vonden geen aandachtspunten. Dat dekt maar een deel van de keuring.', { size: 3 }) }];
+  for (let i = 0; i < items.length; i += per) {
+    let b = txt(CX, CY + 6, i ? 'Aandachtspunten (vervolg)' : 'Aandachtspunten', { bold: true, size: 3.6 }) + txt(CX + 60, CY + 6, 'Indicatieve controles; ze vervangen de keuring niet.', { size: 2.4, fill: '#555' });
+    items.slice(i, i + per).forEach((f, r) => {
+      const y = CY + 14 + r * 12.5;
+      b += rect(CX, y - 3.6, 2.2, 9.6, { fill: col[f.level] }) + txt(CX + 5, y, `${f.level.toUpperCase()} · ${f.state === 'nieuw' ? 'nieuwe toestand' : 'bestaande toestand'}`, { size: 2.2, fill: col[f.level], bold: true })
+        + txt(CX + 5, y + 3.8, clip(f.title, 120), { size: 3, bold: true }) + txt(CX + 5, y + 7.4, clip(`Oplossing: ${f.fix}`, 150), { size: 2.6 });
+    });
+    sheets.push({ title: 'Aandachtspunten', body: b });
+  }
+  return sheets;
+}
+
+function bomSheets(d: PdfData): Sheet[] {
+  const lines = buildBom(d.boards, d.devices, d.circuits);
+  if (!lines.length) return [];
+  const RH = 6.2, per = Math.floor((CH - 16) / RH), X = [CX, CX + 20, CX + 150, CX + 215], sheets: Sheet[] = [];
+  for (let i = 0; i < lines.length; i += per) {
+    let b = rect(CX, CY, CW, 7, { fill: '#e6e9ee' }) + ['Aantal', 'Omschrijving', 'Merk / serie', 'Referentie'].map((hd, k) => txt(X[k] + 2, CY + 4.8, hd, { bold: true, size: 3 })).join('');
+    lines.slice(i, i + per).forEach((l, r) => {
+      const y = CY + 7 + r * RH, e = d.bomEntries?.[l.key];
+      if (r % 2 === 0) b += rect(CX, y, CW, RH, { fill: '#f3f5f8' });
+      b += txt(X[0] + 2, y + 4.3, String(l.qty), { bold: true, size: 3.4 }) + txt(X[1] + 2, y + 4.3, clip(l.description + (l.est ? ' (schatting)' : ''), 78), { size: 3 }) + txt(X[2] + 2, y + 4.3, clip(e?.brand ?? '', 30), { size: 3 }) + txt(X[3] + 2, y + 4.3, clip(e?.ref ?? '', 24), { size: 3 });
+    });
+    b += txt(CX, CY + CH - 2, 'Rail, klemmen en labels zijn schattingen. Prijzen en leverancier volgen in de offerte.', { size: 2.4, fill: '#555' });
+    sheets.push({ title: 'Materiaallijst', body: b });
+  }
+  return sheets;
+}
+
 /** Alle pagina's als volledige SVG-strings (A4 liggend). */
 export function buildPdfPages(d: PdfData, o: PdfOptions): string[] {
+  if (o.proposal) {
+    const sh: Sheet[] = [coverSheet(d), ...boardLayoutSheets(d), ...schemaSheets(d, 'nieuw', false), ...mappingSheets(d), ...attentionSheets(d), ...bomSheets(d)];
+    return sh.map((s, i) => framePage(d, s, i + 1, sh.length));
+  }
   const multi = o.states.length > 1, sheets: Sheet[] = [];
   for (const st of o.states) sheets.push(...schemaSheets(d, st, multi));
   if (o.plans) for (const pp of d.plans) { const s = planSheet(d, pp, o.photoOnPlans); if (s) sheets.push(s); }

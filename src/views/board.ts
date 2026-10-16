@@ -9,6 +9,7 @@ import { moduleArt } from '../domain/modules';
 import { deviceForm } from './deviceform';
 import { openGenerate } from './generate';
 import { generateNewBoards, DEFAULT_GEN } from '../domain/newboard';
+import { openBom } from './bom';
 import { editCircuit } from './circuits';
 import { analyzeBoardPhoto } from '../lib/ai';
 import { uid } from '../lib/id';
@@ -122,6 +123,7 @@ export async function renderBoard(root: HTMLElement, project: Project) {
   }
   toolbar.append(btn('+ Toestel', { icon: 'Plus', title: 'Toestel manueel toevoegen (zonder foto)', onClick: () => addDeviceManual() }),
     btn('Alles wissen', { icon: 'Trash2', variant: 'ghost', title: 'Alle toestellen van deze kast verwijderen', onClick: () => clearAll() }));
+  if (board.kind === 'nieuw') toolbar.append(btn('Materiaallijst', { icon: 'ClipboardList', title: 'Materiaallijst van de nieuwe kast (CSV)', onClick: () => openBom(project) }));
   toolbar.append(btn(board.kind === 'nieuw' ? 'Opnieuw genereren' : 'Nieuwe kast voorstellen', { icon: 'WandSparkles', variant: 'accent', title: 'Voorstel voor alle kasten: elke kring eigen automaat, per 30 mA-differentieel', onClick: genNew }));
 
   // ---------- canvas ----------
