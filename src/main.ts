@@ -8,6 +8,8 @@ import './styles/app.css';
 import { h, clear, icon, toast } from './lib/dom';
 import { renderProjects } from './views/projects';
 import { renderProject } from './views/project';
+import { renderLogin } from './views/login';
+import { AuthError } from './db/client';
 
 const app = document.getElementById('app')!;
 
@@ -18,6 +20,7 @@ async function route() {
     if (kind === 'p' && id) await renderProject(app, id, tab || 'kast');
     else await renderProjects(app);
   } catch (e: any) {
+    if (e instanceof AuthError) { renderLogin(app); return; }
     console.error(e);
     app.append(h('div', { class: 'page' }, h('div', { class: 'card card-pad' }, h('h3', null, 'Er ging iets mis'), h('p', null, String(e?.message ?? e)))));
     toast(String(e?.message ?? e), 'error');

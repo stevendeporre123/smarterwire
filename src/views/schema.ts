@@ -1,7 +1,7 @@
 import { h, svg, btn, icon, download, clear, toast } from '../lib/dom';
 import { buildForm, badge, type FieldDef } from '../lib/ui';
-import { upsert, upsertStmt, softDelete } from '../db/repo';
-import { sql, type Stmt } from '../db/client';
+import { upsert, putOp, setOp, whereOp, softDelete } from '../db/repo';
+import { run, type Op } from '../db/client';
 import { uid } from '../lib/id';
 import { boardsOf, circuitsOf, allDevicesOfProject, type Project, type Circuit, type Device } from '../domain/model';
 import { buildDiagram } from '../domain/diagram';
@@ -88,7 +88,7 @@ export async function renderSchema(root: HTMLElement, project: Project) {
   async function removeDevice(d: Device) {
     const kids = devices.filter((x) => x.parent_id === d.id);
     if (!confirm(`${deviceTitle(d)} verwijderen${kids.length ? ` (de ${kids.length} toestellen eronder komen dan los te hangen)` : ''}?`)) return;
-    await sql.run('UPDATE device SET parent_id=NULL, updated_at=? WHERE parent_id=?', [Date.now(), d.id]);
+    await run([whereOp('device', { parent_id: null }, { parent_id: d.id })]);
     await softDelete('device', d.id); await unlinkDevice(d.id);
     sel = null; await after();
   }
@@ -118,25 +118,25 @@ export async function renderSchema(root: HTMLElement, project: Project) {
     const added: any[] = moving ? [moving] : (what.newTypes ?? (what.newType ? [what.newType] : [])).map((type) => ({ src: 'manual', id: uid(), fresh: true, type, label: null }));
     if (chain && rows.length) { const t = Math.min(at, rows.length - 1); const lbl = rows[t].map((l) => l.label).find(Boolean) ?? null; for (const e of added) { e.label = e.label ?? lbl; rows[t].push(e); } }
     else rows.splice(Math.min(at, rows.length), 0, added);
-    const now = Date.now(), stmts: Stmt[] = [];
+    const stmts: Op[] = [];
     let order = 0;
     for (const row of rows) {
       const grp = row.length > 1 ? (row.find((l) => l.grp && !(l as any).fresh)?.grp ?? uid()) : null;
       for (const l of row) {
         order += 10;
-        if ((l as any).fresh) stmts.push(upsertStmt('schema_load', { id: l.id, circuit_id: circuitId, type: l.type, label: l.label ?? null, n: 1, pos: order, grp }));
-        else if (l.src === 'plan') stmts.push({ sql: 'UPDATE symbol SET spos=?, sgrp=?, circuit_id=?, updated_at=? WHERE id=?', bind: [order, grp, circuitId, now, l.id] });
-        else stmts.push({ sql: 'UPDATE schema_load SET pos=?, grp=?, circuit_id=?, updated_at=? WHERE id=?', bind: [order, grp, circuitId, now, l.id] });
+        if ((l as any).fresh) stmts.push(putOp('schema_load', { id: l.id, circuit_id: circuitId, type: l.type, label: l.label ?? null, n: 1, pos: order, grp }));
+        else if (l.src === 'plan') stmts.push(setOp('symbol', l.id!, { spos: order, sgrp: grp, circuit_id: circuitId }));
+        else stmts.push(setOp('schema_load', l.id!, { pos: order, grp, circuit_id: circuitId }));
       }
     }
-    await sql.batch(stmts);
+    await run(stmts);
     if (moving) sel = { kind: 'load', id: what.key! }; else if (added.length) sel = { kind: 'load', id: `manual:${added[0].id}` };
     await after();
   }
   async function removeLoad(key: string) {
     const l = loadOf(key); if (!l) return;
     if (l.src === 'manual') await softDelete('schema_load', l.id!);
-    else await sql.run('UPDATE symbol SET circuit_id=NULL, updated_at=? WHERE id=?', [Date.now(), l.id]);
+    else await run([setOp('symbol', l.id!, { circuit_id: null })]);
     sel = null; await after();
   }
 
@@ -259,7 +259,7 @@ export async function renderSchema(root: HTMLElement, project: Project) {
     const { id: baseId, n: gangN } = splitType(l.type), en = symbolEntry(baseId), isPlan = l.src === 'plan';
     const circ = circuits.find((c) => c.id === l.circuit_id);
     const save = async (patch: { type?: string; label?: string | null; n?: number; circuit_id?: string | null }) => {
-      if (isPlan) { const sets = Object.keys(patch).filter((k) => k !== 'n'); if (sets.length) await sql.run(`UPDATE symbol SET ${sets.map((k) => `${k}=?`).join(',')}, updated_at=? WHERE id=?`, [...sets.map((k) => (patch as any)[k]), Date.now(), l.id]); }
+      if (isPlan) { const { n: _n, ...rest } = patch as any; if (Object.keys(rest).length) await run([setOp('symbol', l.id!, rest)]); }
       else { const row = manual.find((m) => m.id === l.id)!; Object.assign(row, patch); await upsert('schema_load', row); }
       await after();
     };
@@ -301,7 +301,7 @@ export async function renderSchema(root: HTMLElement, project: Project) {
     el.append(input, results); fill();
     if (unlinked.size) el.append(h('h4', null, 'Nog niet gekoppeld op het plan'), ...[...unlinked.values()].map((g) => h('div', { class: 'load-row' }, iconFor(g.type), h('span', { style: { flex: 1 } }, `${g.ids.length}× ${nameOf(splitType(g.type).id)}${g.label ? ' – ' + g.label : ''}`),
       btn('Koppel', { variant: 'secondary', title: `Aan kring ${c.nr ?? ''} koppelen`, onClick: async () => {
-        const now = Date.now(); await sql.batch(g.ids.map((id) => ({ sql: 'UPDATE symbol SET circuit_id=?, updated_at=? WHERE id=?', bind: [c.id, now, id] }))); await after(`${g.ids.length} symbool/symbolen gekoppeld`);
+        await run(g.ids.map((id) => setOp('symbol', id, { circuit_id: c.id }))); await after(`${g.ids.length} symbool/symbolen gekoppeld`);
       } }))));
     return el;
   }

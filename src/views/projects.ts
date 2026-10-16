@@ -1,8 +1,8 @@
 import { h, btn, icon, toast } from '../lib/dom';
 import { dataTable, formModal } from '../lib/ui';
-import { sql } from '../db/client';
+import { q } from '../db/client';
 import { exportProject, importProject } from '../db/transfer';
-import { upsert } from '../db/repo';
+import { upsert, softDelete } from '../db/repo';
 import { topbar } from './shell';
 import type { Project } from '../domain/model';
 
@@ -31,12 +31,7 @@ export function validateProject(v: Record<string, any>): boolean {
 }
 
 export async function renderProjects(app: HTMLElement) {
-  const rows = await sql.query<Project & { circuits: number; boards: number; done: number }>(`
-    SELECT p.*,
-      (SELECT COUNT(*) FROM board b WHERE b.project_id=p.id AND b.deleted=0) boards,
-      (SELECT COUNT(*) FROM circuit c WHERE c.project_id=p.id AND c.deleted=0) circuits,
-      (SELECT COUNT(*) FROM circuit c WHERE c.project_id=p.id AND c.deleted=0 AND c.status!='onbekend') done
-    FROM project p WHERE p.deleted=0 ORDER BY p.updated_at DESC`);
+  const rows = await q<Project & { circuits: number; boards: number; done: number }>('projects');
 
   const open = (p: Project) => { location.hash = `#/p/${p.id}/kast`; };
   const edit = (p?: Project) => formModal({
@@ -46,7 +41,7 @@ export async function renderProjects(app: HTMLElement) {
       const saved = await upsert('project', { ...(p ?? {}), ...v });
       if (!p) open(saved as any); else location.reload();
     },
-    onDelete: p ? async () => { await sql.run('UPDATE project SET deleted=1, updated_at=? WHERE id=?', [Date.now(), p.id]); location.reload(); } : undefined,
+    onDelete: p ? async () => { await softDelete('project', p.id); location.reload(); } : undefined,
   });
 
   app.append(h('div', { class: 'shell' }, topbar(),

@@ -1,4 +1,4 @@
-import { sql } from '../db/client';
+import { q } from '../db/client';
 import { list } from '../db/repo';
 
 export interface Project { id: string; name: string; address?: string; client?: string; owner?: string; ean?: string; supply?: string; supply_amp?: number | null; supply_cable?: string | null; inspector?: string; inspector_info?: string; notes?: string; updated_at: number }
@@ -22,12 +22,10 @@ export interface Shape {
 }
 export interface Symbol_ { id: string; plan_id: string; type: string; x: number; y: number; rot: number; circuit_id?: string | null; board_id?: string | null; label?: string | null; notes?: string | null }
 
-export const boardsOf = (pid: string) => list<Board>('board', 'project_id=?', [pid], 'kind, name');
-export const devicesOf = (boardId: string) => list<Device>('device', 'board_id=?', [boardId], 'row_no, pos');
-export const circuitsOf = (pid: string) =>
-  list<Circuit>('circuit', 'project_id=?', [pid], `CASE WHEN nr GLOB '[0-9]*' THEN CAST(nr AS INTEGER) ELSE 9999 END, nr, name`);
-export const plansOf = (pid: string) => list<Plan>('plan', 'project_id=?', [pid], 'level, name');
-export const shapesOf = (planId: string) => list<Shape>('shape', 'plan_id=?', [planId]);
-export const symbolsOf = (planId: string) => list<Symbol_>('symbol', 'plan_id=?', [planId]);
-export const allDevicesOfProject = (pid: string) =>
-  sql.query<Device>(`SELECT d.* FROM device d JOIN board b ON b.id=d.board_id WHERE d.deleted=0 AND b.deleted=0 AND b.project_id=?`, [pid]);
+export const boardsOf = (pid: string) => list<Board>('board', pid);
+export const devicesOf = (boardId: string) => list<Device>('device', boardId);
+export const circuitsOf = (pid: string) => list<Circuit>('circuit', pid);
+export const plansOf = (pid: string) => list<Plan>('plan', pid);
+export const shapesOf = (planId: string) => list<Shape>('shape', planId);
+export const symbolsOf = (planId: string) => list<Symbol_>('symbol', planId);
+export const allDevicesOfProject = (pid: string) => q<Device>('devices', { project: pid });

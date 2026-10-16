@@ -1,16 +1,11 @@
-import { sql } from '../db/client';
-import { upsert } from '../db/repo';
+import { getMe, saveInstaller, type Installer } from '../lib/auth';
 
-/** Gegevens van de installateur (komen op elke PDF-pagina). Eenmalig in te vullen, geldt voor alle projecten. */
-export interface Installer { name: string; address: string; phone: string; email: string; vat: string; logo: string }
+/** Gegevens van de installateur (komen op elke PDF-pagina). Eenmalig in te vullen, geldt voor alle projecten van deze gebruiker. */
+export type { Installer };
 export const EMPTY_INSTALLER: Installer = { name: '', address: '', phone: '', email: '', vat: '', logo: '' };
 
-export async function getSetting<T>(key: string, fallback: T): Promise<T> {
-  const row = await sql.one<{ value: string }>('SELECT value FROM setting WHERE id=? AND deleted=0', [key]);
-  if (!row?.value) return fallback;
-  try { return JSON.parse(row.value) as T; } catch { return fallback; }
-}
-export const setSetting = (key: string, value: unknown) => upsert('setting', { id: key, value: JSON.stringify(value) });
+export const getInstaller = async (): Promise<Installer> => ({ ...EMPTY_INSTALLER, ...((await getMe()).installer ?? {}) });
+export const setInstaller = (v: Installer) => saveInstaller(v);
 
-export const getInstaller = () => getSetting<Installer>('installer', EMPTY_INSTALLER);
-export const setInstaller = (v: Installer) => setSetting('installer', v);
+/** Voorkeuren per gebruiker (bv. favorieten in het situatieplan). */
+export { getPref as getSetting, setPref as setSetting } from '../lib/auth';
