@@ -1,32 +1,23 @@
-import { sql, type Stmt } from './client';
+import { q, run, type Op, type Where } from './client';
 import { uid } from '../lib/id';
 
 export type Row = Record<string, any> & { id: string };
 
-/** INSERT ... ON CONFLICT DO UPDATE. Zet altijd updated_at (voor sync). */
-export function upsertStmt(table: string, obj: Record<string, any>): Stmt {
-  const o: Record<string, any> = { ...obj, id: obj.id ?? uid(), updated_at: Date.now() };
-  const cols = Object.keys(o);
-  const set = cols.filter((c) => c !== 'id').map((c) => `${c}=excluded.${c}`).join(',');
-  return {
-    sql: `INSERT INTO ${table} (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})
-          ON CONFLICT(id) DO UPDATE SET ${set}`,
-    bind: cols.map((c) => o[c] ?? null),
-  };
-}
+/** Bewerking: invoegen of bijwerken. De server zet updated_at en controleert de eigenaar. */
+export const putOp = (table: string, obj: Record<string, any>): Op => ({ t: 'put', table, row: { ...obj, id: obj.id ?? uid() } });
+export const setOp = (table: string, id: string, patch: Record<string, any>): Op => ({ t: 'set', table, id, patch });
+export const softDeleteOp = (table: string, id: string): Op => setOp(table, id, { deleted: 1 });
+export const whereOp = (table: string, set: Record<string, any>, where: Where): Op => ({ t: 'where', table, set, where });
 
 export async function upsert<T extends Record<string, any>>(table: string, obj: T): Promise<T & { id: string }> {
-  const withId = { ...obj, id: obj.id ?? uid() };
-  const s = upsertStmt(table, withId);
-  await sql.run(s.sql, s.bind);
-  return withId;
+  const op = putOp(table, obj);
+  await run([op]);
+  return { ...obj, id: (op as any).row.id };
 }
+export const softDelete = (table: string, id: string) => run([softDeleteOp(table, id)]);
 
-export const softDelete = (table: string, id: string) =>
-  sql.run(`UPDATE ${table} SET deleted=1, updated_at=? WHERE id=?`, [Date.now(), id]);
-
-export const list = <T = Row>(table: string, where = '1=1', bind: any[] = [], order = 'rowid') =>
-  sql.query<T>(`SELECT * FROM ${table} WHERE deleted=0 AND (${where}) ORDER BY ${order}`, bind);
+/** Lijst van een tabel per ouder (project, kast, plan). Volgorde ligt vast op de server. */
+export const list = <T = Row>(table: string, by: string) => q<T>('list', { table, by });
 
 // ---------- assets (foto's, plattegronden) ----------
 // Bytes staan in D1 (tabel asset) en worden via de Worker geserveerd; D1 laat max. 2 MB per rij toe.
@@ -56,5 +47,5 @@ export async function assetUrl(id: string | null | undefined): Promise<string | 
 }
 
 export async function assetSize(id: string) {
-  return sql.one<{ width: number; height: number }>('SELECT width,height FROM asset WHERE id=?', [id]);
+  return (await q<{ width: number; height: number }>('assetSize', { id }))[0];
 }

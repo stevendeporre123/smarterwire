@@ -1,7 +1,6 @@
 import { h, svg, btn, icon, toast, clear, download } from '../lib/dom';
 import { buildForm, formModal, panZoom, type FieldDef } from '../lib/ui';
 import { upsert, softDelete, saveImage, assetUrl, assetSize } from '../db/repo';
-import { sql } from '../db/client';
 import { plansOf, symbolsOf, shapesOf, circuitsOf, boardsOf, type Plan, type Project, type Symbol_, type Shape } from '../domain/model';
 import { circuitColor } from '../domain/symbols';
 import { CATALOG, FUNC_ORDER, symbolEntry, symbolGeom, symbolMarkup, splitType, joinType, type SymbolEntry } from '../domain/areisymbols';
@@ -641,6 +640,5 @@ export async function renderPlan(root: HTMLElement, project: Project) {
     if (e.key.toLowerCase() === 'r') { sym.rot = (sym.rot + 90) % 360; await upsert('symbol', sym); drawSyms(); drawSide(); }
   });
 
-  void sql;
   drawPal(); drawAll(); drawSide();
 }

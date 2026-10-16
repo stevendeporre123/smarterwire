@@ -1,0 +1,79 @@
+name: D1 aanmaken
+
+# Handmatig starten (ook vanop je gsm): GitHub → Actions → "D1 aanmaken" → Run workflow.
+# Maakt twee D1-databases aan (productie + preview, indien ze nog niet bestaan), schrijft de database_id's in
+# wrangler.toml en wrangler.preview-migrations.toml, commit dat en past de migraties toe.
+# Vereist repository-secrets: CLOUDFLARE_API_TOKEN (rechten: D1 Edit) en CLOUDFLARE_ACCOUNT_ID.
+on:
+  workflow_dispatch:
+    inputs:
+      name:
+        description: Naam van de productie-database
+        default: smarterwire
+        required: true
+      preview_name:
+        description: Naam van de preview-database (voor branch-previews)
+        default: smarterwire-preview
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  create:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      DB_NAME: ${{ inputs.name }}
+      PREVIEW_NAME: ${{ inputs.preview_name }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+
+      - name: Databases aanmaken (als ze nog niet bestaan)
+        run: |
+          for n in "$DB_NAME" "$PREVIEW_NAME"; do
+            if npx wrangler d1 list --json | jq -e --arg n "$n" 'map(select(.name==$n))|length>0' >/dev/null; then
+              echo "Database $n bestaat al."
+            else
+              npx wrangler d1 create "$n"
+            fi
+          done
+
+      - name: database_id's in de wrangler-bestanden zetten
+        run: |
+          idof() { npx wrangler d1 list --json | jq -r --arg n "$1" '.[]|select(.name==$n)|.uuid'; }
+          export DB_ID=$(idof "$DB_NAME") PREVIEW_ID=$(idof "$PREVIEW_NAME")
+          test -n "$DB_ID" && test -n "$PREVIEW_ID"
+          python3 - <<'PY'
+          import os, re
+          prod = (os.environ['DB_NAME'], os.environ['DB_ID'])
+          prev = (os.environ['PREVIEW_NAME'], os.environ['PREVIEW_ID'])
+          def patch(path, pick):
+              out, section = [], ''
+              for line in open(path).read().split('\n'):
+                  m = re.match(r'\s*\[+([^\]]+)\]+\s*$', line)
+                  if m: section = m.group(1).strip()
+                  target = pick(section)
+                  if target and re.match(r'database_name\s*=', line): line = f'database_name = "{target[0]}"'
+                  if target and re.match(r'database_id\s*=', line): line = f'database_id = "{target[1]}"'
+                  out.append(line)
+              open(path, 'w').write('\n'.join(out))
+          patch('wrangler.toml', lambda s: prod if s == 'd1_databases' else prev if s == 'previews.d1_databases' else None)
+          patch('wrangler.preview-migrations.toml', lambda s: prev if s == 'd1_databases' else None)
+          PY
+          git diff --stat
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -am "D1: database_id's van $DB_NAME en $PREVIEW_NAME"
+            git push
+          fi
+
+      - name: Migraties toepassen (productie)
+        run: npx wrangler d1 migrations apply "$DB_NAME" --remote -c wrangler.toml
+      - name: Migraties toepassen (preview)
+        run: npx wrangler d1 migrations apply PREVIEW_DB --remote -c wrangler.preview-migrations.toml

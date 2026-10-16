@@ -1,5 +1,5 @@
-import { sql, type Stmt } from '../db/client';
-import { upsertStmt } from '../db/repo';
+import { q, run, type Op } from '../db/client';
+import { putOp, setOp, whereOp } from '../db/repo';
 import { uid } from '../lib/id';
 import { DEFAULT_RATING_FOR_SECTION } from './devices';
 import { boardsOf, circuitsOf, allDevicesOfProject, type Board, type Circuit, type Device, type Project } from './model';
@@ -35,9 +35,7 @@ const sizeOf = (it: Item[]) => it.reduce((s, i) => s + i.cs.length, 0);
 export async function generateNewBoards(project: Project, opt: GenOptions): Promise<GenResult> {
   const [boards, circuits, devices, symLevels] = await Promise.all([
     boardsOf(project.id), circuitsOf(project.id), allDevicesOfProject(project.id),
-    sql.query<{ circuit_id: string; level: string; n: number }>(
-      `SELECT s.circuit_id, COALESCE(p.level, p.name) level, COUNT(*) n FROM symbol s JOIN plan p ON p.id=s.plan_id
-       WHERE s.deleted=0 AND p.deleted=0 AND p.project_id=? AND s.circuit_id IS NOT NULL GROUP BY s.circuit_id, p.id`, [project.id]),
+    q<{ circuit_id: string; level: string; n: number }>('symLevels', { project: project.id }),
   ]);
   const old = boards.filter((b) => b.kind === 'bestaand');
   if (!old.length) throw new Error('Geen bestaande kast gevonden');
@@ -60,19 +58,19 @@ export async function generateNewBoards(project: Project, opt: GenOptions): Prom
   const threePhase = project.supply === '3N400' || project.supply === '3x230';
   const phaseNames = project.supply === '3x230' ? ['L1-L2', 'L2-L3', 'L3-L1'] : ['L1', 'L2', 'L3'];
 
-  const stmts: Stmt[] = [];
+  const stmts: Op[] = [];
   let diffCount = 0;
   const now = Date.now();
-  stmts.push({ sql: `UPDATE circuit SET new_device_id=NULL, updated_at=? WHERE project_id=?`, bind: [now, project.id] });
+  stmts.push(whereOp('circuit', { new_device_id: null }, { project_id: project.id }));
 
   for (const src of old) {
     // bijhorende nieuwe kast zoeken of aanmaken
     let nb = boards.find((b) => b.kind === 'nieuw' && b.src_board_id === src.id);
     if (!nb) {
       nb = { id: uid(), project_id: project.id, name: `${src.name} (nieuw)`, kind: 'nieuw', src_board_id: src.id } as Board;
-      stmts.push(upsertStmt('board', nb));
+      stmts.push(putOp('board', nb));
     }
-    stmts.push({ sql: `UPDATE device SET deleted=1, updated_at=? WHERE board_id=?`, bind: [now, nb.id] });
+    stmts.push(whereOp('device', { deleted: 1 }, { board_id: nb.id }));
 
     const mine = circuits.filter((c) => (c.device_id ? devBoard.get(c.device_id) === src.id : src.id === root.id));
     if (!mine.length && src.id !== root.id) continue;
@@ -120,7 +118,7 @@ export async function generateNewBoards(project: Project, opt: GenOptions): Prom
     type Dev = Record<string, any>;
     const polesAll = threePhase ? (project.supply === '3x230' ? '3P' : '4P') : '2P', modsAll = threePhase ? (project.supply === '3x230' ? 3 : 4) : 2;
     const groups: Dev[][] = [];
-    const circuitStmts: Stmt[] = [];
+    const circuitStmts: Op[] = [];
     if (isRoot) groups.push([{ id: mainId, board_id: nb.id, kind: 'differentieel', label: 'Hoofddifferentieel', poles: polesAll, rating_a: opt.mainDiffRating, sens_ma: 300, dtype: opt.mainDiffType || 'A', modules: modsAll, notes: 'hoofddifferentieel 300 mA' }]);
     const globalLoad: Record<string, number> = Object.fromEntries(phaseNames.map((p) => [p, 0]));
     let n = 1;
@@ -149,7 +147,7 @@ export async function generateNewBoards(project: Project, opt: GenOptions): Prom
             if (phase !== '3P') { diffLoad[phase] += rating; globalLoad[phase] += rating; } else phaseNames.forEach((p) => { diffLoad[p] += rating; globalLoad[p] += rating; });
           }
           group.push({ id: devId, board_id: nb.id, parent_id: diffId, kind: 'automaat', label: c.nr ? `K${c.nr}` : null, poles, phase, rating_a: rating, curve: 'C', modules });
-          circuitStmts.push({ sql: `UPDATE circuit SET new_device_id=?, updated_at=? WHERE id=?`, bind: [devId, now, c.id] });
+          circuitStmts.push(setOp('circuit', c.id, { new_device_id: devId }));
         }
       }
       groups.push(group); n++; diffCount++;
@@ -166,10 +164,10 @@ export async function generateNewBoards(project: Project, opt: GenOptions): Prom
     }
     const rowsUsed = row + 1;
     if (rowsUsed > opt.rows) warnings.push(`${nb.name}: ${rowsUsed} rijen nodig bij ${cols} modules breed, maar er zijn er ${opt.rows} ingesteld. Maak de kast breder of voeg een rij toe.`);
-    stmts.push(...groups.flat().map((d) => upsertStmt('device', d)), ...circuitStmts);
+    stmts.push(...groups.flat().map((d) => putOp('device', d)), ...circuitStmts);
     if (threePhase) warnings.push(`${nb.name}: belasting (A) per fase ≈ ${phaseNames.map((p) => `${p}: ${globalLoad[p]}`).join(', ')}`);
   }
 
-  await sql.batch(stmts);
+  await run(stmts);
   return { diffs: diffCount, circuits: circuits.length, warnings };
 }

@@ -1,15 +1,13 @@
-import { sql } from '../db/client';
+import { q } from '../db/client';
 import type { DiagramSymbol } from './diagram';
 
 /** Verbruiker die rechtstreeks op het eendraadschema werd toegevoegd. */
 export interface SchemaLoad { id: string; circuit_id: string; type: string; label?: string | null; n: number; pos?: number | null; grp?: string | null }
 
-export const schemaLoadsOf = (pid: string) => sql.query<SchemaLoad>(
-  `SELECT l.* FROM schema_load l JOIN circuit c ON c.id=l.circuit_id WHERE l.deleted=0 AND c.deleted=0 AND c.project_id=? ORDER BY l.pos, l.rowid`, [pid]);
+export const schemaLoadsOf = (pid: string) => q<SchemaLoad>('schemaLoads', { project: pid });
 
 export interface PlanSymbolRow { id: string; circuit_id: string | null; type: string; label: string | null; plan: string; spos: number | null; sgrp: string | null }
-export const planSymbolRows = (pid: string) => sql.query<PlanSymbolRow>(
-  `SELECT s.id, s.circuit_id, s.type, s.label, s.spos, s.sgrp, p.name plan FROM symbol s JOIN plan p ON p.id=s.plan_id WHERE s.deleted=0 AND p.deleted=0 AND p.project_id=? ORDER BY p.level, p.name, s.rowid`, [pid]);
+export const planSymbolRows = (pid: string) => q<PlanSymbolRow>('planSymbols', { project: pid });
 
 export const loadKey = (src: 'plan' | 'manual', id: string) => `${src}:${id}`;
 

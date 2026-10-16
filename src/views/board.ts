@@ -1,7 +1,7 @@
 import { h, svg, btn, icon, toast, clear } from '../lib/dom';
 import { buildForm, formModal, modal, panZoom, badge, type FieldDef } from '../lib/ui';
-import { upsert, softDelete, saveImage, assetUrl, assetSize, upsertStmt } from '../db/repo';
-import { sql } from '../db/client';
+import { upsert, softDelete, saveImage, assetUrl, assetSize, putOp } from '../db/repo';
+import { run } from '../db/client';
 import { boardsOf, devicesOf, circuitsOf, type Board, type Device, type Project, type Circuit } from '../domain/model';
 import { CURVES, DEVICE_KINDS, DIFF_TYPES, deviceTitle, isGroupParent, isFeeder, supplyOf, supplyPhases, supplyPoles, supplyConflict, deviceFieldKeys, defaultModules, normPoles, polesText } from '../domain/devices';
 import { ensureCircuits, unlinkDevice } from '../domain/circuits';
@@ -112,7 +112,7 @@ export async function renderBoard(root: HTMLElement, project: Project) {
     toolbar.append(fileInput, btn(photoUrl ? 'Andere foto' : 'Foto opladen', { icon: 'Camera', onClick: () => fileInput.click() }));
     if (photoUrl) toolbar.append(btn('AI-voorstel', { icon: 'Sparkles', variant: 'accent', title: 'Toestellen herkennen met AI (proxy vereist)', onClick: runAi }),
       btn('Ouders afleiden', { icon: 'GitBranch', title: 'Beschermend differentieel automatisch afleiden uit de positie', onClick: async () => {
-        const ch = guessParents(devices); await sql.batch(ch.map((d) => upsertStmt('device', d))); toast(`${ch.length} toestel(len) gekoppeld`); refresh(); } }));
+        const ch = guessParents(devices); await run(ch.map((d) => putOp('device', d))); toast(`${ch.length} toestel(len) gekoppeld`); refresh(); } }));
   }
   toolbar.append(btn('+ Toestel', { icon: 'Plus', title: 'Toestel manueel toevoegen (zonder foto)', onClick: () => addDeviceManual() }),
     btn('Alles wissen', { icon: 'Trash2', variant: 'ghost', title: 'Alle toestellen van deze kast verwijderen', onClick: () => clearAll() }));
@@ -174,7 +174,7 @@ export async function renderBoard(root: HTMLElement, project: Project) {
       if (w < W * 0.008 || h_ < H * 0.008) return;
       const d = await upsert('device', { board_id: board.id, kind: 'automaat', poles: '2P', curve: 'C', breaking_ka: 3, phase: supply === '1x230' ? null : 'L1', modules: Math.max(1, Math.round(w / h_ * 2.2)), row_no: 0, pos: 0, rx: x / W, ry: y / H, rw: w / W, rh: h_ / H });
       devices = await devicesOf(board.id);
-      const ch = recomputeLayout(devices); await sql.batch(ch.map((c) => upsertStmt('device', c)));
+      const ch = recomputeLayout(devices); await run(ch.map((c) => putOp('device', c)));
       selId = d.id; await refresh();
     });
     // verplaatsen / selecteren
@@ -192,7 +192,7 @@ export async function renderBoard(root: HTMLElement, project: Project) {
       const up = async () => {
         window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up);
         if (!moved) return;
-        const ch = recomputeLayout(devices); await sql.batch([upsertStmt('device', d), ...ch.map((c) => upsertStmt('device', c))]); await refresh();
+        const ch = recomputeLayout(devices); await run([putOp('device', d), ...ch.map((c) => putOp('device', c))]); await refresh();
       };
       window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
     }
@@ -326,12 +326,12 @@ export async function renderBoard(root: HTMLElement, project: Project) {
       if (mode === 'replace') await removeAllDevices();
       const stmts = prop.map((p) => {
         const kind = p.kind in DEVICE_KINDS ? p.kind : 'anders', poles = p.poles ? normPoles(p.poles) : null;
-        return upsertStmt('device', { id: uid(), board_id: board.id, kind, label: p.label, poles, rating_a: p.rating_a, curve: p.curve, sens_ma: p.sens_ma, dtype: p.dtype, modules: p.modules ?? defaultModules(kind, poles), rx: p.rect.x, ry: p.rect.y, rw: p.rect.w, rh: p.rect.h, row_no: 0, pos: 0, notes: p.notes });
+        return putOp('device', { id: uid(), board_id: board.id, kind, label: p.label, poles, rating_a: p.rating_a, curve: p.curve, sens_ma: p.sens_ma, dtype: p.dtype, modules: p.modules ?? defaultModules(kind, poles), rx: p.rect.x, ry: p.rect.y, rw: p.rect.w, rh: p.rect.h, row_no: 0, pos: 0, notes: p.notes });
       });
-      await sql.batch(stmts);
+      await run(stmts);
       devices = await devicesOf(board.id);
       const ch = recomputeLayout(devices); ch.push(...guessParents(devices));
-      await sql.batch(ch.map((c) => upsertStmt('device', c)));
+      await run(ch.map((c) => putOp('device', c)));
       toast(`${prop.length} toestellen ${mode === 'replace' ? 'ingelezen' : 'toegevoegd'} – controleer ze!`); await refresh();
     } catch (e: any) { toast(e.message, 'error'); }
   }

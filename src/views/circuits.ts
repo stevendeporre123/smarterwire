@@ -1,7 +1,7 @@
 import { h, btn, icon, toast } from '../lib/dom';
 import { dataTable, formModal, badge, type FieldDef } from '../lib/ui';
-import { upsert, softDelete } from '../db/repo';
-import { sql } from '../db/client';
+import { upsert, softDelete, whereOp } from '../db/repo';
+import { q, run } from '../db/client';
 import { boardsOf, devicesOf, circuitsOf, plansOf, type Circuit, type Device, type Project } from '../domain/model';
 import { CABLE_TYPES, FIRE_CLASSES, FUNCTIONS, INSTALL_MODES, CONDUIT_MODES, SECTIONS, STATUSES, cableLabel, cableMissing, deviceTitle, isFeeder, supplyOf, supplyVoltages } from '../domain/devices';
 
@@ -51,15 +51,14 @@ export async function editCircuit(project: Project, circuit: Partial<Circuit>, o
 
 /** Kringen in bulk verwijderen. Symbolen op het plan blijven staan (zonder kring), handmatige verbruikers en leidingtrajecten van de kring verdwijnen/ontkoppelen. */
 async function deleteCircuits(ids: string[], alsoDevices: boolean, devIds: string[]) {
-  const now = Date.now(), ph = (n: number) => Array(n).fill('?').join(',');
-  const stmts = [
-    { sql: `UPDATE circuit SET deleted=1, updated_at=? WHERE id IN (${ph(ids.length)})`, bind: [now, ...ids] },
-    { sql: `UPDATE symbol SET circuit_id=NULL, updated_at=? WHERE circuit_id IN (${ph(ids.length)})`, bind: [now, ...ids] },
-    { sql: `UPDATE schema_load SET deleted=1, updated_at=? WHERE circuit_id IN (${ph(ids.length)})`, bind: [now, ...ids] },
-    { sql: `UPDATE shape SET ref_id=NULL, updated_at=? WHERE kind='cable' AND ref_id IN (${ph(ids.length)})`, bind: [now, ...ids] },
+  const ops = [
+    whereOp('circuit', { deleted: 1 }, { id: ids }),
+    whereOp('symbol', { circuit_id: null }, { circuit_id: ids }),
+    whereOp('schema_load', { deleted: 1 }, { circuit_id: ids }),
+    whereOp('shape', { ref_id: null }, { kind: 'cable', ref_id: ids }),
   ];
-  if (alsoDevices && devIds.length) stmts.push({ sql: `UPDATE device SET deleted=1, updated_at=? WHERE id IN (${ph(devIds.length)})`, bind: [now, ...devIds] });
-  await sql.batch(stmts);
+  if (alsoDevices && devIds.length) ops.push(whereOp('device', { deleted: 1 }, { id: devIds }));
+  await run(ops);
 }
 
 export async function renderCircuits(root: HTMLElement, project: Project) {
@@ -67,8 +66,7 @@ export async function renderCircuits(root: HTMLElement, project: Project) {
   const devs = new Map<string, Device>();
   const boardName = new Map(boards.map((b) => [b.id, b.name]));
   for (const b of boards) for (const d of await devicesOf(b.id)) devs.set(d.id, d);
-  const symCounts = new Map<string, number>((await sql.query(
-    `SELECT s.circuit_id id, COUNT(*) n FROM symbol s JOIN plan p ON p.id=s.plan_id WHERE s.deleted=0 AND p.project_id=? AND s.circuit_id IS NOT NULL GROUP BY s.circuit_id`, [project.id]))
+  const symCounts = new Map<string, number>((await q('symCounts', { project: project.id }))
     .map((r: any) => [r.id, r.n]));
   const shared = new Map<string, number>();
   for (const c of circuits) if (c.device_id) shared.set(c.device_id, (shared.get(c.device_id) ?? 0) + 1);

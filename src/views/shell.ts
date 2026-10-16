@@ -1,5 +1,6 @@
 import { h, icon, btn, toast } from '../lib/dom';
 import { formModal } from '../lib/ui';
+import { getMe, logout, changePassword } from '../lib/auth';
 import { getInstaller, setInstaller, type Installer } from '../domain/settings';
 
 export function topbar(crumb?: string) {
@@ -8,6 +9,7 @@ export function topbar(crumb?: string) {
     crumb && h('div', { class: 'crumb' }, icon('ChevronRight', 14), h('strong', null, crumb)),
     h('span', { class: 'spacer' }),
     btn('Installateur', { icon: 'HardHat', variant: 'ghost', title: 'Gegevens van de installateur (komen op de PDF)', onClick: editInstaller }),
+    userMenu(),
   );
 }
 
@@ -37,3 +39,23 @@ async function editInstaller() {
   });
 }
 const EMPTY = (): Installer => ({ name: '', address: '', phone: '', email: '', vat: '', logo: '' });
+
+/** E-mailadres van de ingelogde gebruiker, wachtwoord wijzigen en afmelden. */
+function userMenu() {
+  const who = h('span', { class: 'hint' });
+  getMe().then((m) => { who.textContent = m.email; }).catch(() => {});
+  return h('span', { style: { display: 'inline-flex', alignItems: 'center', gap: '4px' } }, who,
+    btn('', { icon: 'KeyRound', variant: 'ghost', title: 'Wachtwoord wijzigen', onClick: editPassword }),
+    btn('', { icon: 'LogOut', variant: 'ghost', title: 'Afmelden', onClick: async () => { await logout(); location.hash = '#/'; location.reload(); } }));
+}
+
+function editPassword() {
+  formModal({
+    title: 'Wachtwoord wijzigen', values: {}, saveLabel: 'Wijzigen',
+    fields: [{ key: 'current', label: 'Huidig wachtwoord', type: 'password' }, { key: 'next', label: 'Nieuw wachtwoord (min. 8 tekens)', type: 'password' }],
+    onSave: async (v) => {
+      try { await changePassword(String(v.current ?? ''), String(v.next ?? '')); toast('Wachtwoord gewijzigd'); }
+      catch (e: any) { toast(e.message, 'error'); return false; }
+    },
+  });
+}

@@ -4,7 +4,7 @@ import { upsert } from '../db/repo';
 import { formModal } from '../lib/ui';
 import { projectFields, validateProject } from './projects';
 import { icon } from '../lib/dom';
-import { sql } from '../db/client';
+import { q } from '../db/client';
 import { topbar } from './shell';
 import { renderBoard } from './board';
 import { renderCircuits } from './circuits';
@@ -22,7 +22,7 @@ const TABS = [
 ];
 
 export async function renderProject(app: HTMLElement, id: string, tab: string) {
-  const project = await sql.one<Project>('SELECT * FROM project WHERE id=? AND deleted=0', [id]);
+  const project = (await q<Project>('project', { id }))[0];
   if (!project) { location.hash = '#/'; return; }
   await ensureCircuits(project);
   const body = h('div', { class: 'main' });

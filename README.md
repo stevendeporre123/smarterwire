@@ -13,11 +13,14 @@ Browser-app om AREI-conforme eendraadschema's en situatieplannen te maken voor k
 
 ## Techniek
 - Vite + TypeScript (geen framework), SVG voor kast, plan en schema.
-- **Cloudflare D1** is de enige opslag. De Worker (`cloudflare/worker.ts`) bevat de API: `/api/db/*` (SQL-statements, enkel SELECT/INSERT/UPDATE/DELETE), `/api/asset/:id` (foto's als BLOB in D1, max. ~2 MB, de app verkleint ze), project export/import en de AI-proxy (sleutel blijft server-side).
-- Schema = `cloudflare/migrations/*.sql` (wrangler d1 migrations).
-- Elke tabel heeft `id` (uuid), `updated_at`, `deleted` (soft delete).
-- **"Sync"** = project exporteren/importeren (`*.smarterwire.json`, incl. foto's) tussen omgevingen of toestellen. Bij importeren worden rijen met hetzelfde id samengevoegd: de laatst gewijzigde versie wint.
-- De app is niet meer offline bruikbaar. De API heeft **geen eigen login**: zet Cloudflare Access (of gelijkaardig) op het domein.
+- **Cloudflare D1** is de enige opslag. De Worker (`cloudflare/`) is de API: er gaat **geen SQL** over de lijn, de client stuurt bewerkingen (`put/set/where`) en benoemde queries (`data.ts`); de server controleert bij elke bewerking dat het project van de ingelogde gebruiker is. Foto's staan als BLOB in D1 (max. ~2 MB, de app verkleint ze).
+- **Accounts** (`auth.ts`): e-mail + wachtwoord (PBKDF2-SHA256), sessie via HttpOnly-cookie, throttling op login/registratie, CSRF-controle. Elke gebruiker is installateur met eigen projecten, eigen installateurgegevens (komen op de PDF) en eigen voorkeuren.
+- **Registratie** is open; zet `INVITE_CODE` (secret) om enkel met een uitnodigingscode te laten registreren. De eerste gebruiker neemt bestaande projecten zonder eigenaar over.
+- **Klantenportaal (gepland)**: de tabel `project_member` (rol `client`) en de toegangscontrole (`Ctx.access`) zijn er al op voorbereid; een klant krijgt dan lees-toegang tot een project zonder het te kunnen wijzigen.
+- Schema = `cloudflare/migrations/*.sql` (wrangler d1 migrations). Elke tabel heeft `id` (uuid), `updated_at`, `deleted` (soft delete).
+- **"Sync"** = project exporteren/importeren (`*.smarterwire.json`, incl. foto's) tussen omgevingen of toestellen. Het geïmporteerde project wordt van jou; bij samenvoegen wint per rij de laatst gewijzigde versie.
+- De app is niet meer offline bruikbaar. Nog niet gebouwd: e-mailverificatie en "wachtwoord vergeten" (vereist een mailprovider).
+- Wachtwoordhashing gebruikt ~100k PBKDF2-iteraties per aanmelding: dat vraagt het Workers Paid-plan (de gratis limiet van 10 ms CPU is te krap).
 
 ```bash
 npm install
@@ -28,14 +31,20 @@ npm run build
 # Eerste keer productie:
 npx wrangler d1 create smarterwire          # database_id invullen in wrangler.toml
 npx wrangler secret put ANTHROPIC_API_KEY
+npx wrangler secret put INVITE_CODE     # optioneel, om registratie te beperken
 npm run deploy                              # build + migraties (remote) + deploy
+```
+Via GitHub kan het ook zonder terminal: workflow **D1 aanmaken** maakt de productie- én de preview-database (`smarterwire-preview`, voor `wrangler preview` van branches met Cloudflare Workers Builds), vult de id's in en past de migraties toe.
+```bash
 ```
 
 ### Oude offline back-up (.sqlite3) overnemen
 ```bash
 node tools/sqlite-to-project.mjs smarterwire-2026-10-14.sqlite3 export/   # Node 22+, één bestand per project
 ```
-Daarna in de app: **Importeer project**. (Installateurgegevens zijn niet per project en vul je opnieuw in.)
+Meld je aan, daarna in de app: **Importeer project** (het project wordt van jou). Installateurgegevens zijn niet per project en vul je opnieuw in.
+
+NB: de testpagina's in `tools/*-e2e.*` gebruikten de oude in-browser database en werken niet meer zonder aanmelding.
 
 ## Status
 Eerste werkende versie. Nog niet gedaan: officiële AREI-symbolen als exacte set, AREI-controles (aantal punten per kring, doorsnede/zekering…), pinch-zoom op touch, PDF-kaft met meetgegevens.
