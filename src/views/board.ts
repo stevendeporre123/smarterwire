@@ -1,5 +1,5 @@
 import { h, svg, btn, icon, toast, clear, busy } from '../lib/dom';
-import { buildForm, formModal, modal, panZoom, badge, type FieldDef } from '../lib/ui';
+import { buildForm, formModal, modal, panZoom, badge, choose, confirmDialog, type FieldDef } from '../lib/ui';
 import { upsert, softDelete, saveImage, assetUrl, assetSize, putOp } from '../db/repo';
 import { run } from '../db/client';
 import { boardsOf, devicesOf, circuitsOf, type Board, type Device, type Project, type Circuit } from '../domain/model';
@@ -10,7 +10,7 @@ import { deviceForm } from './deviceform';
 import { openGenerate } from './generate';
 import { generateNewBoards, DEFAULT_GEN } from '../domain/newboard';
 import { editCircuit } from './circuits';
-import { analyzeBoardPhoto, getAiEndpoint, setAiEndpoint } from '../lib/ai';
+import { analyzeBoardPhoto } from '../lib/ai';
 import { uid } from '../lib/id';
 
 const LS_BOARD = (pid: string) => `smarterwire.board.${pid}`;
@@ -268,7 +268,7 @@ export async function renderBoard(root: HTMLElement, project: Project) {
         cs.length ? h('div', null, cs.map((c) => h('div', { style: { padding: '4px 0' } }, h('a', { href: '#', onClick: (e: Event) => { e.preventDefault(); editCircuit(project, c, () => refresh()); } }, `${c.nr ?? ''} ${c.name}`)))) : h('p', { class: 'hint' }, isFeeder(d.kind) ? 'Wordt aangemaakt…' : 'Dit toestel voedt zelf geen kring.'),
         cs.length > 1 ? badge('Meerdere kringen op één zekering', 'warn') : null,
         ...(cs.length ? [btn('Kring bewerken', { icon: 'Pencil', variant: 'primary', onClick: () => editCircuit(project, cs[0], () => refresh()) })] : [])),
-      btn('Toestel verwijderen', { icon: 'Trash2', variant: 'danger', onClick: async () => { if (!confirm('Toestel verwijderen?')) return; await softDelete('device', d.id); await unlinkDevice(d.id); selId = null; await refresh(); } }));
+      btn('Toestel verwijderen', { icon: 'Trash2', variant: 'danger', onClick: async () => { if (!(await confirmDialog({ title: 'Toestel verwijderen', message: 'Dit toestel verwijderen?' }))) return; await softDelete('device', d.id); await unlinkDevice(d.id); selId = null; await refresh(); } }));
   }
 
   function deviceList() {
@@ -288,17 +288,6 @@ export async function renderBoard(root: HTMLElement, project: Project) {
 
   function genNew() { return openGenerate(project, () => reload()); }
 
-  /** Vraagt tussen meerdere acties; geeft de gekozen sleutel terug, of null bij annuleren. */
-  function choose(title: string, text: string, options: { key: string; label: string; variant: 'primary' | 'danger' | 'secondary' }[]): Promise<string | null> {
-    return new Promise((resolve) => {
-      let done = false;
-      const finish = (v: string | null, close: () => void) => { if (done) return; done = true; close(); resolve(v); };
-      modal({ title, body: h('p', null, text), actions: (close) => [
-        h('span', { class: 'spacer' }), btn('Annuleren', { variant: 'ghost', onClick: () => finish(null, close) }),
-        ...options.map((o) => btn(o.label, { variant: o.variant, onClick: () => finish(o.key, close) }))] });
-    });
-  }
-
   /** Alle toestellen van deze kast verwijderen (lege automatische kringen verdwijnen mee). */
   async function removeAllDevices() {
     for (const d of devices) { await softDelete('device', d.id); await unlinkDevice(d.id); }
@@ -306,15 +295,13 @@ export async function renderBoard(root: HTMLElement, project: Project) {
   }
   async function clearAll() {
     if (!devices.length) return;
-    if (!confirm(`Alle ${devices.length} toestellen van "${board.name}" verwijderen? Kringen met gegevens blijven bestaan, maar zonder zekering.`)) return;
+    if (!(await confirmDialog({ title: 'Alle toestellen verwijderen', message: `Alle ${devices.length} toestellen van "${board.name}" verwijderen? Kringen met gegevens blijven bestaan, maar zonder zekering.`, confirmLabel: 'Alles verwijderen' }))) return;
     await removeAllDevices(); await refresh(); toast('Toestellen gewist');
   }
 
   let aiRunning = false;
   async function runAi() {
     if (aiRunning) return;
-    const tip = `Endpoint voor de AI-proxy:`;
-    const url = prompt(tip, getAiEndpoint()); if (!url) return; setAiEndpoint(url);
     aiRunning = true;
     let stop = busy('Foto wordt geanalyseerd door AI… (kan even duren)');
     try {

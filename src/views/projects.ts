@@ -1,5 +1,5 @@
 import { h, btn, icon, toast } from '../lib/dom';
-import { dataTable, formModal } from '../lib/ui';
+import { dataTable, formModal, alertDialog } from '../lib/ui';
 import { q } from '../db/client';
 import { exportProject, importProject } from '../db/transfer';
 import { upsert, softDelete } from '../db/repo';
@@ -26,7 +26,7 @@ export const projectFields = [
 export function validateProject(v: Record<string, any>): boolean {
   if (!v.name) return false;
   if (v.inspector && !v.inspector_info && INSPECTOR_PRESETS[v.inspector]) v.inspector_info = INSPECTOR_PRESETS[v.inspector];
-  if (v.ean) { v.ean = String(v.ean).replace(/\s/g, ''); if (!/^\d{18}$/.test(v.ean)) { alert('Een EAN-code bestaat uit 18 cijfers.'); return false; } }
+  if (v.ean) { v.ean = String(v.ean).replace(/\s/g, ''); if (!/^\d{18}$/.test(v.ean)) { void alertDialog('EAN-code', 'Een EAN-code bestaat uit 18 cijfers.'); return false; } }
   return true;
 }
 

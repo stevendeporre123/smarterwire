@@ -1,5 +1,5 @@
 import { h, svg, btn, icon, toast, clear, download } from '../lib/dom';
-import { buildForm, formModal, panZoom, type FieldDef } from '../lib/ui';
+import { buildForm, formModal, panZoom, confirmDialog, promptDialog, type FieldDef } from '../lib/ui';
 import { upsert, softDelete, saveImage, assetUrl, assetSize } from '../db/repo';
 import { plansOf, symbolsOf, shapesOf, circuitsOf, boardsOf, type Plan, type Project, type Symbol_, type Shape } from '../domain/model';
 import { circuitColor } from '../domain/symbols';
@@ -26,7 +26,7 @@ export async function renderPlan(root: HTMLElement, project: Project) {
   const addPhotoPlan = () => {
     fileInput.onchange = async () => {
       const f = fileInput.files?.[0]; if (!f) return;
-      const name = prompt('Naam van het plan', `Verdieping ${plans.length}`) ?? 'Plan';
+      const name = await promptDialog({ title: 'Nieuw plan', label: 'Naam van het plan', value: `Verdieping ${plans.length}` }); if (!name) return;
       const img = await saveImage(f, 3200);
       const p = await upsert('plan', { project_id: project.id, name, asset_id: img.id, level: String(plans.length), w: img.width, h: img.height });
       localStorage.setItem(LS(project.id), p.id); reload();
@@ -34,7 +34,7 @@ export async function renderPlan(root: HTMLElement, project: Project) {
     fileInput.click();
   };
   const addBlankPlan = async () => {
-    const name = prompt('Naam van het plan', `Verdieping ${plans.length}`); if (!name) return;
+    const name = await promptDialog({ title: 'Nieuw plan', label: 'Naam van het plan', value: `Verdieping ${plans.length}` }); if (!name) return;
     const p = await upsert('plan', { project_id: project.id, name, level: String(plans.length), w: 3000, h: 2100, scale: 150 });
     localStorage.setItem(LS(project.id), p.id); reload();
   };
@@ -133,7 +133,7 @@ export async function renderPlan(root: HTMLElement, project: Project) {
       ...(plan.asset_id ? [check('Foto', 'bg', () => showBg, (v) => (showBg = v), 'Achtergrondfoto tonen'),
         h('input', { type: 'range', min: 10, max: 100, value: Math.round((plan.bg_opacity ?? 0.6) * 100), title: 'Doorzichtigheid foto', style: { width: '80px' }, onInput: async (e: Event) => { plan.bg_opacity = Number((e.target as HTMLInputElement).value) / 100; bgImg?.setAttribute('opacity', String(plan.bg_opacity)); }, onChange: () => upsert('plan', plan) }),
         btn('Foto verwijderen', { icon: 'ImageOff', variant: 'ghost', title: 'Achtergrondfoto verwijderen als alle muren getekend zijn', onClick: async () => {
-          if (!confirm('De achtergrondfoto van dit plan verwijderen? Je tekening (muren, symbolen) blijft behouden.')) return;
+          if (!(await confirmDialog({ title: 'Achtergrondfoto verwijderen', message: 'De achtergrondfoto van dit plan verwijderen? Je tekening (muren, symbolen) blijft behouden.' }))) return;
           plan.asset_id = null; await upsert('plan', plan); reload(); } })] : []),
       h('span', { class: 'hint' }, 'Symbool %'), h('input', { type: 'number', value: pct(LS_SIZE), min: 30, max: 300, step: 10, style: { width: '64px' }, onChange: (e: Event) => { localStorage.setItem(LS_SIZE, (e.target as HTMLInputElement).value); S = W * SYM_SIZE * pct(LS_SIZE) / 100; drawSyms(); } }),
       h('span', { class: 'hint' }, 'Label %'), h('input', { type: 'number', value: pct(LS_LABEL), min: 30, max: 300, step: 10, style: { width: '64px' }, onChange: (e: Event) => { localStorage.setItem(LS_LABEL, (e.target as HTMLInputElement).value); LBL = pct(LS_LABEL) / 100; drawSyms(); } }),
@@ -438,7 +438,7 @@ export async function renderPlan(root: HTMLElement, project: Project) {
       window.addEventListener('pointerup', up); return;
     }
     if (tool === 'text') {
-      const t = prompt('Tekst (bv. KEUKEN)'); if (!t) return;
+      const t = await promptDialog({ title: 'Tekst op het plan', label: 'Tekst', placeholder: 'bv. KEUKEN' }); if (!t) return;
       const sh = await addShape({ kind: 'text', x1: p.x, y1: p.y, label: t, size: 0.4 }); selShape = sh.id; drawShapes(); drawSide(); return;
     }
     if (tool === 'scale') {
@@ -446,7 +446,7 @@ export async function renderPlan(root: HTMLElement, project: Project) {
       if (!scaleA) { scaleA = q; return; }
       const px = dist(scaleA, q); scaleA = null; ghostG.innerHTML = '';
       if (px < 5) return;
-      const m = NUM(prompt('Hoeveel meter is deze afstand in werkelijkheid?', '3') ?? ''); if (!(m > 0)) return;
+      const m = NUM((await promptDialog({ title: 'Schaal instellen', label: 'Hoeveel meter is deze afstand in werkelijkheid?', value: '3', confirmLabel: 'Instellen' })) ?? ''); if (!(m > 0)) return;
       plan.scale = px / m; await upsert('plan', plan); updScale(); toast(`Schaal ingesteld: 1 m = ${Math.round(plan.scale)} px`); setTool('select'); return;
     }
     if (tool.startsWith('place:')) {
