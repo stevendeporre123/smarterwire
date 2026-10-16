@@ -15,6 +15,12 @@ een 2-polige mini-automaat kan 2 polen op 1 module hebben, dus tel de breedte ap
 rect = omkadering van het toestel, genomen als fractie (0..1) van de breedte/hoogte van de foto.
 Laat velden weg die je niet kan aflezen; gok niet. Elke toestel apart, ook naast elkaar.`;
 
+const LABEL_PROMPT = `Je ziet een foto van de beschrijvingen bij een Belgische zekeringskast: handgeschreven of gedrukte strookjes onder de toestellen, een legendekaart in het deksel, of een lijst met kringen.
+Hieronder staat de lijst van de toestellen in de kast, van boven naar onder (rij) en van links naar rechts (plaats), elk met een id.
+Geef voor elke beschrijving die je kan lezen het toestel waar ze bij hoort. Gebruik de plaats op de foto (strookje onder of boven een toestel) of, bij een legende/lijst, de volgorde en eventuele kringnummers.
+Antwoord enkel met JSON zonder uitleg: {"labels":[{"device_id":"...","text":"letterlijk gelezen tekst","confidence":0.0-1.0,"reason":"waarom dit toestel"}]}
+Regels: gebruik uitsluitend id's uit de lijst; laat een toestel weg als er geen beschrijving bij te vinden is; gok niet (zet dan confidence laag); neem de tekst over zoals ze er staat (ook afkortingen), zonder eigen aanvullingen.`;
+
 // ---------- foto's ----------
 async function asset(c: Ctx, req: Request, id: string) {
   if (!ID.test(id)) throw new HttpError(400, 'Ongeldig id');
@@ -58,6 +64,26 @@ async function analyze(env: Env, req: Request) {
   return new Response(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1), { headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
 }
 
+async function analyzeLabels(env: Env, req: Request) {
+  const { image, mime, devices } = (await req.json()) as { image: string; mime: string; devices: { id: string; row: number; pos: number; title: string }[] };
+  if (!Array.isArray(devices) || devices.length > 200) throw new HttpError(400, 'Ongeldige lijst met toestellen');
+  const list = devices.map((d) => `- id ${String(d.id).slice(0, 40)} · rij ${Number(d.row)} · plaats ${Number(d.pos)} · ${String(d.title).slice(0, 60)}`).join('\n');
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+    body: JSON.stringify({
+      model: env.MODEL ?? 'claude-sonnet-5-5', max_tokens: 6000,
+      messages: [{ role: 'user', content: [
+        { type: 'image', source: { type: 'base64', media_type: mime, data: image } },
+        { type: 'text', text: `${LABEL_PROMPT}\n\nToestellen:\n${list}` }] }],
+    }),
+  });
+  if (!r.ok) throw new HttpError(502, (await r.text()).slice(0, 300));
+  const data: any = await r.json();
+  const text: string = data.content?.find((c: any) => c.type === 'text')?.text ?? '{}';
+  return new Response(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1), { headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
+}
+
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const url = new URL(req.url), path = url.pathname;
@@ -85,6 +111,7 @@ export default {
       if (path === '/api/db/ops' && post) return await runOps(c, ((await req.json()) as any).ops);
       if (path === '/api/db/q' && post) { const b: any = await req.json(); return json(await query(c, String(b.name), b.args ?? {})); }
       if (path === '/api/analyze-board' && post) return await analyze(env, req);
+      if (path === '/api/analyze-labels' && post) return await analyzeLabels(env, req);
       if (path === '/api/project/import' && post) return await importProject(c, await req.json());
 
       if ((m = path.match(/^\/api\/asset\/([^/]+)$/))) return await asset(c, req, m[1]);

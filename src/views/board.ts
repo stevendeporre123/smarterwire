@@ -10,6 +10,7 @@ import { deviceForm } from './deviceform';
 import { openGenerate } from './generate';
 import { generateNewBoards, DEFAULT_GEN } from '../domain/newboard';
 import { openBom } from './bom';
+import { captureLabels, openGallery } from './boardphotos';
 import { editCircuit } from './circuits';
 import { analyzeBoardPhoto } from '../lib/ai';
 import { uid } from '../lib/id';
@@ -118,6 +119,8 @@ export async function renderBoard(root: HTMLElement, project: Project) {
 
   if (board.kind === 'bestaand') {
     toolbar.append(fileInput, camInput, btn(photoUrl ? 'Andere foto' : 'Foto opladen', { icon: 'Upload', onClick: () => fileInput.click() }), btn('Camera', { icon: 'Camera', title: 'Foto nemen met de camera (telefoon/tablet)', onClick: () => camInput.click() }));
+    toolbar.append(btn('Beschrijvingen', { icon: 'ScanText', title: 'Foto nemen van de beschrijvingen (strookjes, legende): AI leest ze en koppelt ze aan de zekeringen', onClick: () => captureLabels(project, board, true, () => refresh()) }),
+      btn('Foto’s', { icon: 'Images', title: 'Alle foto’s van deze kast: extra foto’s, beschrijvingen, bekabeling, typeplaatjes', onClick: () => openGallery(project, board, () => refresh()) }));
     if (photoUrl) toolbar.append(btn('AI-voorstel', { icon: 'Sparkles', variant: 'accent', title: 'Toestellen herkennen met AI (proxy vereist)', onClick: runAi }),
       btn('Ouders afleiden', { icon: 'GitBranch', title: 'Beschermend differentieel automatisch afleiden uit de positie', onClick: async () => {
         const ch = guessParents(devices);

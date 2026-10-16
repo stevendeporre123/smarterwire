@@ -32,8 +32,27 @@ test('volledige flow: project → kast → kringen → schema → nieuwe kast �
   await page.getByRole('button', { name: 'Bestaande kast toevoegen' }).click();
   await saved(page);
   for (let i = 0; i < 3; i++) { await page.getByRole('button', { name: '+ Toestel' }).click(); await expect(page.getByText(`${i + 1} toestel`)).toBeVisible().catch(() => {}); }
+  // foto van de beschrijvingen → AI (gemockt) koppelt de teksten aan de zekeringen in volgorde
+  await page.route('**/api/analyze-labels', async (route) => {
+    const { devices } = JSON.parse(route.request().postData() ?? '{}') as { devices: { id: string }[] };
+    const text = ['Stopcontacten living', 'Verlichting keuken', 'Wasmachine'];
+    await route.fulfill({ json: { labels: devices.map((d, i) => ({ device_id: d.id, text: text[i], confidence: 0.9 })) } });
+  });
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+  const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.getByRole('button', { name: 'Beschrijvingen' }).click()]);
+  await chooser.setFiles({ name: 'legende.png', mimeType: 'image/png', buffer: png });
+  await expect(modal(page).getByRole('heading', { name: /Beschrijvingen koppelen/ })).toBeVisible();
+  await expect(modal(page).locator('tbody tr')).toHaveCount(3);
+  await modal(page).getByRole('button', { name: 'Toepassen' }).click();
+  await expect(modal(page)).toHaveCount(0);
+  await page.getByRole('button', { name: /Foto.s/ }).click();
+  await expect(modal(page).locator('figcaption', { hasText: 'Beschrijvingen / legende' })).toBeVisible();
+  await modal(page).getByRole('button', { name: 'Sluiten' }).last().click();
+
   await page.getByRole('link', { name: 'Kringen' }).click();
   await expect(page.getByRole('heading', { name: 'Kringen', exact: true })).toBeVisible();
+  await expect(page.locator('tbody input.inline-edit').first()).toHaveValue('Stopcontacten living');
+  await expect(page.locator('tbody select.inline-edit').first()).toHaveValue('Stopcontacten');
   await expect(page.locator('tbody tr')).toHaveCount(3);
 
   // één kring volledig invullen → status wordt vanzelf "gedocumenteerd"

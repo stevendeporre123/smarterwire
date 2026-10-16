@@ -3,7 +3,7 @@ import { ASSET_READABLE, assetBinds, columns, Ctx, PROJECT_EXPR } from './data';
 import { HttpError, ID, json } from './util';
 
 // Volgorde = volgorde van invoegen (ouders voor kinderen, i.v.m. foreign keys).
-const ORDER = ['asset', 'project', 'board', 'device', 'circuit', 'plan', 'symbol', 'shape', 'schema_load'] as const;
+const ORDER = ['asset', 'project', 'board', 'board_photo', 'device', 'circuit', 'plan', 'symbol', 'shape', 'schema_load'] as const;
 const FORMAT = 'smarterwire-project';
 const STRIP = new Set(['installer_id']);
 const IDENT = /^[a-z_][a-z0-9_]*$/;
@@ -20,6 +20,7 @@ export async function exportProject(c: Ctx, id: string) {
   const t: Record<string, Record<string, any>[]> = {};
   t.project = await all('SELECT * FROM project WHERE id=?');
   t.board = await all('SELECT * FROM board WHERE project_id=?');
+  t.board_photo = await all('SELECT * FROM board_photo WHERE board_id IN (SELECT id FROM board WHERE project_id=?)');
   t.device = await all('SELECT * FROM device WHERE board_id IN (SELECT id FROM board WHERE project_id=?)');
   t.circuit = await all('SELECT * FROM circuit WHERE project_id=?');
   t.plan = await all('SELECT * FROM plan WHERE project_id=?');
@@ -27,7 +28,7 @@ export async function exportProject(c: Ctx, id: string) {
   t.shape = await all('SELECT * FROM shape WHERE plan_id IN (SELECT id FROM plan WHERE project_id=?)');
   t.schema_load = await all('SELECT * FROM schema_load WHERE circuit_id IN (SELECT id FROM circuit WHERE project_id=?)');
   t.asset = [];
-  for (const a of new Set([...t.board, ...t.plan].map((r) => r.asset_id).filter(Boolean))) {   // één per keer: een foto kan bijna 2 MB wegen
+  for (const a of new Set([...t.board, ...t.plan, ...t.board_photo].map((r) => r.asset_id).filter(Boolean))) {   // één per keer: een foto kan bijna 2 MB wegen
     const r = await c.env.DB.prepare(`SELECT * FROM asset WHERE id=? AND ${ASSET_READABLE}`).bind(a, ...assetBinds(c.user.id)).first<Record<string, any>>();
     if (r) t.asset.push({ ...strip(r), data: b64(r.data) });
   }
@@ -54,6 +55,7 @@ export async function importProject(c: Ctx, doc: any) {
     board: (r) => { r.project_id = pid; },
     circuit: (r) => { r.project_id = pid; },
     plan: (r) => { r.project_id = pid; },
+    board_photo: (r) => { if (!boards.has(r.board_id)) throw new HttpError(400, 'Foto zonder kast in het bestand'); },
     device: (r) => { if (!boards.has(r.board_id)) throw new HttpError(400, 'Toestel zonder kast in het bestand'); },
     symbol: (r) => { if (!plans.has(r.plan_id)) throw new HttpError(400, 'Symbool zonder plan in het bestand'); },
     shape: (r) => { if (!plans.has(r.plan_id)) throw new HttpError(400, 'Vorm zonder plan in het bestand'); },
@@ -61,7 +63,7 @@ export async function importProject(c: Ctx, doc: any) {
   };
   // foto's: uit het bestand, of een foto die al van mij is
   const ownAssets = new Set<string>();
-  for (const r of [...rowsOf('board'), ...rowsOf('plan')]) {
+  for (const r of [...rowsOf('board'), ...rowsOf('plan'), ...rowsOf('board_photo')]) {
     if (r.asset_id && !assets.has(r.asset_id) && !ownAssets.has(r.asset_id)) {
       if (!(await d.prepare('SELECT 1 FROM asset WHERE id=? AND installer_id=?').bind(r.asset_id, me).first())) throw new HttpError(400, 'Verwijzing naar een onbekende foto');
       ownAssets.add(r.asset_id);

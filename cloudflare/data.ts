@@ -8,7 +8,7 @@ const PARENT: Record<string, { col: string; table: string } | null> = {
   project: null,
   board: { col: 'project_id', table: 'project' }, circuit: { col: 'project_id', table: 'project' }, plan: { col: 'project_id', table: 'project' },
   device: { col: 'board_id', table: 'board' }, symbol: { col: 'plan_id', table: 'plan' }, shape: { col: 'plan_id', table: 'plan' },
-  schema_load: { col: 'circuit_id', table: 'circuit' },
+  schema_load: { col: 'circuit_id', table: 'circuit' }, board_photo: { col: 'board_id', table: 'board' },
 };
 export const PROJECT_EXPR: Record<string, string> = {
   project: 'project.id', board: 'board.project_id', circuit: 'circuit.project_id', plan: 'plan.project_id',
@@ -16,6 +16,7 @@ export const PROJECT_EXPR: Record<string, string> = {
   symbol: '(SELECT project_id FROM plan WHERE plan.id=symbol.plan_id)',
   shape: '(SELECT project_id FROM plan WHERE plan.id=shape.plan_id)',
   schema_load: '(SELECT project_id FROM circuit WHERE circuit.id=schema_load.circuit_id)',
+  board_photo: '(SELECT project_id FROM board WHERE board.id=board_photo.board_id)',
 };
 export const TABLES = Object.keys(PARENT);
 const RESERVED = new Set(['id', 'installer_id', 'updated_at']);
@@ -185,6 +186,7 @@ const LIST: Record<string, { by: string; order: string }> = {
   plan: { by: 'project_id', order: 'level, name' },
   shape: { by: 'plan_id', order: 'rowid' },
   symbol: { by: 'plan_id', order: 'rowid' },
+  board_photo: { by: 'board_id', order: 'kind, rowid' },
 };
 const BY_PROJECT: Record<string, string> = {
   devices: `SELECT d.* FROM device d JOIN board b ON b.id=d.board_id WHERE d.deleted=0 AND b.deleted=0 AND b.project_id=?`,
@@ -229,5 +231,6 @@ export async function query(c: Ctx, name: string, args: Record<string, any>) {
 
 // Foto's: van mij, of in gebruik in een project dat ik mag bekijken
 export const ASSET_READABLE = `(installer_id=? OR id IN (SELECT asset_id FROM board WHERE asset_id IS NOT NULL AND project_id IN ${READABLE})
-  OR id IN (SELECT asset_id FROM plan WHERE asset_id IS NOT NULL AND project_id IN ${READABLE}))`;
-export const assetBinds = (uid: string) => [uid, uid, uid, uid, uid];
+  OR id IN (SELECT asset_id FROM plan WHERE asset_id IS NOT NULL AND project_id IN ${READABLE})
+  OR id IN (SELECT asset_id FROM board_photo WHERE deleted=0 AND board_id IN (SELECT id FROM board WHERE project_id IN ${READABLE})))`;
+export const assetBinds = (uid: string) => [uid, uid, uid, uid, uid, uid, uid];
