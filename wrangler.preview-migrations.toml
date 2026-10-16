@@ -1,4 +1,4 @@
-# Enkel voor `wrangler d1 migrations apply PREVIEW_DB --remote -c cloudflare/wrangler.preview-migrations.toml`:
+# Enkel voor `wrangler d1 migrations apply PREVIEW_DB --remote -c wrangler.preview-migrations.toml`:
 # dezelfde database als [[previews.d1_databases]] in wrangler.toml (de workflow "D1 aanmaken" houdt ze gelijk).
 name = "smarterwire-preview-migrations"
 compatibility_date = "2025-01-01"
@@ -7,4 +7,4 @@ compatibility_date = "2025-01-01"
 binding = "PREVIEW_DB"
 database_name = "smarterwire-preview"
 database_id = "VUL-IN-NA-WRANGLER-D1-CREATE"
-migrations_dir = "migrations"
+migrations_dir = "cloudflare/migrations"

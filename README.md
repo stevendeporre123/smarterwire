@@ -29,9 +29,9 @@ npm run build
 # AI-analyse lokaal: zet je sleutel in .dev.vars in de hoofdmap (zie cloudflare/.dev.vars.example).
 
 # Eerste keer productie:
-npx wrangler d1 create smarterwire          # database_id invullen in cloudflare/wrangler.toml
-npx wrangler secret put ANTHROPIC_API_KEY -c cloudflare/wrangler.toml
-npx wrangler secret put INVITE_CODE -c cloudflare/wrangler.toml     # optioneel, om registratie te beperken
+npx wrangler d1 create smarterwire          # database_id invullen in wrangler.toml
+npx wrangler secret put ANTHROPIC_API_KEY
+npx wrangler secret put INVITE_CODE     # optioneel, om registratie te beperken
 npm run deploy                              # build + migraties (remote) + deploy
 ```
 Via GitHub kan het ook zonder terminal: workflow **D1 aanmaken** maakt de productie- én de preview-database (`smarterwire-preview`, voor `wrangler preview` van branches met Cloudflare Workers Builds), vult de id's in en past de migraties toe.

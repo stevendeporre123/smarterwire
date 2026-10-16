@@ -2,7 +2,7 @@ name: D1 aanmaken
 
 # Handmatig starten (ook vanop je gsm): GitHub → Actions → "D1 aanmaken" → Run workflow.
 # Maakt twee D1-databases aan (productie + preview, indien ze nog niet bestaan), schrijft de database_id's in
-# cloudflare/wrangler.toml en cloudflare/wrangler.preview-migrations.toml, commit dat en past de migraties toe.
+# wrangler.toml en wrangler.preview-migrations.toml, commit dat en past de migraties toe.
 # Vereist repository-secrets: CLOUDFLARE_API_TOKEN (rechten: D1 Edit) en CLOUDFLARE_ACCOUNT_ID.
 on:
   workflow_dispatch:
@@ -62,8 +62,8 @@ jobs:
                   if target and re.match(r'database_id\s*=', line): line = f'database_id = "{target[1]}"'
                   out.append(line)
               open(path, 'w').write('\n'.join(out))
-          patch('cloudflare/wrangler.toml', lambda s: prod if s == 'd1_databases' else prev if s == 'previews.d1_databases' else None)
-          patch('cloudflare/wrangler.preview-migrations.toml', lambda s: prev if s == 'd1_databases' else None)
+          patch('wrangler.toml', lambda s: prod if s == 'd1_databases' else prev if s == 'previews.d1_databases' else None)
+          patch('wrangler.preview-migrations.toml', lambda s: prev if s == 'd1_databases' else None)
           PY
           git diff --stat
           if ! git diff --quiet; then
@@ -74,6 +74,6 @@ jobs:
           fi
 
       - name: Migraties toepassen (productie)
-        run: npx wrangler d1 migrations apply "$DB_NAME" --remote -c cloudflare/wrangler.toml
+        run: npx wrangler d1 migrations apply "$DB_NAME" --remote -c wrangler.toml
       - name: Migraties toepassen (preview)
-        run: npx wrangler d1 migrations apply PREVIEW_DB --remote -c cloudflare/wrangler.preview-migrations.toml
+        run: npx wrangler d1 migrations apply PREVIEW_DB --remote -c wrangler.preview-migrations.toml
