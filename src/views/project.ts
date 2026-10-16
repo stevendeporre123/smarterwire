@@ -32,7 +32,7 @@ export async function renderProject(app: HTMLElement, id: string, tab: string) {
       btn('PDF', { icon: 'FileDown', variant: 'primary', title: 'Eendraadschema, situatieplannen en lijst van de kringen als PDF', onClick: () => openPdfExport(project) }),
       btn('Exporteer', { icon: 'Download', variant: 'ghost', title: 'Project met foto\'s exporteren (.smarterwire.json)', onClick: () => exportProject(project).catch((e) => toast(e.message, 'error')) }),
       btn('Projectgegevens', { icon: 'FileText', variant: 'ghost', onClick: () => formModal({ title: 'Projectgegevens', fields: projectFields, values: { ...project, supply: project.supply ?? '1x230' }, wide: true,
-        onSave: async (v) => { if (!validateProject(v)) return false; await upsert('project', { ...project, ...v }); toast('Projectgegevens opgeslagen'); refreshRoute(); } }) })),
+        onSave: async (v) => { if (!(await validateProject(v))) return false; await upsert('project', { ...project, ...v }); toast('Projectgegevens opgeslagen'); refreshRoute(); } }) })),
     body));
   const t = TABS.find((x) => x.id === tab) ?? TABS[0];
   clear(body);

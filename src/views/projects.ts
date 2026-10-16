@@ -1,5 +1,5 @@
 import { h, btn, icon, toast, refreshRoute } from '../lib/dom';
-import { dataTable, formModal, alertDialog } from '../lib/ui';
+import { dataTable, formModal, alertDialog, confirmDialog } from '../lib/ui';
 import { q } from '../db/client';
 import { exportProject, importProject } from '../db/transfer';
 import { upsert, softDelete } from '../db/repo';
@@ -12,7 +12,7 @@ export const projectFields = [
   { key: 'name', label: 'Projectnaam', required: true, span: 2 as const },
   { key: 'owner', label: 'Naam eigenaar (plaats van de installatie)', span: 2 as const },
   { key: 'address', label: 'Adres installatie', type: 'textarea' as const, placeholder: 'Straat en nummer\npostcode gemeente', span: 2 as const },
-  { key: 'client', label: 'Opdrachtgever' },
+  { key: 'client', label: 'Opdrachtgever', placeholder: 'leeg = zelfde als eigenaar' },
   { key: 'ean', label: 'EAN-code meter', placeholder: '18 cijfers (541…)' },
   { key: 'supply', label: 'Voeding *', type: 'select' as const, options: SUPPLIES, allowEmpty: false },
   { key: 'supply_amp', label: 'Voeding (A)', type: 'number' as const, placeholder: 'bv. 20' },
@@ -22,11 +22,24 @@ export const projectFields = [
   { key: 'notes', label: 'Notities', type: 'textarea' as const, span: 2 as const },
 ];
 
-/** Valideert EAN en toont fout; geeft false terug als de gebruiker moet bijsturen. */
-export function validateProject(v: Record<string, any>): boolean {
+/** GS1-controlecijfer van een EAN/GSRN (18 cijfers): gewichten 3,1,3,… van rechts, zonder het controlecijfer zelf. */
+export const eanCheckOk = (ean: string) => {
+  const d = ean.split('').map(Number), body = d.slice(0, -1);
+  const sum = body.reduce((s, x, i) => s + x * ((body.length - i) % 2 ? 3 : 1), 0);
+  return (10 - (sum % 10)) % 10 === d[d.length - 1];
+};
+
+/** Valideert het project en toont een duidelijke fout; geeft false terug als de gebruiker moet bijsturen. */
+export async function validateProject(v: Record<string, any>): Promise<boolean> {
   if (!v.name) return false;
   if (v.inspector && !v.inspector_info && INSPECTOR_PRESETS[v.inspector]) v.inspector_info = INSPECTOR_PRESETS[v.inspector];
-  if (v.ean) { v.ean = String(v.ean).replace(/\s/g, ''); if (!/^\d{18}$/.test(v.ean)) { void alertDialog('EAN-code', 'Een EAN-code bestaat uit 18 cijfers.'); return false; } }
+  if (!v.client && v.owner) v.client = v.owner;   // opdrachtgever is meestal de eigenaar
+  if (v.ean) {
+    v.ean = String(v.ean).replace(/[\s.-]/g, '');
+    if (!/^\d{18}$/.test(v.ean)) { await alertDialog('EAN-code', `Een EAN-code bestaat uit 18 cijfers (je typte ${v.ean.length} tekens). Je vindt hem op de energiemeter of de factuur; hij begint met 541.`); return false; }
+    if (!v.ean.startsWith('54')) toast('Let op: Belgische EAN-codes beginnen met 54', 'error');
+    if (!eanCheckOk(v.ean) && !(await confirmDialog({ title: 'EAN-code controleren', message: 'Het controlecijfer van deze EAN-code klopt niet: er zit waarschijnlijk een typfout in. Toch bewaren?', confirmLabel: 'Toch bewaren', danger: false }))) return false;
+  }
   return true;
 }
 
@@ -37,7 +50,7 @@ export async function renderProjects(app: HTMLElement) {
   const edit = (p?: Project) => formModal({
     title: p ? 'Project bewerken' : 'Nieuw project', fields: projectFields, values: { ...(p ?? {}), supply: p?.supply ?? '1x230' }, wide: true,
     onSave: async (v) => {
-      if (!validateProject(v)) return false;
+      if (!(await validateProject(v))) return false;
       const saved = await upsert('project', { ...(p ?? {}), ...v });
       toast('Project opgeslagen'); if (!p) open(saved as any); else refreshRoute();
     },
