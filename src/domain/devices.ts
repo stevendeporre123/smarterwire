@@ -27,10 +27,12 @@ export const FUNCTIONS = [
   'Verlichting', 'Stopcontacten', 'Kookplaat', 'Oven', 'Wasmachine', 'Droogkast', 'Vaatwasser',
   'Boiler', 'Verwarming', 'Airco / warmtepomp', 'Laadpaal', 'Buiten', 'Bel / laagspanning', 'Andere',
 ];
-export const CABLE_TYPES = ['VOB', 'XVB', 'XGB', 'EXVB', 'XVB-F2', 'H07V-U', 'H07V-K', 'YMvK', 'Onbekend'];
+export const CABLE_TYPES = ['VOB', 'XVB', 'XGB', 'EXVB', 'EXAVB', 'XVB-F2', 'H07V-U', 'H07V-K', 'H05VV-F', 'H07RN-F', 'YMvK', 'Onbekend'];
 export const FIRE_CLASSES = ['Eca', 'Dca', 'Cca', 'B2ca', 'Fca', 'Onbekend'];
 /** Waar de leiding ligt (wand, plafond of vloer); of ze los of in een buis zit is een aparte eigenschap. */
-export const INSTALL_MODES = ['In wand', 'In plafond', 'In vloer'];
+export const INSTALL_MODES = ['In wand', 'In plafond', 'In vloer', 'Opbouw (op wand)', 'In kabelgoot', 'In isolatie', 'Ondergronds', 'Onbekend'];
+/** Plaatsingen waarvoor het AREI-symbool "in wand/plafond/vloer" (E-vorm) van toepassing is. */
+export const IN_WALL_MODES = ['In wand', 'In plafond', 'In vloer'];
 export const CONDUIT_MODES = [{ value: 0, label: 'Los' }, { value: 1, label: 'In buis' }];
 export const SUPPLIES = [{ value: '1x230', label: 'Monofasig 230 V' }, { value: '3N400', label: 'Driefasig 3N 400 V' }, { value: '3x230', label: 'Driefasig 3x230 V (geen nul)' }];
 export const PHASES = ['L1', 'L2', 'L3', '3P'];
@@ -79,7 +81,7 @@ export const INSPECTOR_PRESETS: Record<string, string> = {
 export const supplyText = (s: Supply) => (s === '3N400' ? '3 x 400V + N ~ 50Hz' : s === '3x230' ? '3 x 230V ~ 50Hz' : '1 x 230V + N ~ 50Hz');
 /** "20A Voeding - 4 polig" */
 export const supplyExtra = (s: Supply, amp?: number | null) => `${amp ? amp + 'A ' : ''}Voeding - ${s === '3N400' ? 4 : s === '3x230' ? 3 : 2} polig`;
-export const SECTIONS = [1.5, 2.5, 4, 6, 10, 16];
+export const SECTIONS = [0.75, 1, 1.5, 2.5, 4, 6, 10, 16, 25, 35];
 
 /** Veelgebruikte kabels voor het palet van het eendraadschema: aantal aders (incl. aarding bij G), aarding, doorsnede. */
 export const CABLE_PRESETS: { id: string; wires: number; has_earth: number; section_mm2: number }[] =
@@ -125,7 +127,7 @@ export function cableMissing(c: { cable_type?: string | null; section_mm2?: numb
   if (!c.cable_type || c.cable_type === 'Onbekend') m.push('type');
   if (!c.section_mm2) m.push('doorsnede');
   if (!c.fire_class || c.fire_class === 'Onbekend') m.push('brandklasse');
-  if (!c.install) m.push('plaatsing');
+  if (!c.install || c.install === 'Onbekend') m.push('plaatsing');
   return m;
 }
 

@@ -1,5 +1,5 @@
 import type { Board, Circuit, Device } from './model';
-import { cableLabel, deviceTitle, isGroupParent, isFeeder, polesLabel, supplyLabel, isThreePhase, type Supply } from './devices';
+import { IN_WALL_MODES, cableLabel, deviceTitle, isGroupParent, isFeeder, polesLabel, supplyLabel, isThreePhase, type Supply } from './devices';
 import { symbolGeom, symbolMarkup, areiSymbol, isApplianceType } from './areisymbols';
 import { esc } from '../lib/dom';
 
@@ -194,7 +194,7 @@ export function buildDiagram(opts: {
 
   /** Kabelsymbolen links van de lijn (E = in wand/plafond/vloer, cirkel = in buis), zoals in de AREI-symbolen voor leidingen. */
   const cableMarks = (x: number, y0: number, c: Circuit | undefined) => {
-    if (!c?.install) return '';
+    if (!c?.install || !IN_WALL_MODES.includes(c.install)) return '';
     const wall = (yc: number) => `<path d="M${x - 2} ${yc - 11} H${x - 12} V${yc + 11} H${x - 2} M${x - 2} ${yc} H${x - 12}" class="ln"/>`;
     return c.conduit ? wall(y0 - 130) + `<circle cx="${x - 8}" cy="${y0 - 158}" r="4.2" class="ln"/>` + wall(y0 - 186) : wall(y0 - 140) + wall(y0 - 178);
   };
@@ -224,7 +224,8 @@ export function buildDiagram(opts: {
     }
     // kabel: symbolen links, tekst rechts
     parts.push(cableMarks(x, y0, cs[0]));
-    const cab = cs[0] ? cableLabel(cs[0]).replace(/ · .*/, '') : '';
+    const place = cs[0]?.install && !IN_WALL_MODES.includes(cs[0].install) && cs[0].install !== 'Onbekend' ? ` ${cs[0].install.replace(/^In |s*(.*)/g, '').toLowerCase()}` : '';
+    const cab = cs[0] ? cableLabel(cs[0]).replace(/ · .*/, '') + place : '';
     if (cab) parts.push(vtext(x + 10, y0 - 116, clip(cab, 18), 't-s'));
     // verbruikers: elke rij = één of meer onderdelen achter elkaar; elk onderdeel is selecteerbaar en versleepbaar
     const SC = 2.6;
