@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "ai": "npx wrangler dev",
     "deploy": "npm run build && npm run db:migrate && npx wrangler deploy",
-    "db:migrate": "npx wrangler d1 migrations apply smarterwire --remote"
+    "db:migrate": "npx wrangler d1 migrations apply smarterwire --remote",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@fontsource/poppins": "^5.1.0",
@@ -19,6 +20,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261016.1",
+    "@playwright/test": "^1.64.1",
     "typescript": "^5.6.0",
     "vite": "^8.3.4",
     "wrangler": "^4.151.0"

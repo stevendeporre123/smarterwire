@@ -45,7 +45,7 @@ node tools/sqlite-to-project.mjs smarterwire-2026-10-14.sqlite3 export/   # Node
 ```
 Meld je aan, daarna in de app: **Importeer project** (het project wordt van jou). Installateurgegevens zijn niet per project en vul je opnieuw in.
 
-NB: de testpagina's in `tools/*-e2e.*` gebruikten de oude in-browser database en werken niet meer zonder aanmelding.
+Tests: `npm run test:e2e` (Playwright, start zelf `npm run dev`; lokaal met je geïnstalleerde Chrome, in CI met Chromium via de workflow *E2E*) doorloopt de hele flow tot de PDF-download. Let op: registreren wordt lokaal gethrottled; bij veel herhalingen: `npx wrangler d1 execute smarterwire --local --command "DELETE FROM auth_attempt"`. De oude testpagina's in `tools/*-e2e.*` werken niet meer (oude in-browser database); `tools/*-test.*` (diagram, PDF, bevindingen, voorstel) draaien met `npx vite --config tools/vite.test.config.ts`.
 
 ## Status
 Eerste werkende versie. Nog niet gedaan: officiële AREI-symbolen als exacte set, AREI-controles (aantal punten per kring, doorsnede/zekering…), pinch-zoom op touch, PDF-kaft met meetgegevens.
@@ -67,3 +67,4 @@ Eerste werkende versie. Nog niet gedaan: officiële AREI-symbolen als exacte set
 - #6 + #21 PDF-keuze *Voorstel nieuwe kast (klantdocument)* en een **Materiaallijst** (knop in de nieuwe kast): aantallen per type automaat/differentieel, kast, rail, klemmen en labels (schattingen), merk/serie en referentie zelf in te vullen, export als CSV of in de PDF. Prijzen/offerte en marge-instellingen zijn nog niet gebouwd.
 - #20 Metingen: isolatieweerstand, lusimpedantie en datum per kring (kringformulier, *Meer opties*), type en weerstand van de aarding bij de projectgegevens, gemeten uitschakelstroom/-tijd per differentieel; bevindingen bij te lage isolatie, te trage of te gevoelige differentiëlen en een aardingsweerstand boven 100 Ω; in het keuringsdossier-PDF komt een pagina *Metingen*. **Nieuwe migratie 0011**: voer `npm run db:migrate` uit (of deploy met migraties).
 - #18 (deels) Zekeringskast: knop *Camera* opent op telefoon/tablet meteen de camera, en het opslaan van de foto toont een melding. Nog niet: meerdere foto's per kast, foto per kring, betrouwbaarheid per toestel en een meting op echte foto's uit `reference/`.
+- #22 E2E-test met Playwright (`e2e/flow.spec.ts`) + GitHub-workflow *E2E*: registreren, project, kast met toestellen, kring invullen (status wordt vanzelf gedocumenteerd), schema, bevindingen, nieuwe kast opbouwen (opmerkingen + oud → nieuw) en PDF-download. De AI-analyse is niet gedekt (vraagt een sleutel).
