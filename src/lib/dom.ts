@@ -28,6 +28,15 @@ function append(el: Node, kids: Child[]) {
 
 export const clear = (el: Element) => { while (el.firstChild) el.removeChild(el.firstChild); };
 
+/** Leegt een pagina en toont een laad-indicator tot de view haar eigen inhoud toevoegt (de indicator verdwijnt dan via CSS: enkel zichtbaar als enig kind). */
+export function loading(el: Element, msg = 'Laden…') {
+  clear(el);
+  el.append(h('div', { class: 'page-loading', role: 'status', 'aria-live': 'polite' }, h('span', { class: 'spinner', 'aria-hidden': 'true' }), msg));
+}
+
+/** Pagina opnieuw opbouwen na een wijziging, zonder de hele app te herladen. */
+export const refreshRoute = () => window.dispatchEvent(new HashChangeEvent('hashchange'));
+
 export function icon(name: string, size = 16): SVGElement {
   const node = (L.icons as any)[name];
   const el = node ? lucide(node) : lucide((L.icons as any).Circle);

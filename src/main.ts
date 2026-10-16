@@ -5,7 +5,7 @@ import '@fontsource/poppins/600.css';
 import '@fontsource/poppins/700.css';
 import './styles/tokens.css';
 import './styles/app.css';
-import { h, clear, icon, toast } from './lib/dom';
+import { h, loading, icon, toast } from './lib/dom';
 import { renderProjects } from './views/projects';
 import { renderProject } from './views/project';
 import { renderLogin } from './views/login';
@@ -14,7 +14,7 @@ import { AuthError } from './db/client';
 const app = document.getElementById('app')!;
 
 async function route() {
-  clear(app);
+  loading(app);
   const [, kind, id, tab] = location.hash.split('/');
   try {
     if (kind === 'p' && id) await renderProject(app, id, tab || 'kast');

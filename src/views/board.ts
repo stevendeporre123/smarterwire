@@ -1,4 +1,4 @@
-import { h, svg, btn, icon, toast, clear, busy } from '../lib/dom';
+import { h, svg, btn, icon, toast, clear, loading, busy } from '../lib/dom';
 import { buildForm, formModal, modal, panZoom, badge, choose, confirmDialog, type FieldDef } from '../lib/ui';
 import { upsert, softDelete, saveImage, assetUrl, assetSize, putOp } from '../db/repo';
 import { run } from '../db/client';
@@ -56,7 +56,7 @@ export async function renderBoard(root: HTMLElement, project: Project) {
   let boardId = localStorage.getItem(LS_BOARD(project.id)) ?? boards[0]?.id;
   if (!boards.find((b) => b.id === boardId)) boardId = boards[0]?.id;
 
-  const reload = () => { clear(root); return renderBoard(root, project); };
+  const reload = () => { loading(root); return renderBoard(root, project); };
   const newBoard = (kind: 'bestaand' | 'nieuw' = 'bestaand') => formModal({
     title: kind === 'nieuw' ? 'Nieuwe kast (ontwerp)' : 'Bestaande zekeringskast',
     fields: [{ key: 'name', label: 'Naam', required: true, span: 2 }, { key: 'location', label: 'Locatie', placeholder: 'bv. kelder, garage…', span: 2 }],
@@ -104,7 +104,7 @@ export async function renderBoard(root: HTMLElement, project: Project) {
   const toolbar = h('div', { class: 'toolbar' }, boardSel,
     btn('', { icon: 'Plus', variant: 'ghost', title: 'Kast of onderverdeler toevoegen', onClick: () => newBoard('bestaand') }),
     btn('', { icon: 'Pencil', variant: 'ghost', title: 'Kast hernoemen', onClick: () => formModal({ title: 'Kast bewerken', fields: [{ key: 'name', label: 'Naam', span: 2 }, { key: 'location', label: 'Locatie', span: 2 }, { key: 'notes', label: 'Notities', type: 'textarea', span: 2 }], values: board,
-      onSave: async (v) => { await upsert('board', { ...board, ...v }); reload(); },
+      onSave: async (v) => { await upsert('board', { ...board, ...v }); toast('Kast opgeslagen'); reload(); },
       onDelete: async () => { await softDelete('board', board.id); localStorage.removeItem(LS_BOARD(project.id)); reload(); } }) }),
     h('span', { class: 'hint' }, board.kind === 'nieuw' ? 'ontwerp nieuwe kast' : 'bestaande toestand', feedHint()),
     h('span', { class: 'spacer' }), viewBtns);

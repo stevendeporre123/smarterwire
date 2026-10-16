@@ -1,4 +1,4 @@
-import { h, btn, icon, toast } from '../lib/dom';
+import { h, btn, icon, toast, refreshRoute } from '../lib/dom';
 import { dataTable, formModal, alertDialog } from '../lib/ui';
 import { q } from '../db/client';
 import { exportProject, importProject } from '../db/transfer';
@@ -39,15 +39,15 @@ export async function renderProjects(app: HTMLElement) {
     onSave: async (v) => {
       if (!validateProject(v)) return false;
       const saved = await upsert('project', { ...(p ?? {}), ...v });
-      if (!p) open(saved as any); else location.reload();
+      toast('Project opgeslagen'); if (!p) open(saved as any); else refreshRoute();
     },
-    onDelete: p ? async () => { await softDelete('project', p.id); location.reload(); } : undefined,
+    onDelete: p ? async () => { await softDelete('project', p.id); toast('Project verwijderd'); refreshRoute(); } : undefined,
   });
 
   app.append(h('div', { class: 'shell' }, topbar(),
     h('div', { class: 'main' }, h('div', { class: 'page' },
       h('div', { class: 'page-head' }, h('h2', null, 'Projecten'), h('span', { class: 'spacer' }),
-        btn('Importeer project', { icon: 'Upload', variant: 'secondary', title: 'Project (.smarterwire.json) importeren', onClick: () => importProject(() => location.reload()) }),
+        btn('Importeer project', { icon: 'Upload', variant: 'secondary', title: 'Project (.smarterwire.json) importeren', onClick: () => importProject(() => refreshRoute()) }),
         btn('Nieuw project', { icon: 'Plus', variant: 'primary', onClick: () => edit() })),
       rows.length ? dataTable({
         rows, onRow: open, search: (r) => `${r.name} ${r.address} ${r.owner} ${r.ean}`,

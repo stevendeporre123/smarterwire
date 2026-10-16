@@ -1,4 +1,4 @@
-import { h, svg, btn, icon, download, clear, toast } from '../lib/dom';
+import { h, svg, btn, icon, download, clear, loading, toast } from '../lib/dom';
 import { buildForm, badge, confirmDialog, type FieldDef } from '../lib/ui';
 import { upsert, putOp, setOp, whereOp, softDelete } from '../db/repo';
 import { run, type Op } from '../db/client';
@@ -388,7 +388,7 @@ export async function renderSchema(root: HTMLElement, project: Project) {
   const stateSel = h('select', { onChange: (e: Event) => { which = (e.target as HTMLSelectElement).value as any; sel = null; draw(); drawSide(); } },
     (['bestaand', 'nieuw'] as const).filter((k) => boards.some((b) => b.kind === k)).map((k) => h('option', { value: k, selected: k === which }, k === 'nieuw' ? '★ Nieuwe toestand (ontwerp)' : 'Bestaande toestand')));
   root.append(h('div', { class: 'toolbar' }, stateSel,
-    btn('Opnieuw opbouwen vanuit kringen', { icon: 'WandSparkles', variant: 'accent', title: 'Nieuwe kast(en) en schema opnieuw opbouwen uit de kringen', onClick: () => openGenerate(project, () => { clear(root); renderSchema(root, project); }) }),
+    btn('Opnieuw opbouwen vanuit kringen', { icon: 'WandSparkles', variant: 'accent', title: 'Nieuwe kast(en) en schema opnieuw opbouwen uit de kringen', onClick: () => openGenerate(project, () => { loading(root); renderSchema(root, project); }) }),
     h('span', { class: 'spacer' }),
     btn('SVG', { icon: 'Download', onClick: () => download(`eendraadschema-${which}.svg`, current, 'image/svg+xml') }),
     btn('Afdrukken', { icon: 'Printer', onClick: () => window.print() })),

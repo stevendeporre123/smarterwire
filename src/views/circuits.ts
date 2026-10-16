@@ -1,4 +1,4 @@
-import { h, btn, icon, toast } from '../lib/dom';
+import { h, btn, icon, toast, loading } from '../lib/dom';
 import { dataTable, formModal, badge, type FieldDef } from '../lib/ui';
 import { upsert, softDelete, whereOp } from '../db/repo';
 import { q, run } from '../db/client';
@@ -31,19 +31,18 @@ export async function editCircuit(project: Project, circuit: Partial<Circuit>, o
     { key: 'status', label: 'Status (gedocumenteerd volgt vanzelf uit de kabelgegevens)', type: 'select', options: STATUSES, allowEmpty: false, advanced: true },
     { key: 'feeds_board_id', label: 'Voedt onderverdeler', type: 'select', options: old.filter((b) => b.id !== hostBoard).map((b) => ({ value: b.id, label: b.name })), advanced: true },
     { key: 'lock_group', label: 'Samen houden (gedeelde nul)', placeholder: 'zelfde tekst = zelfde differentieel', advanced: true },
-    { key: 'has_earth', label: 'Aarding aanwezig', type: 'checkbox', advanced: true },
     { key: 'notes', label: 'Notities / opmerkingen keuring', type: 'textarea', span: 2, advanced: true },
   ];
   formModal({
     title: circuit.id ? `Kring ${circuit.nr ?? ''} bewerken` : 'Nieuwe kring', fields, wide: true,
     values: { status: 'onbekend', voltage: 230, ...circuit },
-    extra: h('p', { class: 'hint' }, '* verplicht om een kring als "gedocumenteerd" te kunnen markeren.'),
+    extra: h('p', { class: 'hint' }, '* verplicht: zodra deze gegevens compleet zijn, wordt de kring vanzelf "gedocumenteerd".'),
     onSave: async (v) => {
       if (!v.name) return false;
-      const status = v.status ?? 'onbekend';
       const missing = cableMissing(v);
-      if (status !== 'onbekend' && missing.length) { toast(`Kabelgegevens onvolledig: ${missing.join(', ')}. Vul aan of zet de status op "onbekend".`, 'error'); return false; }
-      await upsert('circuit', { ...circuit, ...v, project_id: project.id, status });
+      if (v.status === 'gecontroleerd' && missing.length) { toast(`Kabelgegevens onvolledig: ${missing.join(', ')}. Vul aan voor je de kring als gecontroleerd markeert.`, 'error'); return false; }
+      await upsert('circuit', { ...circuit, ...v, project_id: project.id, status: autoStatus(v) });
+      toast('Kring opgeslagen');
       onDone();
     },
     onDelete: circuit.id ? async () => { await softDelete('circuit', circuit.id!); onDone(); } : undefined,
@@ -76,7 +75,7 @@ export async function renderCircuits(root: HTMLElement, project: Project) {
   const oldIds = new Set(boards.filter((b) => b.kind === 'bestaand').map((b) => b.id));
   for (const d of devs.values()) if (oldIds.has(d.board_id) && isFeeder(d.kind) && !shared.has(d.id)) orphan.push(d);
 
-  const reload = () => { root.innerHTML = ''; renderCircuits(root, project); };
+  const reload = () => { loading(root); renderCircuits(root, project); };
   const selection = new Set<string>();
   const delBtn = btn('', { icon: 'Trash2', variant: 'danger', onClick: () => {
     const chosen = circuits.filter((c) => selection.has(c.id));

@@ -95,6 +95,10 @@ input[type=checkbox] { width: auto; }
 .spinner { display: inline-block; width: 16px; height: 16px; flex: none; border: 2px solid rgba(255, 255, 255, .3); border-top-color: #fff; border-radius: 50%; animation: spin .8s linear infinite; }
 .busy { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; padding: 10px 18px; border-radius: var(--radius-md); background: var(--color-neutral-900); color: #fff; box-shadow: var(--shadow-lg); z-index: 100; }
 @keyframes spin { to { transform: rotate(360deg); } }
+/* laad-indicator van een pagina: enkel zichtbaar zolang er nog niets anders in staat */
+.page-loading { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 64px 16px; color: var(--color-neutral-700, #555e55); }
+.page-loading:not(:only-child) { display: none; }
+.page-loading .spinner { border-color: rgba(0, 0, 0, .15); border-top-color: var(--color-primary, #008000); width: 20px; height: 20px; }
 @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2s; } }
 
 /* ---- split layout voor editors ---- */

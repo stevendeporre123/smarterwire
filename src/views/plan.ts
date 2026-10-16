@@ -1,4 +1,4 @@
-import { h, svg, btn, icon, toast, clear, download } from '../lib/dom';
+import { h, svg, btn, icon, toast, clear, loading, download } from '../lib/dom';
 import { buildForm, formModal, panZoom, confirmDialog, promptDialog, type FieldDef } from '../lib/ui';
 import { upsert, softDelete, saveImage, assetUrl, assetSize } from '../db/repo';
 import { plansOf, symbolsOf, shapesOf, circuitsOf, boardsOf, type Plan, type Project, type Symbol_, type Shape } from '../domain/model';
@@ -20,7 +20,7 @@ const NUM = (s: string) => Number(s.replace(',', '.'));
 
 export async function renderPlan(root: HTMLElement, project: Project) {
   const plans = await plansOf(project.id);
-  const reload = () => { clear(root); return renderPlan(root, project); };
+  const reload = () => { loading(root); return renderPlan(root, project); };
   const fileInput = h('input', { type: 'file', accept: 'image/*', style: { display: 'none' } }) as HTMLInputElement;
 
   const addPhotoPlan = () => {
