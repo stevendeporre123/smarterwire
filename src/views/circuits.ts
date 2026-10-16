@@ -2,6 +2,8 @@ import { h, btn, icon, toast, loading } from '../lib/dom';
 import { dataTable, formModal, badge, type FieldDef } from '../lib/ui';
 import { upsert, softDelete, whereOp, putOp } from '../db/repo';
 import { q, run } from '../db/client';
+import { runChecks, type Finding } from '../domain/checks';
+import { projectLoads } from '../domain/loads';
 import { boardsOf, devicesOf, circuitsOf, plansOf, type Circuit, type Device, type Project } from '../domain/model';
 import { CABLE_TYPES, FIRE_CLASSES, FUNCTIONS, INSTALL_MODES, CONDUIT_MODES, SECTIONS, STATUSES, EARTH_MODES, autoStatus, cableLabel, cableMissing, deviceTitle, devicePlaces, isFeeder, supplyOf, supplyVoltages } from '../domain/devices';
 
@@ -111,6 +113,9 @@ export async function renderCircuits(root: HTMLElement, project: Project) {
   const devs = new Map<string, Device>();
   const boardName = new Map(boards.map((b) => [b.id, b.name]));
   for (const b of boards) for (const d of await devicesOf(b.id)) devs.set(d.id, d);
+  const found = runChecks({ circuits, devices: [...devs.values()], loads: await projectLoads(project.id), projectSupplyAmp: project.supply_amp });
+  const foundBy = new Map<string, Finding[]>();
+  for (const f of found) if (f.circuitId) (foundBy.get(f.circuitId) ?? foundBy.set(f.circuitId, []).get(f.circuitId)!).push(f);
   const symCounts = new Map<string, number>((await q('symCounts', { project: project.id }))
     .map((r: any) => [r.id, r.n]));
   const shared = new Map<string, number>();
@@ -161,6 +166,9 @@ export async function renderCircuits(root: HTMLElement, project: Project) {
             return d ? h('span', null, bname(d), shared.get(d.id)! > 1 ? badge(`deelt met ${shared.get(d.id)! - 1}`, 'warn') : null) : badge('niet gekoppeld', 'err'); } },
         { key: 'cable', label: 'Kabel', sort: (c) => cableLabel(c),
           render: (c) => { const m = cableMissing(c); return h('span', null, cableLabel(c) || '—', m.length ? badge(`mist: ${m.join(', ')}`, 'warn') : null); } },
+        { key: 'checks', label: 'Controle', sort: (c) => (foundBy.get(c.id) ?? []).reduce((s, f) => s + (f.level === 'fout' ? 100 : f.level === 'waarschuwing' ? 10 : 1), 0),
+          render: (c) => { const fs = foundBy.get(c.id) ?? [], n = (l: string) => fs.filter((f) => f.level === l).length; if (!fs.length) return '—';
+            return h('a', { href: `#/p/${project.id}/bevindingen`, title: fs.map((f) => f.title).join(String.fromCharCode(10)), onClick: (e: Event) => e.stopPropagation() }, n('fout') ? badge(`${n('fout')} fout`, 'err') : null, n('waarschuwing') ? badge(`${n('waarschuwing')} waarsch.`, 'warn') : null, n('info') ? badge(`${n('info')} info`, 'info') : null); } },
         { key: 'new_device_id', label: 'Nieuwe kast', render: (c) => { const d = c.new_device_id ? devs.get(c.new_device_id) : null; return d ? deviceTitle(d) + (d.phase ? ` · ${d.phase}` : '') : '—'; } },
         { key: 'sym', label: 'Symb.', align: 'right', render: (c) => String(symCounts.get(c.id) ?? 0), sort: (c) => symCounts.get(c.id) ?? 0 },
         { key: 'status', label: 'Status', render: (c) => badge(c.status, c.status === 'gecontroleerd' ? 'ok' : c.status === 'gedocumenteerd' ? 'info' : 'muted') },

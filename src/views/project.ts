@@ -10,6 +10,7 @@ import { renderBoard } from './board';
 import { renderCircuits } from './circuits';
 import { renderPlan } from './plan';
 import { renderSchema } from './schema';
+import { renderFindings } from './findings';
 import { openPdfExport } from './pdf';
 import { ensureCircuits } from '../domain/circuits';
 import type { Project } from '../domain/model';
@@ -19,6 +20,7 @@ const TABS = [
   { id: 'kringen', label: 'Kringen', icon: 'Cable', render: renderCircuits },
   { id: 'plan', label: 'Situatieplan', icon: 'MapPin', render: renderPlan },
   { id: 'schema', label: 'Eendraadschema', icon: 'Workflow', render: renderSchema },
+  { id: 'bevindingen', label: 'Bevindingen', icon: 'ShieldAlert', render: renderFindings },
 ];
 
 export async function renderProject(app: HTMLElement, id: string, tab: string) {
