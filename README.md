@@ -51,3 +51,4 @@ Eerste werkende versie. Nog niet gedaan: officiële AREI-symbolen als exacte set
 
 ## Wijzigingen per issue
 - #8 "Ouders afleiden" zegt nu wat er gebeurde: hoeveel nieuw gekoppeld, "alles was al gekoppeld", of bij hoeveel toestellen geen differentieel gevonden werd.
+- #9 Toestelopschriften zonder dubbele tekst ("B16" + 16A wordt één keer "B16"); in dropdowns en lijsten staat de plaats in de kast (R1·3 = rij 1, 3e van links) zodat gelijke zekeringen onderscheidbaar zijn; op de foto kun je de opschriften met de knop *Labels* verbergen (het geselecteerde toestel toont zijn opschrift altijd), kleiner lettertype.

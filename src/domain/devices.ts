@@ -91,12 +91,23 @@ export const STATUSES = ['onbekend', 'gedocumenteerd', 'gecontroleerd'];
 export const DEFAULT_RATING_FOR_SECTION: Record<number, number> = { 1.5: 10, 2.5: 16, 4: 25, 6: 32, 10: 40, 16: 63 };
 
 export function deviceTitle(d: { kind: string; label?: string | null; rating_a?: number | null; curve?: string | null; sens_ma?: number | null }) {
-  const bits: (string | number | null | undefined)[] = [d.label];
-  if (d.rating_a) bits.push(`${d.curve ?? ''}${d.rating_a}A`);
-  else if (d.curve) bits.push(d.curve);
-  if (d.sens_ma) bits.push(`${d.sens_ma}mA`);
+  // het opschrift (bv. "B16") bevat vaak al curve en amperage: niet nog eens bijvoegen ("B16 B16A")
+  const label = d.label?.trim() ?? '', low = label.toLowerCase().replace(/s+/g, '');
+  const has = (x: string) => !!label && low.includes(x.toLowerCase());
+  const bits: (string | number | null | undefined)[] = [label];
+  if (d.rating_a) { const spec = `${d.curve ?? ''}${d.rating_a}`; if (!has(spec) && !has(`${d.rating_a}A`) && !has(`${d.rating_a}`)) bits.push(`${spec}A`); }
+  else if (d.curve && !has(d.curve)) bits.push(d.curve);
+  if (d.sens_ma && !has(`${d.sens_ma}mA`) && !has(`${d.sens_ma}`)) bits.push(`${d.sens_ma}mA`);
   const t = bits.filter(Boolean).join(' ');
   return t || DEVICE_KINDS[d.kind]?.label.split(' ')[0] || 'Toestel';
+}
+
+/** Plaats in de kast per toestel: "R1·3" = rij 1, derde toestel van links. Voor dropdowns en lijsten, zodat gelijke toestellen onderscheidbaar zijn. */
+export function devicePlaces(devs: { id: string; row_no: number; pos: number }[]): Map<string, string> {
+  const out = new Map<string, string>(), rows = new Map<number, typeof devs>();
+  for (const d of devs) (rows.get(d.row_no) ?? rows.set(d.row_no, []).get(d.row_no)!).push(d);
+  for (const [row, ds] of rows) ds.sort((x, y) => x.pos - y.pos).forEach((d, i) => out.set(d.id, `R${row + 1}·${i + 1}`));
+  return out;
 }
 
 const dec = (n: number) => String(n).replace('.', ',');

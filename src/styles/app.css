@@ -114,7 +114,7 @@ input[type=checkbox] { width: auto; }
 .dev-rect { fill: rgba(0,128,0,.12); stroke: var(--color-primary); stroke-width: 2; vector-effect: non-scaling-stroke; cursor: pointer; }
 .dev-rect.warn { fill: rgba(224,120,0,.15); stroke: var(--color-amber-500); }
 .dev-rect.sel { fill: rgba(0,102,170,.2); stroke: var(--color-info); stroke-width: 3; }
-.dev-tag { font-size: 12px; font-weight: 600; paint-order: stroke; stroke: #fff; stroke-width: 3px; fill: var(--color-fg); pointer-events: none; }
+.dev-tag { font-size: 10px; font-weight: 600; paint-order: stroke; stroke: #fff; stroke-width: 3px; fill: var(--color-fg); pointer-events: none; }
 .empty-state { display: grid; place-items: center; text-align: center; padding: var(--space-12); color: var(--color-fg-muted); gap: var(--space-3); }
 .legend { display: flex; flex-wrap: wrap; gap: var(--space-2); font-size: var(--text-xs); }
 .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; }

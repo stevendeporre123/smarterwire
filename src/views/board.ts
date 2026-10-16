@@ -3,7 +3,7 @@ import { buildForm, formModal, modal, panZoom, badge, choose, confirmDialog, typ
 import { upsert, softDelete, saveImage, assetUrl, assetSize, putOp } from '../db/repo';
 import { run } from '../db/client';
 import { boardsOf, devicesOf, circuitsOf, type Board, type Device, type Project, type Circuit } from '../domain/model';
-import { CURVES, DEVICE_KINDS, DIFF_TYPES, deviceTitle, isGroupParent, isFeeder, supplyOf, supplyPhases, supplyPoles, supplyConflict, deviceFieldKeys, defaultModules, normPoles, polesText } from '../domain/devices';
+import { CURVES, DEVICE_KINDS, DIFF_TYPES, deviceTitle, devicePlaces, isGroupParent, isFeeder, supplyOf, supplyPhases, supplyPoles, supplyConflict, deviceFieldKeys, defaultModules, normPoles, polesText } from '../domain/devices';
 import { ensureCircuits, unlinkDevice } from '../domain/circuits';
 import { moduleArt } from '../domain/modules';
 import { deviceForm } from './deviceform';
@@ -85,6 +85,7 @@ export async function renderBoard(root: HTMLElement, project: Project) {
   const size = board.asset_id ? await assetSize(board.asset_id) : undefined;
   let view: 'foto' | 'virtueel' = photoUrl ? 'foto' : 'virtueel';
   let selId: string | null = null;
+  let showTags = localStorage.getItem('smarterwire.tags') !== '0';   // opschriften boven de toestellen op de foto
 
   function feedHint() {
     const srcId = board.kind === 'nieuw' ? board.src_board_id : board.id;
@@ -132,8 +133,9 @@ export async function renderBoard(root: HTMLElement, project: Project) {
   function setViewButtons() {
     clear(viewBtns);
     if (photoUrl) viewBtns.append(btn('Foto', { icon: 'Image', variant: 'secondary', onClick: () => { view = 'foto'; draw(); } }));
+    if (photoUrl && view === 'foto') viewBtns.append(btn('Labels', { icon: showTags ? 'Eye' : 'EyeOff', variant: 'ghost', title: 'Opschriften op de foto tonen/verbergen (het geselecteerde toestel toont altijd zijn opschrift)', onClick: () => { showTags = !showTags; localStorage.setItem('smarterwire.tags', showTags ? '1' : '0'); draw(); } }));
     viewBtns.append(btn('Virtueel', { icon: 'LayoutPanelTop', onClick: () => { view = 'virtueel'; draw(); } }));
-    [...viewBtns.children].forEach((c, i) => c.classList.toggle('active', (photoUrl ? ['foto', 'virtueel'][i] : 'virtueel') === view));
+    [...viewBtns.children].forEach((c) => c.classList.toggle('active', c.textContent === (view === 'foto' ? 'Foto' : 'Virtueel')));
   }
 
   async function refresh() { await ensureCircuits(project); [devices, circuits] = await Promise.all([devicesOf(board.id), circuitsOf(project.id)]); draw(); drawSide(); }
@@ -156,7 +158,8 @@ export async function renderBoard(root: HTMLElement, project: Project) {
       const r = svg('rect', { x: d.rx! * W, y: d.ry! * H, width: d.rw! * W, height: d.rh! * H, class: `dev-rect ${warn ? 'warn' : ''} ${d.id === selId ? 'sel' : ''}` });
       rects.set(d.id, r);
       r.addEventListener('pointerdown', (e) => startMove(e, d, r));
-      layer.append(r, svg('text', { x: d.rx! * W + 3, y: d.ry! * H - 4, class: 'dev-tag' }, deviceTitle(d)));
+      layer.append(r);
+      if (showTags || d.id === selId) layer.append(svg('text', { x: d.rx! * W + 3, y: d.ry! * H - 4, class: 'dev-tag' }, deviceTitle(d)));
     }
     // nieuw rechthoek tekenen
     let drag: { x0: number; y0: number; el: SVGRectElement } | null = null;
@@ -277,10 +280,10 @@ export async function renderBoard(root: HTMLElement, project: Project) {
   }
 
   function deviceList() {
-    const cByD = circuitsByDevice();
+    const cByD = circuitsByDevice(), at = devicePlaces(devices);
     return h('div', null, devices.slice().sort((a, b) => a.row_no - b.row_no || a.pos - b.pos).map((d) =>
       h('div', { class: 'pal-item', onClick: () => { selId = d.id; draw(); drawSide(); } },
-        h('span', { class: 'muted', style: { width: '28px' } }, `R${d.row_no + 1}`), h('span', { style: { flex: 1 } }, deviceTitle(d)),
+        h('span', { class: 'muted', style: { width: '40px' } }, at.get(d.id)), h('span', { style: { flex: 1 } }, deviceTitle(d)),
         isFeeder(d.kind) && !cByD.has(d.id) ? badge('?', 'warn') : null)));
   }
 

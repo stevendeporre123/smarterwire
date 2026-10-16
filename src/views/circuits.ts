@@ -3,14 +3,14 @@ import { dataTable, formModal, badge, type FieldDef } from '../lib/ui';
 import { upsert, softDelete, whereOp } from '../db/repo';
 import { q, run } from '../db/client';
 import { boardsOf, devicesOf, circuitsOf, plansOf, type Circuit, type Device, type Project } from '../domain/model';
-import { CABLE_TYPES, FIRE_CLASSES, FUNCTIONS, INSTALL_MODES, CONDUIT_MODES, SECTIONS, STATUSES, cableLabel, cableMissing, deviceTitle, isFeeder, supplyOf, supplyVoltages } from '../domain/devices';
+import { CABLE_TYPES, FIRE_CLASSES, FUNCTIONS, INSTALL_MODES, CONDUIT_MODES, SECTIONS, STATUSES, cableLabel, cableMissing, deviceTitle, devicePlaces, isFeeder, supplyOf, supplyVoltages } from '../domain/devices';
 
 export async function editCircuit(project: Project, circuit: Partial<Circuit>, onDone: () => void) {
   const [boards, plans] = await Promise.all([boardsOf(project.id), plansOf(project.id)]);
   const old = boards.filter((b) => b.kind === 'bestaand');
   const opts: { value: string; label: string }[] = [];
   let hostBoard: string | undefined;
-  for (const b of old) for (const d of await devicesOf(b.id)) { if (d.id === circuit.device_id) hostBoard = b.id; if (isFeeder(d.kind)) opts.push({ value: d.id, label: `${old.length > 1 ? b.name + ': ' : ''}${deviceTitle(d)} (rij ${d.row_no + 1})` }); }
+  for (const b of old) { const devs = await devicesOf(b.id), at = devicePlaces(devs); for (const d of devs) { if (d.id === circuit.device_id) hostBoard = b.id; if (isFeeder(d.kind)) opts.push({ value: d.id, label: `${old.length > 1 ? b.name + ': ' : ''}${at.get(d.id)} · ${deviceTitle(d)}` }); } }
   const supply = supplyOf(project);
   const fields: FieldDef[] = [
     { key: 'nr', label: 'Kring' },
