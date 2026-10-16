@@ -6,5 +6,5 @@ compatibility_date = "2025-01-01"
 [[d1_databases]]
 binding = "PREVIEW_DB"
 database_name = "smarterwire-preview"
-database_id = "VUL-IN-NA-WRANGLER-D1-CREATE"
+database_id = "2bcefff8-38f9-46e9-b61f-4eacffc5e611"
 migrations_dir = "cloudflare/migrations"

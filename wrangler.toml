@@ -16,7 +16,7 @@ migrations_dir = "cloudflare/migrations"
 [[previews.d1_databases]]
 binding = "DB"
 database_name = "smarterwire-preview"
-database_id = "VUL-IN-NA-WRANGLER-D1-CREATE"
+database_id = "2bcefff8-38f9-46e9-b61f-4eacffc5e611"
 
 # De gebouwde app (npm run build) wordt als statische assets geserveerd; enkel /api/* gaat langs de worker.
 [assets]
