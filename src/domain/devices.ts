@@ -24,7 +24,7 @@ export const polesLabel = normPoles;
 export const polesText = (p: string) => `${p.replace('P', '')}-polig`;
 export const DIFF_TYPES = ['AC', 'A', 'F', 'B'];
 export const FUNCTIONS = [
-  'Verlichting', 'Stopcontacten', 'Kookplaat', 'Oven', 'Wasmachine', 'Droogkast', 'Vaatwasser',
+  'Verlichting', 'Stopcontacten', 'Gemengd', 'Kookplaat', 'Oven', 'Wasmachine', 'Droogkast', 'Vaatwasser',
   'Boiler', 'Verwarming', 'Airco / warmtepomp', 'Laadpaal', 'Buiten', 'Bel / laagspanning', 'Andere',
 ];
 export const CABLE_TYPES = ['VOB', 'XVB', 'XGB', 'EXVB', 'EXAVB', 'XVB-F2', 'H07V-U', 'H07V-K', 'H05VV-F', 'H07RN-F', 'YMvK', 'Onbekend'];
@@ -81,6 +81,23 @@ export const INSPECTOR_PRESETS: Record<string, string> = {
 export const supplyText = (s: Supply) => (s === '3N400' ? '3 x 400V + N ~ 50Hz' : s === '3x230' ? '3 x 230V ~ 50Hz' : '1 x 230V + N ~ 50Hz');
 /** "20A Voeding - 4 polig" */
 export const supplyExtra = (s: Supply, amp?: number | null) => `${amp ? amp + 'A ' : ''}Voeding - ${s === '3N400' ? 4 : s === '3x230' ? 3 : 2} polig`;
+/**
+ * Voorkeuzekabels voor het kringformulier: één keuze vult type, brandklasse, doorsnede, aantal aders en aarding in.
+ * Plaatsing en los/in buis blijven zoals ze zijn. Wat hier niet in staat vul je zelf in ("Aangepast").
+ * NB: de brandklasse van VOB (Eca) is een aanname; pas ze aan als de kabel anders gemarkeerd is.
+ */
+export interface CablePref { id: string; label: string; cable_type: string; fire_class: string; section_mm2: number; wires: number; has_earth: number }
+const pref = (type: string, fire: string, wires: number, section: number): CablePref =>
+  ({ id: `${type}|${wires}G${section}`, label: `${type} ${fire} ${wires}G${String(section).replace('.', ',')}`, cable_type: type, fire_class: fire, section_mm2: section, wires, has_earth: 1 });
+export const CABLE_PREFS: CablePref[] = [
+  pref('XVB', 'Cca', 3, 2.5), pref('XVB', 'Cca', 3, 1.5), pref('VOB', 'Eca', 3, 2.5), pref('VOB', 'Eca', 3, 1.5),
+  pref('XVB', 'Cca', 3, 4), pref('XVB', 'Cca', 3, 6), pref('XVB', 'Cca', 5, 2.5), pref('XVB', 'Cca', 5, 4), pref('XVB', 'Cca', 5, 6), pref('XVB', 'Cca', 5, 10),
+  pref('VOB', 'Eca', 3, 4), pref('VOB', 'Eca', 3, 6), pref('VOB', 'Eca', 5, 2.5), pref('VOB', 'Eca', 5, 6),
+];
+export const cablePrefOptions = () => CABLE_PREFS.map((p) => ({ value: p.id, label: p.label }));
+/** Velden die een voorkeuzekabel instelt. */
+export const cablePrefPatch = (id: string) => { const p = CABLE_PREFS.find((x) => x.id === id); return p ? { cable_type: p.cable_type, fire_class: p.fire_class, section_mm2: p.section_mm2, wires: p.wires, has_earth: p.has_earth } : null; };
+
 export const SECTIONS = [0.75, 1, 1.5, 2.5, 4, 6, 10, 16, 25, 35];
 
 /** Veelgebruikte kabels voor het palet van het eendraadschema: aantal aders (incl. aarding bij G), aarding, doorsnede. */

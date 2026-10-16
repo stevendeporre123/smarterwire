@@ -50,7 +50,7 @@ export function runChecks(inp: CheckInput): Finding[] {
     const sockets = entries.filter((x) => x.e?.func === 'Stopcontacten').reduce((s, x) => s + cnt(x.l), 0);
     const lights = entries.filter((x) => x.e?.func === 'Verlichting').reduce((s, x) => s + cnt(x.l), 0);
     const kinds = bigKinds([c.name, c.func ?? '', ...entries.map((x) => splitType(x.l.type).id)].join(' '));
-    const hasSockets = sockets > 0 || c.func === 'Stopcontacten';
+    const hasSockets = sockets > 0 || c.func === 'Stopcontacten' || c.func === 'Gemengd';
 
     for (const state of states) {
       const devId = state === 'bestaand' ? c.device_id : c.new_device_id;

@@ -8,7 +8,7 @@ import { pdfFileName } from '../lib/pdf';
 import { download } from '../lib/dom';
 import { projectLoads } from '../domain/loads';
 import { boardsOf, devicesOf, circuitsOf, plansOf, type Circuit, type Device, type Project } from '../domain/model';
-import { CABLE_TYPES, FIRE_CLASSES, FUNCTIONS, INSTALL_MODES, CONDUIT_MODES, SECTIONS, STATUSES, EARTH_MODES, autoStatus, cableLabel, cableMissing, deviceTitle, devicePlaces, isFeeder, supplyOf, supplyVoltages } from '../domain/devices';
+import { CABLE_TYPES, FIRE_CLASSES, FUNCTIONS, INSTALL_MODES, CONDUIT_MODES, SECTIONS, STATUSES, EARTH_MODES, autoStatus, cablePrefOptions, cablePrefPatch, cableLabel, cableMissing, deviceTitle, devicePlaces, isFeeder, supplyOf, supplyVoltages } from '../domain/devices';
 
 /** Verdiepingen = de aangemaakte plannen (geen vrije tekst meer: typfouten gaven dubbele groepen). Een bestaande afwijkende waarde blijft kiesbaar. */
 const levelOptions = (plans: { name: string; level?: string | null }[], current?: string | null) => {
@@ -16,6 +16,14 @@ const levelOptions = (plans: { name: string; level?: string | null }[], current?
   if (current && !v.includes(current)) v.push(current);
   return v;
 };
+
+/** Een voorkeuzekabel kiezen vult type, brandklasse, doorsnede, aders en aarding in; daarna kan je alles nog aanpassen. */
+function applyPref(form: { inputs: Record<string, HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement> }) {
+  form.inputs.cable_pref?.addEventListener('change', () => {
+    const patch = cablePrefPatch(form.inputs.cable_pref.value); if (!patch) return;
+    for (const [k, v] of Object.entries(patch)) { const el = form.inputs[k]; if (el) el.value = String(v); }
+  });
+}
 
 /** Kabelgegevens die je van een andere kring kunt overnemen. */
 const COPY_KEYS = ['cable_type', 'fire_class', 'section_mm2', 'wires', 'has_earth', 'install', 'conduit', 'level'] as const;
@@ -33,6 +41,7 @@ export async function editCircuit(project: Project, circuit: Partial<Circuit>, o
     { key: 'name', label: 'Omschrijving', required: true, placeholder: 'bv. Stopcontacten living + keuken' },
     { key: 'func', label: 'Functie', type: 'select', options: FUNCTIONS },
     { key: 'device_id', label: 'Zekering (bestaande kast)', type: 'select', options: opts },
+    { key: 'cable_pref', label: 'Voorkeuzekabel (vult de velden hieronder in)', type: 'select', options: cablePrefOptions(), span: 2 },
     { key: 'cable_type', label: 'Kabeltype *', type: 'select', options: CABLE_TYPES },
     { key: 'fire_class', label: 'Brandklasse *', type: 'select', options: FIRE_CLASSES },
     { key: 'section_mm2', label: 'Doorsnede (mm²) *', type: 'select', options: SECTIONS, numeric: true },
@@ -63,6 +72,7 @@ export async function editCircuit(project: Project, circuit: Partial<Circuit>, o
     saveNext: next ? { label: `Opslaan & volgende (${next.nr ?? ''})`, then: () => editCircuit(project, next, onDone, { list: ctx.list, prev: { ...circuit, ...form.read() } }) } : undefined,
     onSave: async (v) => {
       if (!v.name) return false;
+      delete v.cable_pref;
       const missing = cableMissing(v);
       if (v.status === 'gecontroleerd' && missing.length) { toast(`Kabelgegevens onvolledig: ${missing.join(', ')}. Vul aan voor je de kring als gecontroleerd markeert.`, 'error'); return false; }
       await upsert('circuit', { ...circuit, ...v, project_id: project.id, status: autoStatus(v) });
@@ -71,6 +81,7 @@ export async function editCircuit(project: Project, circuit: Partial<Circuit>, o
     },
     onDelete: circuit.id ? async () => { await softDelete('circuit', circuit.id!); onDone(); } : undefined,
   });
+  applyPref(form);
   if (prev) extra.prepend(btn(`Kabelgegevens overnemen van kring ${prev.nr ?? ''}`, { icon: 'Copy', variant: 'secondary', title: 'Kabeltype, brandklasse, doorsnede, aders, aarding, plaatsing en verdieping van de vorige kring', onClick: () => {
     for (const k of COPY_KEYS) { const el = form.inputs[k] as HTMLInputElement | undefined; if (el) el.value = prev[k] == null ? '' : String(prev[k]); }
   } }));
@@ -82,6 +93,7 @@ async function bulkEdit(project: Project, chosen: Circuit[], onDone: () => void)
   const fields: FieldDef[] = [
     { key: 'func', label: 'Functie', type: 'select', options: FUNCTIONS },
     { key: 'level', label: 'Verdieping', type: 'select', options: levelOptions(plans) },
+    { key: 'cable_pref', label: 'Voorkeuzekabel (vult de velden hieronder in)', type: 'select', options: cablePrefOptions(), span: 2 },
     { key: 'cable_type', label: 'Kabeltype', type: 'select', options: CABLE_TYPES },
     { key: 'fire_class', label: 'Brandklasse', type: 'select', options: FIRE_CLASSES },
     { key: 'section_mm2', label: 'Doorsnede (mm²)', type: 'select', options: SECTIONS, numeric: true },
@@ -90,16 +102,18 @@ async function bulkEdit(project: Project, chosen: Circuit[], onDone: () => void)
     { key: 'install', label: 'Plaatsing', type: 'select', options: INSTALL_MODES },
     { key: 'conduit', label: 'Los of in buis', type: 'select', options: CONDUIT_MODES, numeric: true },
   ];
-  formModal({
+  const bulkForm = formModal({
     title: `${chosen.length} kring(en) aanpassen`, fields, values: {}, wide: true, saveLabel: 'Toepassen',
     extra: h('p', { class: 'hint' }, 'Enkel de velden die je invult worden overschreven; bij "—" blijft de bestaande waarde. De status volgt vanzelf uit de kabelgegevens.'),
     onSave: async (v) => {
+      delete v.cable_pref;
       const patch = Object.fromEntries(Object.entries(v).filter(([, x]) => x != null && x !== ''));
       if (!Object.keys(patch).length) { toast('Niets ingevuld: er is niets aangepast', 'error'); return false; }
       await run(chosen.map((c) => putOp('circuit', { ...c, ...patch, status: autoStatus({ ...c, ...patch }) })));
       toast(`${chosen.length} kring(en) aangepast`); onDone();
     },
   });
+  applyPref(bulkForm);
 }
 
 /** Kringen in bulk verwijderen. Symbolen op het plan blijven staan (zonder kring), handmatige verbruikers en leidingtrajecten van de kring verdwijnen/ontkoppelen. */

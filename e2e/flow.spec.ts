@@ -58,9 +58,14 @@ test('volledige flow: project → kast → kringen → schema → nieuwe kast �
   // één kring volledig invullen → status wordt vanzelf "gedocumenteerd"
   await page.locator('tbody tr').first().click();
   await modal(page).getByLabel('Omschrijving').fill('Stopcontacten living');
-  await modal(page).getByLabel(/Kabeltype/).selectOption('XVB');
-  await modal(page).getByLabel(/Brandklasse/).selectOption('Cca');
-  await modal(page).getByLabel(/Doorsnede/).selectOption('2.5');
+  // voorkeuzekabel vult type, brandklasse, doorsnede, aders en aarding in
+  await modal(page).getByLabel(/Voorkeuzekabel/).selectOption('XVB|3G2.5');
+  await expect(modal(page).getByLabel(/Kabeltype/)).toHaveValue('XVB');
+  await expect(modal(page).getByLabel(/Brandklasse/)).toHaveValue('Cca');
+  await expect(modal(page).getByLabel(/Doorsnede/)).toHaveValue('2.5');
+  await expect(modal(page).getByLabel(/Aantal aders/)).toHaveValue('3');
+  await expect(modal(page).getByLabel(/^Aarding/)).toHaveValue('1');
+  await modal(page).getByLabel('Functie').selectOption('Gemengd');
   await modal(page).getByLabel(/Plaatsing/).selectOption('In wand');
   await saved(page);
   await expect(page.locator('tbody .badge', { hasText: 'gedocumenteerd' })).toHaveCount(1);

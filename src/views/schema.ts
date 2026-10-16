@@ -6,7 +6,7 @@ import { uid } from '../lib/id';
 import { boardsOf, circuitsOf, plansOf, allDevicesOfProject, type Project, type Circuit, type Device } from '../domain/model';
 import { buildDiagram } from '../domain/diagram';
 import {
-  CABLE_TYPES, FIRE_CLASSES, FUNCTIONS, INSTALL_MODES, CONDUIT_MODES, SECTIONS, STATUSES, CABLE_PRESETS, EARTH_MODES, autoStatus, SUPPLIES, supplyOf, isThreePhase, defaultModules, deviceTitle, DEVICE_KINDS,
+  CABLE_TYPES, FIRE_CLASSES, FUNCTIONS, INSTALL_MODES, CONDUIT_MODES, SECTIONS, STATUSES, CABLE_PRESETS, EARTH_MODES, autoStatus, CABLE_PREFS, cablePrefPatch, SUPPLIES, supplyOf, isThreePhase, defaultModules, deviceTitle, DEVICE_KINDS,
 } from '../domain/devices';
 import { cableLabel } from '../domain/devices';
 import { CATALOG, FUNC_ORDER, symbolEntry, symbolGeom, symbolMarkup, splitType, joinType, type SymbolEntry } from '../domain/areisymbols';
@@ -375,7 +375,11 @@ export async function renderSchema(root: HTMLElement, project: Project) {
       { key: 'rooms', label: 'Ruimtes', advanced: true, span: 2 }, { key: 'level', label: 'Verdieping', type: 'select', options: [...new Set([...plans.map((p) => p.level || p.name), ...(c.level ? [c.level] : [])])], advanced: true }, { key: 'status', label: 'Status', type: 'select', options: STATUSES, allowEmpty: false, advanced: true },
       { key: 'lock_group', label: 'Samen houden (gedeelde nul)', advanced: true, span: 2 }, { key: 'notes', label: 'Notities', type: 'textarea', advanced: true, span: 2 },
     ];
-    side.append(head(`Kring ${c.nr ?? ''}`, c.name), autoForm(form, c, 'circuit'));
+    const prefSel = h('select', { title: 'Vult kabeltype, brandklasse, doorsnede, aders en aarding in', onChange: async (e: Event) => {
+      const patch = cablePrefPatch((e.target as HTMLSelectElement).value); if (!patch) return;
+      Object.assign(c, patch); c.status = autoStatus(c); await upsert('circuit', c); await after();
+    } }, h('option', { value: '' }, '— voorkeuzekabel —'), CABLE_PREFS.map((p) => h('option', { value: p.id }, p.label)));
+    side.append(head(`Kring ${c.nr ?? ''}`, c.name), field('Voorkeuzekabel', prefSel), autoForm(form, c, 'circuit'));
     if (dev) {
       const dform = deviceForm(dev, { supply: supply(), devices, onChange: async () => { await after(); } });
       side.append(h('h4', null, 'Beveiliging'), ...(dform.conflict ? [badge(dform.conflict, 'err')] : []), dform.el);
