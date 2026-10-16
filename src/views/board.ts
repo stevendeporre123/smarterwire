@@ -97,10 +97,16 @@ export async function renderBoard(root: HTMLElement, project: Project) {
   // ---------- toolbar ----------
   const boardSel = h('select', { onChange: (e: Event) => { localStorage.setItem(LS_BOARD(project.id), (e.target as HTMLSelectElement).value); reload(); } },
     boards.map((b) => h('option', { value: b.id, selected: b.id === board.id }, `${b.kind === 'nieuw' ? '★ ' : ''}${b.name}`)));
-  const fileInput = h('input', { type: 'file', accept: 'image/*', style: { display: 'none' }, onChange: async () => {
-    const f = (fileInput as HTMLInputElement).files?.[0]; if (!f) return;
-    const img = await saveImage(f); await upsert('board', { ...board, asset_id: img.id }); toast('Foto opgeladen'); reload();
-  } });
+  const onPhoto = (inp: HTMLInputElement) => async () => {
+    const f = inp.files?.[0]; if (!f) return;
+    const stop = busy('Foto wordt opgeslagen…');
+    try { const img = await saveImage(f); await upsert('board', { ...board, asset_id: img.id }); toast('Foto opgeladen'); reload(); } catch (e: any) { toast(e?.message ?? 'Foto opslaan mislukt', 'error'); } finally { stop(); }
+  };
+  const fileInput = h('input', { type: 'file', accept: 'image/*', style: { display: 'none' } }) as HTMLInputElement;
+  fileInput.onchange = onPhoto(fileInput);
+  // op telefoon of tablet opent dit meteen de camera
+  const camInput = h('input', { type: 'file', accept: 'image/*', capture: 'environment', style: { display: 'none' } }) as HTMLInputElement;
+  camInput.setAttribute('capture', 'environment'); camInput.onchange = onPhoto(camInput);
   const viewBtns = h('div', { style: { display: 'flex', gap: '4px' } });
   const toolbar = h('div', { class: 'toolbar' }, boardSel,
     btn('', { icon: 'Plus', variant: 'ghost', title: 'Kast of onderverdeler toevoegen', onClick: () => newBoard('bestaand') }),
@@ -111,7 +117,7 @@ export async function renderBoard(root: HTMLElement, project: Project) {
     h('span', { class: 'spacer' }), viewBtns);
 
   if (board.kind === 'bestaand') {
-    toolbar.append(fileInput, btn(photoUrl ? 'Andere foto' : 'Foto opladen', { icon: 'Camera', onClick: () => fileInput.click() }));
+    toolbar.append(fileInput, camInput, btn(photoUrl ? 'Andere foto' : 'Foto opladen', { icon: 'Upload', onClick: () => fileInput.click() }), btn('Camera', { icon: 'Camera', title: 'Foto nemen met de camera (telefoon/tablet)', onClick: () => camInput.click() }));
     if (photoUrl) toolbar.append(btn('AI-voorstel', { icon: 'Sparkles', variant: 'accent', title: 'Toestellen herkennen met AI (proxy vereist)', onClick: runAi }),
       btn('Ouders afleiden', { icon: 'GitBranch', title: 'Beschermend differentieel automatisch afleiden uit de positie', onClick: async () => {
         const ch = guessParents(devices);
