@@ -26,7 +26,7 @@ export async function ensureCircuits(project: Project): Promise<number> {
   for (const d of devs) {
     if (!isFeeder(d.kind) || linked.has(d.id)) continue;
     const nr = nextNr(used); used.push(nr);
-    stmts.push(putOp('circuit', { id: uid(), project_id: project.id, nr, name: `Kring ${nr}`, status: 'onbekend', voltage: 230, has_earth: 1,
+    stmts.push(putOp('circuit', { id: uid(), project_id: project.id, nr, name: `Kring ${nr}`, status: 'onbekend', voltage: 230, has_earth: null,
       [d.bkind === 'nieuw' ? 'new_device_id' : 'device_id']: d.id }));
   }
   await run(stmts);

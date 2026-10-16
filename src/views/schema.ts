@@ -6,7 +6,7 @@ import { uid } from '../lib/id';
 import { boardsOf, circuitsOf, allDevicesOfProject, type Project, type Circuit, type Device } from '../domain/model';
 import { buildDiagram } from '../domain/diagram';
 import {
-  CABLE_TYPES, FIRE_CLASSES, FUNCTIONS, INSTALL_MODES, CONDUIT_MODES, SECTIONS, STATUSES, CABLE_PRESETS, SUPPLIES, supplyOf, isThreePhase, defaultModules, deviceTitle, DEVICE_KINDS,
+  CABLE_TYPES, FIRE_CLASSES, FUNCTIONS, INSTALL_MODES, CONDUIT_MODES, SECTIONS, STATUSES, CABLE_PRESETS, EARTH_MODES, autoStatus, SUPPLIES, supplyOf, isThreePhase, defaultModules, deviceTitle, DEVICE_KINDS,
 } from '../domain/devices';
 import { cableLabel } from '../domain/devices';
 import { CATALOG, FUNC_ORDER, symbolEntry, symbolGeom, symbolMarkup, splitType, joinType, type SymbolEntry } from '../domain/areisymbols';
@@ -185,7 +185,7 @@ export async function renderSchema(root: HTMLElement, project: Project) {
     const c = circuits.find((x) => x.id === circuitId); if (!c) return;
     const p = cabParams, patch: Record<string, any> = { wires: p.wires ?? null, has_earth: p.has_earth ? 1 : 0, section_mm2: p.section_mm2 ?? null };
     for (const k of ['cable_type', 'fire_class', 'install', 'conduit']) if (p[k] != null && p[k] !== '') patch[k] = p[k];
-    await upsert('circuit', { ...c, ...patch });
+    await upsert('circuit', { ...c, ...patch, status: autoStatus({ ...c, ...patch }) });
     sel = { kind: 'circuit', id: c.id }; await after(`Kabel ${cableLabel({ ...c, ...patch }).replace(/ · .*/, '')} geplaatst op kring ${c.nr ?? ''}`);
   }
 
@@ -274,7 +274,7 @@ export async function renderSchema(root: HTMLElement, project: Project) {
   /** Formulier met auto-opslag: elke wijziging gaat meteen naar de database. */
   function autoForm(fields: FieldDef[], obj: Record<string, any>, table: string) {
     const form = buildForm(fields, obj);
-    Object.values(form.inputs).forEach((i) => i.addEventListener('change', async () => { Object.assign(obj, form.read()); await upsert(table, obj); await after(); }));
+    Object.values(form.inputs).forEach((i) => i.addEventListener('change', async () => { Object.assign(obj, form.read()); if (table === 'circuit') obj.status = autoStatus(obj); await upsert(table, obj); await after(); }));
     return form.el;
   }
   const field = (label: string, input: Element) => h('label', { class: 'field' }, h('span', { class: 'field-label' }, label), input);
@@ -370,7 +370,7 @@ export async function renderSchema(root: HTMLElement, project: Project) {
       { key: 'nr', label: 'Kring' }, { key: 'func', label: 'Functie', type: 'select', options: FUNCTIONS },
       { key: 'name', label: 'Omschrijving', span: 2 },
       { key: 'cable_type', label: 'Kabeltype', type: 'select', options: CABLE_TYPES }, { key: 'fire_class', label: 'Brandklasse', type: 'select', options: FIRE_CLASSES },
-      { key: 'section_mm2', label: 'Doorsnede (mm²)', type: 'select', options: SECTIONS, numeric: true }, { key: 'wires', label: 'Aantal aders', type: 'number' }, { key: 'has_earth', label: 'Bevat aarding (G)', type: 'checkbox' },
+      { key: 'section_mm2', label: 'Doorsnede (mm²)', type: 'select', options: SECTIONS, numeric: true }, { key: 'wires', label: 'Aantal aders', type: 'number' }, { key: 'has_earth', label: 'Aarding (beschermgeleider)', type: 'select', options: EARTH_MODES },
       { key: 'install', label: 'Plaatsing', type: 'select', options: INSTALL_MODES }, { key: 'conduit', label: 'Los of in buis', type: 'select', options: CONDUIT_MODES, numeric: true },
       { key: 'rooms', label: 'Ruimtes', advanced: true, span: 2 }, { key: 'level', label: 'Verdieping', advanced: true }, { key: 'status', label: 'Status', type: 'select', options: STATUSES, allowEmpty: false, advanced: true },
       { key: 'lock_group', label: 'Samen houden (gedeelde nul)', advanced: true, span: 2 }, { key: 'notes', label: 'Notities', type: 'textarea', advanced: true, span: 2 },

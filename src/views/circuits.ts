@@ -3,7 +3,7 @@ import { dataTable, formModal, badge, type FieldDef } from '../lib/ui';
 import { upsert, softDelete, whereOp } from '../db/repo';
 import { q, run } from '../db/client';
 import { boardsOf, devicesOf, circuitsOf, plansOf, type Circuit, type Device, type Project } from '../domain/model';
-import { CABLE_TYPES, FIRE_CLASSES, FUNCTIONS, INSTALL_MODES, CONDUIT_MODES, SECTIONS, STATUSES, cableLabel, cableMissing, deviceTitle, devicePlaces, isFeeder, supplyOf, supplyVoltages } from '../domain/devices';
+import { CABLE_TYPES, FIRE_CLASSES, FUNCTIONS, INSTALL_MODES, CONDUIT_MODES, SECTIONS, STATUSES, EARTH_MODES, autoStatus, cableLabel, cableMissing, deviceTitle, devicePlaces, isFeeder, supplyOf, supplyVoltages } from '../domain/devices';
 
 export async function editCircuit(project: Project, circuit: Partial<Circuit>, onDone: () => void) {
   const [boards, plans] = await Promise.all([boardsOf(project.id), plansOf(project.id)]);
@@ -21,13 +21,14 @@ export async function editCircuit(project: Project, circuit: Partial<Circuit>, o
     { key: 'fire_class', label: 'Brandklasse *', type: 'select', options: FIRE_CLASSES },
     { key: 'section_mm2', label: 'Doorsnede (mm²) *', type: 'select', options: SECTIONS, numeric: true },
     { key: 'wires', label: 'Aantal aders (incl. aarde)', type: 'number', placeholder: '3 = 3G, 5 = 5G…' },
+    { key: 'has_earth', label: 'Aarding (beschermgeleider)', type: 'select', options: EARTH_MODES },
     { key: 'install', label: 'Plaatsing *', type: 'select', options: INSTALL_MODES },
     { key: 'conduit', label: 'Los of in buis', type: 'select', options: CONDUIT_MODES, numeric: true },
     // --- zelden nodig ---
     { key: 'level', label: 'Verdieping', list: plans.map((p) => p.level || p.name), advanced: true },
     { key: 'rooms', label: 'Ruimtes', placeholder: 'living, keuken…', advanced: true },
     ...(supply === '3N400' ? [{ key: 'voltage', label: 'Spanning (V)', type: 'select' as const, options: supplyVoltages(supply), numeric: true, allowEmpty: false, advanced: true }] : []),
-    { key: 'status', label: 'Status', type: 'select', options: STATUSES, allowEmpty: false, advanced: true },
+    { key: 'status', label: 'Status (gedocumenteerd volgt vanzelf uit de kabelgegevens)', type: 'select', options: STATUSES, allowEmpty: false, advanced: true },
     { key: 'feeds_board_id', label: 'Voedt onderverdeler', type: 'select', options: old.filter((b) => b.id !== hostBoard).map((b) => ({ value: b.id, label: b.name })), advanced: true },
     { key: 'lock_group', label: 'Samen houden (gedeelde nul)', placeholder: 'zelfde tekst = zelfde differentieel', advanced: true },
     { key: 'has_earth', label: 'Aarding aanwezig', type: 'checkbox', advanced: true },
@@ -35,7 +36,7 @@ export async function editCircuit(project: Project, circuit: Partial<Circuit>, o
   ];
   formModal({
     title: circuit.id ? `Kring ${circuit.nr ?? ''} bewerken` : 'Nieuwe kring', fields, wide: true,
-    values: { status: 'onbekend', voltage: 230, has_earth: 1, wires: 3, ...circuit },
+    values: { status: 'onbekend', voltage: 230, ...circuit },
     extra: h('p', { class: 'hint' }, '* verplicht om een kring als "gedocumenteerd" te kunnen markeren.'),
     onSave: async (v) => {
       if (!v.name) return false;

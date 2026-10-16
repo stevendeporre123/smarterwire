@@ -86,6 +86,13 @@ export const CABLE_PRESETS: { id: string; wires: number; has_earth: number; sect
   ([[3, 1, 1.5], [3, 1, 2.5], [3, 1, 4], [3, 1, 6], [3, 1, 10], [5, 1, 1.5], [5, 1, 2.5], [5, 1, 4], [5, 1, 6], [5, 1, 10], [4, 0, 10], [4, 0, 16], [4, 1, 10], [4, 1, 16]] as const)
     .map(([wires, has_earth, section_mm2]) => ({ id: `${wires}${has_earth ? 'G' : 'x'}${section_mm2}`, wires, has_earth, section_mm2 }));
 export const STATUSES = ['onbekend', 'gedocumenteerd', 'gecontroleerd'];
+export const EARTH_MODES = [{ value: 1, label: 'Aanwezig (G)' }, { value: 0, label: 'Afwezig (x)' }];
+
+/** Status volgt de kabelgegevens: "gedocumenteerd" zodra type, doorsnede, brandklasse en plaatsing gekend zijn. "gecontroleerd" blijft een bewuste bevestiging door de installateur. */
+export function autoStatus(c: { status?: string | null; cable_type?: string | null; section_mm2?: number | null; fire_class?: string | null; install?: string | null }): string {
+  if (c.status === 'gecontroleerd' && !cableMissing(c).length) return 'gecontroleerd';
+  return cableMissing(c).length ? 'onbekend' : 'gedocumenteerd';
+}
 
 /** Gangbare maximum-zekering per kabeldoorsnede (voorstel; altijd zelf nakijken). */
 export const DEFAULT_RATING_FOR_SECTION: Record<number, number> = { 1.5: 10, 2.5: 16, 4: 25, 6: 32, 10: 40, 16: 63 };
@@ -124,7 +131,7 @@ export function cableMissing(c: { cable_type?: string | null; section_mm2?: numb
 
 /** "VOB Eca 3G2,5 · in buis" */
 export function cableLabel(c: { cable_type?: string | null; section_mm2?: number | null; fire_class?: string | null; install?: string | null; conduit?: number | null; wires?: number | null; has_earth?: number | null }): string {
-  const core = c.section_mm2 ? `${c.wires ? c.wires + (c.has_earth === 0 ? 'x' : 'G') : ''}${dec(c.section_mm2)}` : '';
+  const core = c.section_mm2 ? `${c.wires ? c.wires + (c.has_earth === 0 ? 'x' : c.has_earth === 1 ? 'G' : '?') : ''}${dec(c.section_mm2)}` : '';
   const main = [c.cable_type, c.fire_class && c.fire_class !== 'Onbekend' ? c.fire_class : '', core].filter(Boolean).join(' ');
   const place = [c.install?.toLowerCase(), c.conduit == null ? '' : c.conduit ? 'in buis' : 'los'].filter(Boolean).join(', ');
   return [main, place].filter(Boolean).join(' · ');
