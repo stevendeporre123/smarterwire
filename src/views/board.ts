@@ -1,4 +1,4 @@
-import { h, svg, btn, icon, toast, clear } from '../lib/dom';
+import { h, svg, btn, icon, toast, clear, busy } from '../lib/dom';
 import { buildForm, formModal, modal, panZoom, badge, type FieldDef } from '../lib/ui';
 import { upsert, softDelete, saveImage, assetUrl, assetSize, putOp } from '../db/repo';
 import { run } from '../db/client';
@@ -310,12 +310,16 @@ export async function renderBoard(root: HTMLElement, project: Project) {
     await removeAllDevices(); await refresh(); toast('Toestellen gewist');
   }
 
+  let aiRunning = false;
   async function runAi() {
+    if (aiRunning) return;
     const tip = `Endpoint voor de AI-proxy:`;
     const url = prompt(tip, getAiEndpoint()); if (!url) return; setAiEndpoint(url);
-    toast('Foto wordt geanalyseerd…');
+    aiRunning = true;
+    let stop = busy('Foto wordt geanalyseerd door AI… (kan even duren)');
     try {
       const prop = await analyzeBoardPhoto(photoUrl!);
+      stop();
       let mode: 'add' | 'replace' = 'add';
       if (devices.length) {
         const c = await choose(`${prop.length} toestel(len) gevonden`, `Er staan al ${devices.length} toestel(len) in deze kast. Wat wil je met de nieuwe voorstellen doen?`,
@@ -323,6 +327,7 @@ export async function renderBoard(root: HTMLElement, project: Project) {
         if (!c) return;
         mode = c as 'add' | 'replace';
       }
+      stop = busy('Toestellen worden opgeslagen…');
       if (mode === 'replace') await removeAllDevices();
       const stmts = prop.map((p) => {
         const kind = p.kind in DEVICE_KINDS ? p.kind : 'anders', poles = p.poles ? normPoles(p.poles) : null;
@@ -334,6 +339,7 @@ export async function renderBoard(root: HTMLElement, project: Project) {
       await run(ch.map((c) => putOp('device', c)));
       toast(`${prop.length} toestellen ${mode === 'replace' ? 'ingelezen' : 'toegevoegd'} – controleer ze!`); await refresh();
     } catch (e: any) { toast(e.message, 'error'); }
+    finally { stop(); aiRunning = false; }
   }
 
   draw(); drawSide();

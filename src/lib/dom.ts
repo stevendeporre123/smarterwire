@@ -58,6 +58,13 @@ export function toast(msg: string, kind: 'ok' | 'error' = 'ok') {
   setTimeout(() => t.remove(), 3500);
 }
 
+/** Blijvende melding met spinner voor een langdurige bewerking (bv. AI-analyse). Roep het resultaat aan om ze te sluiten. */
+export function busy(msg: string): () => void {
+  const el = h('div', { class: 'busy', role: 'status', 'aria-live': 'polite' }, h('span', { class: 'spinner', 'aria-hidden': 'true' }), msg);
+  document.body.appendChild(el);
+  return () => el.remove();
+}
+
 export function download(name: string, data: BlobPart, mime: string) {
   const a = h('a', { href: URL.createObjectURL(new Blob([data], { type: mime })), download: name });
   document.body.appendChild(a); a.click(); a.remove();
