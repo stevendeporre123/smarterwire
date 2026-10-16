@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import { test, expect, type Page } from '@playwright/test';
 
 // Volledige flow als installateur: registreren → project → kast met toestellen → kringen invullen → schema → bevindingen
@@ -43,7 +44,23 @@ test('volledige flow: project → kast → kringen → schema → nieuwe kast �
   await modal(page).getByLabel(/Doorsnede/).selectOption('2.5');
   await modal(page).getByLabel(/Plaatsing/).selectOption('In wand');
   await saved(page);
-  await expect(page.getByText('gedocumenteerd').first()).toBeVisible();
+  await expect(page.locator('tbody .badge', { hasText: 'gedocumenteerd' })).toHaveCount(1);
+
+  // inline bewerken, filteren en Excel-export van de kringen
+  const naam = page.locator('tbody tr').nth(1).locator('input.inline-edit');
+  await naam.fill('Verlichting hall'); await naam.blur();
+  await expect(page.getByText('Opgeslagen').first()).toBeVisible();
+  await page.locator('select[title="Alle statussen"]').selectOption('gedocumenteerd');
+  await expect(page.locator('tbody tr')).toHaveCount(1);
+  await page.locator('select[title="Alle statussen"]').selectOption('');
+  await expect(page.locator('tbody tr')).toHaveCount(3);
+  const [xlsx] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Excel' }).click()]);
+  expect(xlsx.suggestedFilename()).toMatch(/\.xlsx$/);
+  const { unzipSync, strFromU8 } = await import('fflate');
+  const parts = unzipSync(new Uint8Array(fs.readFileSync((await xlsx.path())!)));
+  expect(Object.keys(parts)).toContain('xl/worksheets/sheet2.xml');
+  expect(strFromU8(parts['xl/worksheets/sheet1.xml'])).toContain('Stopcontacten living');
+  expect(strFromU8(parts['xl/worksheets/sheet2.xml'])).toContain('Verlichting hall');
 
   // eendraadschema en bevindingen laden zonder fout
   await page.getByRole('link', { name: 'Eendraadschema' }).click();

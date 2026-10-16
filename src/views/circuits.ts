@@ -3,6 +3,9 @@ import { dataTable, formModal, badge, type FieldDef } from '../lib/ui';
 import { upsert, softDelete, whereOp, putOp } from '../db/repo';
 import { q, run } from '../db/client';
 import { runChecks, type Finding } from '../domain/checks';
+import { makeXlsx } from '../lib/xlsx';
+import { pdfFileName } from '../lib/pdf';
+import { download } from '../lib/dom';
 import { projectLoads } from '../domain/loads';
 import { boardsOf, devicesOf, circuitsOf, plansOf, type Circuit, type Device, type Project } from '../domain/model';
 import { CABLE_TYPES, FIRE_CLASSES, FUNCTIONS, INSTALL_MODES, CONDUIT_MODES, SECTIONS, STATUSES, EARTH_MODES, autoStatus, cableLabel, cableMissing, deviceTitle, devicePlaces, isFeeder, supplyOf, supplyVoltages } from '../domain/devices';
@@ -111,8 +114,11 @@ async function deleteCircuits(ids: string[], alsoDevices: boolean, devIds: strin
   await run(ops);
 }
 
+/** Filters van de kringentabel blijven bewaard tijdens het werken (ook na herladen van de tabel). */
+const flt = { func: '', level: '', status: '', findings: false };
+
 export async function renderCircuits(root: HTMLElement, project: Project) {
-  const [circuits, boards] = await Promise.all([circuitsOf(project.id), boardsOf(project.id)]);
+  const [circuits, boards, plans] = await Promise.all([circuitsOf(project.id), boardsOf(project.id), plansOf(project.id)]);
   const devs = new Map<string, Device>();
   const boardName = new Map(boards.map((b) => [b.id, b.name]));
   for (const b of boards) for (const d of await devicesOf(b.id)) devs.set(d.id, d);
@@ -130,6 +136,33 @@ export async function renderCircuits(root: HTMLElement, project: Project) {
 
   const reload = () => { loading(root); renderCircuits(root, project); };
   const selection = new Set<string>();
+  const shown = circuits.filter((c) => (!flt.func || c.func === flt.func) && (!flt.level || c.level === flt.level) && (!flt.status || c.status === flt.status) && (!flt.findings || foundBy.has(c.id)));
+  const filterSel = (key: 'func' | 'level' | 'status', label: string, opts: string[]) => h('select', { title: label, onChange: (e: Event) => { flt[key] = (e.target as HTMLSelectElement).value; reload(); } },
+    h('option', { value: '' }, label), opts.map((o) => h('option', { value: o, selected: flt[key] === o }, o)));
+  const uniq = (xs: (string | null | undefined)[]) => [...new Set(xs.filter(Boolean) as string[])].sort((a, b) => a.localeCompare(b, 'nl', { numeric: true }));
+  /** Inline wijzigen: meteen bewaren zonder de tabel te herladen. */
+  const saveInline = async (c: Circuit, patch: Partial<Circuit>) => { Object.assign(c, patch); c.status = autoStatus(c); await upsert('circuit', c); toast('Opgeslagen'); };
+  const stop = (e: Event) => e.stopPropagation();
+  const cell = (c: Circuit, key: 'name' | 'func' | 'level') => key === 'name'
+    ? h('input', { type: 'text', value: c.name, class: 'inline-edit', title: 'Rechtstreeks aanpassen', onClick: stop, onChange: (e: Event) => { const v = (e.target as HTMLInputElement).value.trim(); if (v) saveInline(c, { name: v }); } })
+    : h('select', { class: 'inline-edit', onClick: stop, onChange: (e: Event) => saveInline(c, { [key]: (e.target as HTMLSelectElement).value || null } as Partial<Circuit>) },
+      h('option', { value: '' }, '—'), (key === 'func' ? FUNCTIONS : levelOptions(plans, c.level)).map((o) => h('option', { value: o, selected: (c[key] ?? '') === o }, o)));
+  /** Excel met alle kringen en een tabblad om labels van te printen (afdruk/etiketten via samenvoegen). */
+  const exportExcel = async () => {
+    const byNr = (a: Circuit, b: Circuit) => (a.nr ?? '').localeCompare(b.nr ?? '', 'nl', { numeric: true });
+    const rows = circuits.slice().sort(byNr);
+    const prot = (d?: Device) => (d ? `${d.curve ?? ''}${d.rating_a ?? ''}A` : '');
+    const diffOf = (d?: Device) => { const p = d?.parent_id ? devs.get(d.parent_id) : undefined; return p?.kind === 'differentieel' ? `${p.sens_ma ?? ''} mA` : ''; };
+    const kringen = [['Kring', 'Omschrijving', 'Functie', 'Verdieping', 'Ruimtes', 'Zekering nu', 'Kabel', 'Nieuwe zekering', 'Differentieel nieuw', 'Fase nieuw', 'Status', 'Isolatie (MΩ)', 'Lus (Ω)', 'Datum meting'],
+      ...rows.map((c) => { const o = c.device_id ? devs.get(c.device_id) : undefined, n = c.new_device_id ? devs.get(c.new_device_id) : undefined;
+        return [c.nr, c.name, c.func, c.level, c.rooms, prot(o), cableLabel(c), prot(n), diffOf(n), n?.phase, c.status, c.insulation_mohm, c.loop_ohm, c.measured_at]; })];
+    const labels = [['Kring', 'Label', 'Beveiliging', 'Verdieping'],
+      ...rows.map((c) => { const n = c.new_device_id ? devs.get(c.new_device_id) : undefined, o = c.device_id ? devs.get(c.device_id) : undefined;
+        const d = n ?? o; return [c.nr, `${c.nr ?? ''}  ${/^Kring /.test(c.name) ? '' : c.name}`.trim(), d ? `${prot(d)}${diffOf(d) ? ' · ' + diffOf(d) : ''}` : '', c.level]; })];
+    const blob = await makeXlsx([{ name: 'Kringen', rows: kringen, widths: [7, 40, 16, 14, 20, 12, 30, 14, 16, 10, 14, 12, 9, 14] }, { name: 'Labels', rows: labels, widths: [7, 46, 18, 14] }]);
+    download(pdfFileName(project.name, 'kringen').replace(/\.pdf$/, '.xlsx'), blob, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    toast('Excel gedownload');
+  };
   const delBtn = btn('', { icon: 'Trash2', variant: 'danger', onClick: () => {
     const chosen = circuits.filter((c) => selection.has(c.id));
     if (!chosen.length) return;
@@ -150,20 +183,25 @@ export async function renderCircuits(root: HTMLElement, project: Project) {
 
   root.append(h('div', { class: 'page' },
     h('div', { class: 'page-head' }, h('h2', null, 'Kringen'), h('span', { class: 'hint' }, `${circuits.length} kring(en)`), h('span', { class: 'spacer' }),
+      btn('Excel', { icon: 'FileSpreadsheet', variant: 'secondary', title: 'Kringen en labels exporteren naar Excel (.xlsx)', onClick: exportExcel }),
       editBtn, delBtn,
       btn('Nieuwe kring', { icon: 'Plus', variant: 'primary', onClick: () => editCircuit(project, {}, reload) })),
     orphan.length ? h('div', { class: 'card card-pad', style: { marginBottom: '16px' } },
       h('div', { class: 'hint', style: { marginBottom: '8px' } }, icon('TriangleAlert', 14), ` ${orphan.length} zekering(en) zonder gedocumenteerde kring – klik om te documenteren:`),
       h('div', { class: 'legend' }, orphan.map((d) => btn(bname(d), { variant: 'secondary', onClick: () => editCircuit(project, { device_id: d.id }, reload) })))) : null,
+    h('div', { class: 'filter-bar', style: { display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '8px' } },
+      filterSel('func', 'Alle functies', uniq(circuits.map((c) => c.func))), filterSel('level', 'Alle verdiepingen', uniq(circuits.map((c) => c.level))), filterSel('status', 'Alle statussen', STATUSES),
+      h('label', { class: 'hint', style: { display: 'inline-flex', gap: '4px', alignItems: 'center' } }, h('input', { type: 'checkbox', checked: flt.findings, onChange: (e: Event) => { flt.findings = (e.target as HTMLInputElement).checked; reload(); } }), 'Enkel met bevindingen'),
+      shown.length !== circuits.length ? h('span', { class: 'hint' }, `${shown.length} van ${circuits.length} getoond`) : null),
     dataTable({
-      selection, onSelect: updDel, rows: circuits, search: (c) => `${c.nr} ${c.name} ${c.func} ${c.rooms} ${c.cable_type} ${c.level}`, empty: 'Nog geen kringen. Documenteer ze per zekering of via het situatieplan.',
+      selection, onSelect: updDel, rows: shown, search: (c) => `${c.nr} ${c.name} ${c.func} ${c.rooms} ${c.cable_type} ${c.level}`, empty: 'Nog geen kringen. Documenteer ze per zekering of via het situatieplan.',
       onRow: (c) => editCircuit(project, c, reload, { list: circuits }),
       rowClass: (c) => (c.device_id && shared.get(c.device_id)! > 1 ? 'row-warn' : ''),
       columns: [
         { key: 'nr', label: 'Nr', width: '60px' },
-        { key: 'name', label: 'Omschrijving', render: (c) => h('span', null, h('strong', null, c.name), c.feeds_board_id ? badge(`→ ${boardName.get(c.feeds_board_id) ?? 'onderverdeler'}`, 'info') : null) },
-        { key: 'func', label: 'Functie' },
-        { key: 'level', label: 'Verd.' },
+        { key: 'name', label: 'Omschrijving', render: (c) => h('span', null, cell(c, 'name'), c.feeds_board_id ? badge(`→ ${boardName.get(c.feeds_board_id) ?? 'onderverdeler'}`, 'info') : null) },
+        { key: 'func', label: 'Functie', render: (c) => cell(c, 'func'), sort: (c) => c.func ?? '' },
+        { key: 'level', label: 'Verd.', render: (c) => cell(c, 'level'), sort: (c) => c.level ?? '' },
         { key: 'device_id', label: 'Zekering (nu)', sort: (c) => (c.device_id ? bname(devs.get(c.device_id)!) : ''),
           render: (c) => { const d = c.device_id ? devs.get(c.device_id) : null;
             return d ? h('span', null, bname(d), shared.get(d.id)! > 1 ? badge(`deelt met ${shared.get(d.id)! - 1}`, 'warn') : null) : badge('niet gekoppeld', 'err'); } },
