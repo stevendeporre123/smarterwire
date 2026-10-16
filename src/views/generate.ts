@@ -1,5 +1,5 @@
 import { h, toast } from '../lib/dom';
-import { formModal } from '../lib/ui';
+import { formModal, confirmDialog, alertDialog } from '../lib/ui';
 import { boardsOf, circuitsOf, type Project } from '../domain/model';
 import { DIFF_TYPES } from '../domain/devices';
 import { generateNewBoards, DEFAULT_GEN } from '../domain/newboard';
@@ -8,7 +8,7 @@ import { generateNewBoards, DEFAULT_GEN } from '../domain/newboard';
 export async function openGenerate(project: Project, onDone: () => void) {
   const [boards, circuits] = await Promise.all([boardsOf(project.id), circuitsOf(project.id)]);
   if (!circuits.length) { toast('Documenteer eerst enkele kringen', 'error'); return; }
-  if (boards.some((b) => b.kind === 'nieuw') && !confirm('Bestaande voorstellen voor de nieuwe kast(en) worden vervangen. Doorgaan?')) return;
+  if (boards.some((b) => b.kind === 'nieuw') && !(await confirmDialog({ title: 'Nieuwe kast opbouwen', message: 'Bestaande voorstellen voor de nieuwe kast(en) worden vervangen. Doorgaan?', confirmLabel: 'Doorgaan', danger: false }))) return;
   const noPhase = !project.supply;
   formModal({ title: 'Nieuwe kast opbouwen vanuit de kringen', wide: true, saveLabel: 'Opbouwen', fields: [
     { key: 'maxPerDiff', label: 'Max. kringen per 30 mA-differentieel', type: 'number' },
@@ -30,7 +30,7 @@ export async function openGenerate(project: Project, onDone: () => void) {
     onSave: async (v) => {
       const r = await generateNewBoards(project, { ...DEFAULT_GEN, ...v } as any);
       toast(`${r.diffs} differentieel(en) voorgesteld`);
-      if (r.warnings.length) alert('Opmerkingen:\n\n' + [...new Set(r.warnings)].join('\n'));
+      if (r.warnings.length) await alertDialog('Opmerkingen', [...new Set(r.warnings)].join('\n'));
       const nb = (await boardsOf(project.id)).find((x) => x.kind === 'nieuw'); if (nb) localStorage.setItem(`smarterwire.board.${project.id}`, nb.id);
       onDone();
     } });

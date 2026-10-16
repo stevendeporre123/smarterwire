@@ -1,5 +1,5 @@
 import { h, svg, btn, icon, download, clear, toast } from '../lib/dom';
-import { buildForm, badge, type FieldDef } from '../lib/ui';
+import { buildForm, badge, confirmDialog, type FieldDef } from '../lib/ui';
 import { upsert, putOp, setOp, whereOp, softDelete } from '../db/repo';
 import { run, type Op } from '../db/client';
 import { uid } from '../lib/id';
@@ -97,7 +97,7 @@ export async function renderSchema(root: HTMLElement, project: Project) {
   }
   async function removeDevice(d: Device) {
     const kids = devices.filter((x) => x.parent_id === d.id);
-    if (!confirm(`${deviceTitle(d)} verwijderen${kids.length ? ` (de ${kids.length} toestellen eronder komen dan los te hangen)` : ''}?`)) return;
+    if (!(await confirmDialog({ title: 'Toestel verwijderen', message: `${deviceTitle(d)} verwijderen${kids.length ? ` (de ${kids.length} toestellen eronder komen dan los te hangen)` : ''}?` }))) return;
     await run([whereOp('device', { parent_id: null }, { parent_id: d.id })]);
     await softDelete('device', d.id); await unlinkDevice(d.id);
     sel = null; await after();

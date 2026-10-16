@@ -54,18 +54,65 @@ export function buildForm(fields: FieldDef[], values: Record<string, any>) {
 }
 
 // ---------- modal ----------
-export function modal(opts: { title: string; body: HTMLElement; actions: (close: () => void) => HTMLElement[]; wide?: boolean }) {
+export function modal(opts: { title: string; body: HTMLElement; actions: (close: () => void) => HTMLElement[]; wide?: boolean; onClose?: () => void }) {
   const dlg = h('dialog', { class: `modal ${opts.wide ? 'modal-wide' : ''}` });
-  const close = () => { dlg.close(); dlg.remove(); };
+  const close = () => { dlg.close(); dlg.remove(); opts.onClose?.(); };
   dlg.append(
     h('header', { class: 'modal-head' }, h('h3', null, opts.title), btn('', { icon: 'X', variant: 'ghost', onClick: close, title: 'Sluiten' })),
     h('div', { class: 'modal-body' }, opts.body),
     h('footer', { class: 'modal-foot' }, ...opts.actions(close)),
   );
-  dlg.addEventListener('cancel', () => dlg.remove());
+  dlg.addEventListener('cancel', () => { dlg.remove(); opts.onClose?.(); });
   document.body.appendChild(dlg);
   dlg.showModal();
   return close;
+}
+
+// ---------- dialogen (vervangen alert / confirm / prompt) ----------
+const message = (m: string | Node) => h('p', { style: { margin: 0, whiteSpace: 'pre-line' } }, m);
+const spacer = () => h('span', { class: 'spacer' });
+
+/** Vraagt tussen meerdere acties; geeft de gekozen sleutel terug, of null bij annuleren (knop, X of Esc). */
+export function choose(title: string, text: string | Node, options: { key: string; label: string; variant: 'primary' | 'danger' | 'secondary' }[]): Promise<string | null> {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (v: string | null, close?: () => void) => { if (done) return; done = true; close?.(); resolve(v); };
+    modal({ title, body: message(text), onClose: () => finish(null), actions: (close) => {
+      const cancel = btn('Annuleren', { variant: 'ghost', onClick: () => finish(null, close) });
+      cancel.autofocus = true;   // veilige standaard: Enter verwijdert niets per ongeluk
+      return [spacer(), cancel, ...options.map((o) => btn(o.label, { variant: o.variant, onClick: () => finish(o.key, close) }))];
+    } });
+  });
+}
+
+/** Ja/nee-vraag. Geeft false bij annuleren, X of Esc. */
+export async function confirmDialog(o: { title: string; message: string | Node; confirmLabel?: string; danger?: boolean }): Promise<boolean> {
+  return (await choose(o.title, o.message, [{ key: 'ok', label: o.confirmLabel ?? 'Verwijderen', variant: o.danger === false ? 'primary' : 'danger' }])) === 'ok';
+}
+
+/** Melding met één knop. */
+export function alertDialog(title: string, text: string | Node): Promise<void> {
+  return new Promise((resolve) => {
+    modal({ title, body: message(text), onClose: () => resolve(), actions: (close) => { const ok = btn('OK', { variant: 'primary', onClick: close }); ok.autofocus = true; return [spacer(), ok]; } });
+  });
+}
+
+/** Vraagt één waarde. Geeft null bij annuleren; Enter bevestigt. */
+export function promptDialog(o: { title: string; label?: string; value?: string; placeholder?: string; confirmLabel?: string }): Promise<string | null> {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (v: string | null, close?: () => void) => { if (done) return; done = true; close?.(); resolve(v); };
+    const input = h('input', { type: 'text', value: o.value ?? '', placeholder: o.placeholder, style: { width: '100%' } }) as HTMLInputElement;
+    let closeFn: (() => void) | undefined;
+    const ok = () => finish(input.value.trim(), closeFn);
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); ok(); } });
+    closeFn = modal({
+      title: o.title, onClose: () => finish(null),
+      body: h('label', { class: 'field' }, o.label ? h('span', { class: 'field-label' }, o.label) : null, input),
+      actions: (close) => [spacer(), btn('Annuleren', { variant: 'ghost', onClick: () => finish(null, close) }), btn(o.confirmLabel ?? 'OK', { icon: 'Check', variant: 'primary', onClick: ok })],
+    });
+    input.focus(); input.select();
+  });
 }
 
 export function formModal(opts: {
@@ -78,7 +125,7 @@ export function formModal(opts: {
   modal({
     title: opts.title, body, wide: opts.wide,
     actions: (close) => [
-      opts.onDelete ? btn('Verwijderen', { icon: 'Trash2', variant: 'danger', onClick: async () => { if (confirm('Zeker verwijderen?')) { await opts.onDelete!(); close(); } } }) : h('span'),
+      opts.onDelete ? btn('Verwijderen', { icon: 'Trash2', variant: 'danger', onClick: async () => { if (await confirmDialog({ title: 'Verwijderen', message: 'Zeker verwijderen?' })) { await opts.onDelete!(); close(); } } }) : h('span'),
       h('span', { class: 'spacer' }),
       btn('Annuleren', { variant: 'ghost', onClick: close }),
       btn(opts.saveLabel ?? 'Opslaan', { icon: 'Check', variant: 'primary', onClick: async () => { if ((await opts.onSave(form.read())) !== false) close(); } }),
