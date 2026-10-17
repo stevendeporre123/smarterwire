@@ -3,11 +3,12 @@ import { formModal, menuButton, type MenuItem } from '../lib/ui';
 import { getMe, logout, changePassword } from '../lib/auth';
 import { getInstaller, setInstaller, type Installer } from '../domain/settings';
 
-export function topbar(crumb?: string) {
+export function topbar(crumb?: string, extra?: Node | null) {
   return h('header', { class: 'topbar' },
     h('a', { class: 'brand', href: '#/' }, h('span', { class: 'brand-mark' }, icon('Zap', 18)), h('span', null, 'smarter', h('b', null, 'wire'))),
     crumb && h('div', { class: 'crumb' }, icon('ChevronRight', 14), h('strong', null, crumb)),
     h('span', { class: 'spacer' }),
+    extra,
     userMenu(),
   );
 }
@@ -44,6 +45,7 @@ function userMenu() {
   const who = h('span', { class: 'hint hide-sm' });
   const items: MenuItem[] = [
     { label: '…', header: true },
+    { label: `Build ${new Date(__BUILD_TIME__).toLocaleString('nl-BE', { dateStyle: 'short', timeStyle: 'medium' })}`, header: true },
     { label: 'Installateur', icon: 'HardHat', onClick: editInstaller },
     { label: 'Wachtwoord wijzigen', icon: 'KeyRound', onClick: editPassword },
     { label: 'Afmelden', icon: 'LogOut', onClick: async () => { await logout(); location.hash = '#/'; location.reload(); } },

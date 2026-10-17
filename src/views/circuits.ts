@@ -212,10 +212,10 @@ export async function renderCircuits(root: HTMLElement, project: Project) {
       onRow: (c) => editCircuit(project, c, reload, { list: circuits }),
       rowClass: (c) => (c.device_id && shared.get(c.device_id)! > 1 ? 'row-warn' : ''),
       columns: [
-        { key: 'nr', label: 'Nr', width: '60px' },
-        { key: 'name', label: 'Omschrijving', render: (c) => h('span', null, cell(c, 'name'), c.feeds_board_id ? badge(`→ ${boardName.get(c.feeds_board_id) ?? 'onderverdeler'}`, 'info') : null) },
-        { key: 'func', label: 'Functie', render: (c) => cell(c, 'func'), sort: (c) => c.func ?? '' },
-        { key: 'level', label: 'Verd.', render: (c) => cell(c, 'level'), sort: (c) => c.level ?? '' },
+        { key: 'nr', label: 'Nr', width: '60px', cls: 'hide-sm' },
+        { key: 'name', label: 'Omschrijving', primary: true, render: (c) => h('span', null, h('b', { class: 'only-sm', style: { marginRight: '6px' } }, c.nr ?? ''), cell(c, 'name'), c.feeds_board_id ? badge(`→ ${boardName.get(c.feeds_board_id) ?? 'onderverdeler'}`, 'info') : null) },
+        { key: 'func', label: 'Functie', cls: 'hide-sm', render: (c) => cell(c, 'func'), sort: (c) => c.func ?? '' },
+        { key: 'level', label: 'Verd.', cls: 'hide-sm', render: (c) => cell(c, 'level'), sort: (c) => c.level ?? '' },
         { key: 'device_id', label: 'Zekering (nu)', sort: (c) => (c.device_id ? bname(devs.get(c.device_id)!) : ''),
           render: (c) => { const d = c.device_id ? devs.get(c.device_id) : null;
             return d ? h('span', null, bname(d), shared.get(d.id)! > 1 ? badge(`deelt met ${shared.get(d.id)! - 1}`, 'warn') : null) : badge('niet gekoppeld', 'err'); } },
@@ -224,8 +224,8 @@ export async function renderCircuits(root: HTMLElement, project: Project) {
         { key: 'checks', label: 'Controle', sort: (c) => (foundBy.get(c.id) ?? []).reduce((s, f) => s + (f.level === 'fout' ? 100 : f.level === 'waarschuwing' ? 10 : 1), 0),
           render: (c) => { const fs = foundBy.get(c.id) ?? [], n = (l: string) => fs.filter((f) => f.level === l).length; if (!fs.length) return '—';
             return h('a', { href: `#/p/${project.id}/bevindingen`, title: fs.map((f) => f.title).join(String.fromCharCode(10)), onClick: (e: Event) => e.stopPropagation() }, n('fout') ? badge(`${n('fout')} fout`, 'err') : null, n('waarschuwing') ? badge(`${n('waarschuwing')} waarsch.`, 'warn') : null, n('info') ? badge(`${n('info')} info`, 'info') : null); } },
-        { key: 'new_device_id', label: 'Nieuwe kast', render: (c) => { const d = c.new_device_id ? devs.get(c.new_device_id) : null; return d ? deviceTitle(d) + (d.phase ? ` · ${d.phase}` : '') : '—'; } },
-        { key: 'sym', label: 'Symb.', align: 'right', render: (c) => String(symCounts.get(c.id) ?? 0), sort: (c) => symCounts.get(c.id) ?? 0 },
+        { key: 'new_device_id', label: 'Nieuwe kast', cls: 'hide-sm', render: (c) => { const d = c.new_device_id ? devs.get(c.new_device_id) : null; return d ? deviceTitle(d) + (d.phase ? ` · ${d.phase}` : '') : '—'; } },
+        { key: 'sym', label: 'Symb.', align: 'right', cls: 'hide-sm', render: (c) => String(symCounts.get(c.id) ?? 0), sort: (c) => symCounts.get(c.id) ?? 0 },
         { key: 'status', label: 'Status', render: (c) => badge(c.status, c.status === 'gecontroleerd' ? 'ok' : c.status === 'gedocumenteerd' ? 'info' : 'muted') },
       ],
     })));

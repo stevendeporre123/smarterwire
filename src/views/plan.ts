@@ -1,5 +1,5 @@
 import { h, svg, btn, icon, toast, clear, loading, download } from '../lib/dom';
-import { buildForm, formModal, panZoom, confirmDialog, promptDialog, type FieldDef } from '../lib/ui';
+import { buildForm, formModal, panZoom, confirmDialog, promptDialog, palToggle, type FieldDef } from '../lib/ui';
 import { upsert as dbUpsert, softDelete as dbSoftDelete, saveImage, assetUrl, assetSize } from '../db/repo';
 import { plansOf, symbolsOf, shapesOf, circuitsOf, boardsOf, type Plan, type Project, type Symbol_, type Shape } from '../domain/model';
 import { circuitColor } from '../domain/symbols';
@@ -159,8 +159,9 @@ export async function renderPlan(root: HTMLElement, project: Project) {
   };
   const canvas = h('div', { class: 'canvas' }), side = h('div', { class: 'side' }), pal = h('div', { class: 'pal' });
   root.classList.add('page-full');
+  const split = h('div', { class: 'split left-pal' }, pal, canvas, side);
   root.append(
-    h('div', { class: 'toolbar', style: { flexWrap: 'wrap' } }, planSel, fileInput,
+    h('div', { class: 'toolbar scroll', style: { flexWrap: 'wrap' } }, planSel, palToggle(split), fileInput,
       btn('', { icon: 'Plus', variant: 'ghost', title: 'Plan toevoegen (foto)', onClick: addPhotoPlan }),
       btn('', { icon: 'FilePlus', variant: 'ghost', title: 'Leeg plan toevoegen', onClick: addBlankPlan }),
       btn('', { icon: 'Pencil', variant: 'ghost', title: 'Plan hernoemen', onClick: () => formModal({ title: 'Plan', fields: [{ key: 'name', label: 'Naam', span: 2 }, { key: 'level', label: 'Verdieping (zo heet ze bij de kringen)', span: 2 }], values: plan,
@@ -184,7 +185,7 @@ export async function renderPlan(root: HTMLElement, project: Project) {
       h('span', { class: 'hint' }, 'Actieve kring:'), circSel,
       btn('Nieuwe kring', { icon: 'Plus', variant: 'ghost', onClick: () => editCircuit(project, {}, () => reload()) }),
       btn('SVG', { icon: 'Download', variant: 'ghost', title: 'Tekening (zonder foto) exporteren', onClick: exportSvg })),
-    h('div', { class: 'split left-pal' }, pal, canvas, side));
+    split);
   updScale();
 
   // ---------- palet ----------
