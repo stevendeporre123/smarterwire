@@ -89,7 +89,9 @@ export async function renderBoard(root: HTMLElement, project: Project) {
   const size = board.asset_id ? await assetSize(board.asset_id) : undefined;
   let view: 'foto' | 'virtueel' = photoUrl ? 'foto' : 'virtueel';
   let selId: string | null = null;
-  let showTags = localStorage.getItem('smarterwire.tags') !== '0';   // opschriften boven de toestellen op de foto
+  let photoPz: ReturnType<typeof panZoom> | null = null;   // zoom van de huidige weergave (voor 'hele foto' en inzoomen op een toestel)
+  const tagPref = localStorage.getItem('smarterwire.tags');   // opschriften op de foto: standaard aan, op een touchscreen uit (te druk bij inzoomen)
+  let showTags = tagPref ? tagPref !== '0' : !matchMedia('(pointer: coarse)').matches;   // opschriften boven de toestellen op de foto
 
   function feedHint() {
     const srcId = board.kind === 'nieuw' ? board.src_board_id : board.id;
@@ -114,27 +116,36 @@ export async function renderBoard(root: HTMLElement, project: Project) {
       : `${ch.length} nieuw gekoppeld${devices.length - 1 - ch.length > 0 ? `, de rest ongewijzigd` : ''}`);
     refresh();
   };
-  const viewBtns = h('div', { style: { display: 'flex', gap: '4px' } });
+  const viewBtns = h('div', { class: 'seg' });
   const hint = feedHint();
+  /** Op gsm en smalle tablet verdwijnen de minder-gebruikte knoppen uit de werkbalk en staan ze in het ⋯-menu (cls 'only-md'). */
+  const sm = <T extends HTMLElement>(el: T) => { el.classList.add('hide-md'); return el; };
+  const editBoard = () => formModal({ title: 'Kast bewerken', fields: [{ key: 'name', label: 'Naam', span: 2 }, { key: 'location', label: 'Locatie', span: 2 }, { key: 'notes', label: 'Notities', type: 'textarea', span: 2 }], values: board,
+    onSave: async (v) => { await upsert('board', { ...board, ...v }); toast('Kast opgeslagen'); reload(); },
+    onDelete: async () => { await softDelete('board', board.id); localStorage.removeItem(LS_BOARD(project.id)); reload(); } });
+  const openPhotos = () => openGallery(project, board, { onDone: () => refresh(), mainUrl: photoUrl, setMain, recognise: () => runAi() });
   const toolbar = h('div', { class: 'toolbar' }, boardSel,
-    btn('', { icon: 'Plus', variant: 'ghost', title: 'Kast of onderverdeler toevoegen', onClick: () => newBoard('bestaand') }),
-    btn('', { icon: 'Pencil', variant: 'ghost', title: 'Kast hernoemen of verwijderen', onClick: () => formModal({ title: 'Kast bewerken', fields: [{ key: 'name', label: 'Naam', span: 2 }, { key: 'location', label: 'Locatie', span: 2 }, { key: 'notes', label: 'Notities', type: 'textarea', span: 2 }], values: board,
-      onSave: async (v) => { await upsert('board', { ...board, ...v }); toast('Kast opgeslagen'); reload(); },
-      onDelete: async () => { await softDelete('board', board.id); localStorage.removeItem(LS_BOARD(project.id)); reload(); } }) }),
+    sm(btn('', { icon: 'Plus', variant: 'ghost', title: 'Kast of onderverdeler toevoegen', onClick: () => newBoard('bestaand') })),
+    sm(btn('', { icon: 'Pencil', variant: 'ghost', title: 'Kast hernoemen of verwijderen', onClick: editBoard })),
     hint ? h('span', { class: 'hint hide-sm' }, hint.replace(/^ · /, '')) : null,
     h('span', { class: 'spacer' }), viewBtns);
   if (board.kind === 'bestaand') {
-    toolbar.append(btn('Foto’s', { icon: 'Images', variant: 'secondary', title: 'Foto’s van de kast: hoofdfoto (toestellen herkennen), beschrijvingen koppelen, bekabeling, typeplaatjes',
-      onClick: () => openGallery(project, board, { onDone: () => refresh(), mainUrl: photoUrl, setMain, recognise: () => runAi() }) }));
+    toolbar.append(sm(btn('Foto’s', { icon: 'Images', variant: 'secondary', title: 'Foto’s van de kast: hoofdfoto (toestellen herkennen), beschrijvingen koppelen, bekabeling, typeplaatjes', onClick: openPhotos })));
   }
+  const gen = board.kind === 'nieuw' ? 'Opnieuw genereren' : 'Nieuwe kast voorstellen';
   const more: MenuItem[] = [
+    ...(board.kind === 'bestaand' ? [{ label: 'Foto’s van de kast', icon: 'Images', cls: 'only-md', onClick: openPhotos }] : []),
     { label: 'Toestel toevoegen', icon: 'Plus', onClick: () => addDeviceManual() },
     ...(board.kind === 'bestaand' ? [{ label: 'Ouders afleiden', icon: 'GitBranch', onClick: deriveParents }] : []),
+    { label: 'Kast toevoegen', icon: 'PackagePlus', cls: 'only-md', onClick: () => newBoard('bestaand') },
+    { label: 'Kast bewerken', icon: 'Pencil', cls: 'only-md', onClick: editBoard },
+    ...(board.kind === 'nieuw' ? [{ label: 'Materiaallijst', icon: 'ClipboardList', cls: 'only-md', onClick: () => openBom(project) }] : []),
+    { label: gen, icon: 'WandSparkles', cls: 'only-md', onClick: genNew },
     { label: 'Alle toestellen wissen', icon: 'Trash2', danger: true, onClick: () => clearAll() },
   ];
-  toolbar.append(menuButton({ title: 'Meer: toestel toevoegen, ouders afleiden, alles wissen' }, more));
-  if (board.kind === 'nieuw') toolbar.append(btn('Materiaallijst', { icon: 'ClipboardList', title: 'Materiaallijst van de nieuwe kast (CSV)', onClick: () => openBom(project) }));
-  toolbar.append(btn(board.kind === 'nieuw' ? 'Opnieuw genereren' : 'Nieuwe kast voorstellen', { icon: 'WandSparkles', variant: 'accent', title: 'Voorstel voor alle kasten: elke kring eigen automaat, per 30 mA-differentieel', onClick: genNew }));
+  toolbar.append(menuButton({ title: 'Meer: toestel toevoegen, kast beheren, nieuwe kast voorstellen' }, more));
+  if (board.kind === 'nieuw') toolbar.append(sm(btn('Materiaallijst', { icon: 'ClipboardList', title: 'Materiaallijst van de nieuwe kast (CSV)', onClick: () => openBom(project) })));
+  toolbar.append(sm(btn(gen, { icon: 'WandSparkles', variant: 'accent', title: 'Voorstel voor alle kasten: elke kring eigen automaat, per 30 mA-differentieel', onClick: genNew })));
 
   // ---------- canvas ----------
   const canvas = h('div', { class: 'canvas' });
@@ -160,7 +171,7 @@ export async function renderBoard(root: HTMLElement, project: Project) {
   // --- foto-modus: rechthoeken tekenen/verplaatsen ---
   function drawPhoto(W: number, H: number) {
     const s = svg('svg', { preserveAspectRatio: 'xMidYMid meet' });
-    const pz = panZoom(s as SVGSVGElement, W, H);
+    const pz = panZoom(s as SVGSVGElement, W, H); photoPz = pz;
     s.append(svg('image', { href: photoUrl!, x: 0, y: 0, width: W, height: H }));
     const cByD = circuitsByDevice();
     const layer = svg('g'); s.append(layer);
@@ -181,6 +192,7 @@ export async function renderBoard(root: HTMLElement, project: Project) {
       const el = svg('rect', { x: p.x, y: p.y, width: 0, height: 0, class: 'dev-rect sel', 'pointer-events': 'none' }) as SVGRectElement;
       layer.append(el); drag = { x0: p.x, y0: p.y, el }; s.setPointerCapture(e.pointerId);
     });
+    s.addEventListener('pz-gesture', () => { drag?.el.remove(); drag = null; });   // tweede vinger: geen kader tekenen
     s.addEventListener('pointermove', (e) => {
       if (!drag) return;
       const p = pz.toSvg(e.clientX, e.clientY);
@@ -216,9 +228,17 @@ export async function renderBoard(root: HTMLElement, project: Project) {
       };
       window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
     }
-    canvas.append(s, h('div', { class: 'hint', style: { position: 'absolute', left: '10px', bottom: '8px', background: 'rgba(255,255,255,.85)', padding: '2px 8px', borderRadius: '6px' } },
-      'Sleep om een toestel te omkaderen · wiel = zoom · spatie of middelknop = pannen'));
-    canvas.append(h('div', { class: 'canvas-tools' }, btn('Labels', { icon: showTags ? 'Eye' : 'EyeOff', variant: 'secondary', title: 'Opschriften boven de toestellen tonen/verbergen (het geselecteerde toestel toont altijd zijn opschrift)', onClick: () => { showTags = !showTags; localStorage.setItem('smarterwire.tags', showTags ? '1' : '0'); draw(); } })));
+    canvas.append(s);
+    // uitleg enkel zolang je het nog niet gebruikt hebt (en aangepast aan aanraking of muis)
+    let seen = false; try { seen = !!localStorage.getItem('smarterwire.hint.kast'); } catch { /* geen opslag */ }
+    if (!seen) {
+      const coarse = matchMedia('(pointer: coarse)').matches;
+      const tip = h('div', { class: 'canvas-hint' }, coarse ? 'Sleep om een toestel te omkaderen · twee vingers = zoomen en verschuiven' : 'Sleep om een toestel te omkaderen · wiel = zoom · spatie of middelknop = pannen');
+      canvas.append(tip);
+      s.addEventListener('pointerdown', () => { tip.remove(); try { localStorage.setItem('smarterwire.hint.kast', '1'); } catch { /* geen opslag */ } }, { once: true });
+    }
+    canvas.append(h('div', { class: 'canvas-tools' }, btn('Labels', { icon: showTags ? 'Eye' : 'EyeOff', variant: 'secondary', title: 'Opschriften boven de toestellen tonen/verbergen (het geselecteerde toestel toont altijd zijn opschrift)', onClick: () => { showTags = !showTags; localStorage.setItem('smarterwire.tags', showTags ? '1' : '0'); draw(); } }),
+      btn('Hele foto', { icon: 'Maximize2', variant: 'secondary', title: 'Hele foto tonen (zoom herstellen)', onClick: () => photoPz?.reset() })));
   }
 
   // --- virtuele kast ---
@@ -267,8 +287,8 @@ export async function renderBoard(root: HTMLElement, project: Project) {
     if (!rowKeys.length) s.append(svg('text', { x: 40, y: 60, 'font-size': 14, fill: '#555e55' }, view === 'virtueel' && photoUrl ? 'Nog geen toestellen – omkader ze in de fotoweergave.' : 'Nog geen toestellen.'));
     const H = Math.max(240, PAD * 2 + rowKeys.length * ROW_H);
     s.setAttribute('preserveAspectRatio', 'xMinYMin meet');
-    panZoom(s as SVGSVGElement, maxW, H);
-    canvas.append(s);
+    photoPz = panZoom(s as SVGSVGElement, maxW, H);
+    canvas.append(s, h('div', { class: 'canvas-tools' }, btn('Alles tonen', { icon: 'Maximize2', variant: 'secondary', title: 'Hele kast tonen (zoom herstellen)', onClick: () => photoPz?.reset() })));
     canvas.style.background = '#f5f6f5';
   }
 
@@ -277,14 +297,15 @@ export async function renderBoard(root: HTMLElement, project: Project) {
     clear(side);
     const d = devices.find((x) => x.id === selId);
     if (!d) {
-      side.append(h('div', null, h('h4', null, 'Toestellen'), h('p', { class: 'muted' }, devices.length ? `${devices.length} toestel(len). Klik er één aan om te bewerken.` : 'Teken een kader rond een automaat op de foto, of laat AI een voorstel doen.')),
+      side.classList.add('list'); side.append(h('div', null, h('h4', null, `Toestellen (${devices.length})`), devices.length ? null : h('p', { class: 'muted' }, 'Teken een kader rond een automaat op de foto, of laat AI een voorstel doen.')),
         deviceList());
       return;
     }
+    side.classList.remove('list');
     const dform = deviceForm(d, { supply, devices, onChange: async (kindChanged) => { if (kindChanged) await refresh(); else draw(); } });
     const cs = circuitsByDevice().get(d.id) ?? [];
     side.append(
-      h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } }, h('h3', null, deviceTitle(d)), h('span', { class: 'spacer' }), btn('', { icon: 'X', variant: 'ghost', onClick: () => { selId = null; draw(); drawSide(); } })),
+      h('div', { class: 'side-head' }, h('h3', null, deviceTitle(d)), h('span', { class: 'spacer' }), btn('Klaar', { icon: 'Check', variant: 'ghost', title: 'Sluiten en terug naar de lijst', onClick: () => { selId = null; draw(); drawSide(); } })),
       ...(dform.conflict ? [badge(dform.conflict, 'err')] : []),
       dform.el,
       h('div', null, h('h4', null, 'Kring van dit toestel'),
@@ -294,12 +315,25 @@ export async function renderBoard(root: HTMLElement, project: Project) {
       btn('Toestel verwijderen', { icon: 'Trash2', variant: 'danger', onClick: async () => { if (!(await confirmDialog({ title: 'Toestel verwijderen', message: 'Dit toestel verwijderen?' }))) return; await softDelete('device', d.id); await unlinkDevice(d.id); selId = null; await refresh(); } }));
   }
 
+  /** Kies een toestel in de lijst. Op een gsm/tablet springt de foto mee naar dat toestel. */
+  function selectDevice(id: string) {
+    selId = id; draw(); drawSide();
+    const d = devices.find((x) => x.id === id);
+    if (d?.rx != null && size && view === 'foto' && photoPz && matchMedia('(max-width: 900px), (pointer: coarse)').matches) {
+      const W = size.width, H = size.height, m = Math.max(d.rw! * W, d.rh! * H) * 2;
+      photoPz.fit({ x: d.rx * W - m, y: d.ry! * H - m, w: d.rw! * W + 2 * m, h: d.rh! * H + 2 * m });
+    }
+  }
+
   function deviceList() {
     const cByD = circuitsByDevice(), at = devicePlaces(devices);
-    return h('div', null, devices.slice().sort((a, b) => a.row_no - b.row_no || a.pos - b.pos).map((d) =>
-      h('div', { class: 'pal-item', onClick: () => { selId = d.id; draw(); drawSide(); } },
-        h('span', { class: 'muted', style: { width: '40px' } }, at.get(d.id)), h('span', { style: { flex: 1 } }, deviceTitle(d)),
-        isFeeder(d.kind) && !cByD.has(d.id) ? badge('?', 'warn') : null)));
+    return h('div', { class: 'dev-list' }, devices.slice().sort((a, b) => a.row_no - b.row_no || a.pos - b.pos).map((d) => {
+      const cs = cByD.get(d.id) ?? [];
+      return h('button', { type: 'button', class: `dev-row ${d.id === selId ? 'sel' : ''}`, onClick: () => selectDevice(d.id) },
+        h('span', { class: 'dev-pos' }, at.get(d.id)), h('span', { class: 'dev-name' }, deviceTitle(d)),
+        cs.length ? h('span', { class: 'chip', title: cs.map((c) => c.name).join(' / ') }, cs.map((c) => c.nr || '•').join('+')) : isFeeder(d.kind) ? badge('geen kring', 'warn') : null,
+        icon('ChevronRight', 16));
+    }));
   }
 
   async function addDeviceManual() {

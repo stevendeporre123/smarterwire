@@ -138,7 +138,7 @@ export function formModal(opts: {
 }
 
 // ---------- uitklapmenu (⋯) ----------
-export interface MenuItem { label: string; icon?: string; danger?: boolean; header?: boolean; onClick?: () => void }
+export interface MenuItem { label: string; icon?: string; danger?: boolean; header?: boolean; /** extra CSS-klasse, bv. 'only-sm' = enkel in het menu op smalle schermen */ cls?: string; onClick?: () => void }
 /** Knop met uitklapmenu. Het menu is vast gepositioneerd, zodat het niet afgeknipt wordt door scrollende balken. */
 export function menuButton(o: { icon?: string; label?: string; title?: string; variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'accent' }, items: MenuItem[]) {
   const pop = h('div', { class: 'menu-pop', role: 'menu' });
@@ -155,14 +155,22 @@ export function menuButton(o: { icon?: string; label?: string; title?: string; v
   } });
   for (const it of items) {
     pop.append(it.header ? h('div', { class: 'menu-head' }, it.label)
-      : h('button', { type: 'button', role: 'menuitem', class: `menu-item ${it.danger ? 'danger' : ''}`, onClick: () => { close(); it.onClick?.(); } }, it.icon ? icon(it.icon, 16) : null, it.label));
+      : h('button', { type: 'button', role: 'menuitem', class: `menu-item ${it.danger ? 'danger' : ''} ${it.cls ?? ''}`, onClick: () => { close(); it.onClick?.(); } }, it.icon ? icon(it.icon, 16) : null, it.label));
   }
   const wrap = h('span', { class: 'menu' }, trigger, pop);
   return wrap;
 }
 
+/** Op gsm en smalle tablet is het palet verborgen; deze knop (enkel daar zichtbaar) toont het als blad over de tekening. */
+export function palToggle(split: HTMLElement) {
+  const b = btn('Symbolen', { icon: 'Shapes', variant: 'secondary', title: 'Symbolen en gereedschap tonen of verbergen', onClick: () => b.classList.toggle('active', split.classList.toggle('pal-open')) });
+  b.classList.add('only-md');
+  return b;
+}
+
 // ---------- tabel met zoek & sorteer ----------
-export type Col<T> = { key: string; label: string; render?: (r: T) => Node | string; sort?: (r: T) => string | number; width?: string; align?: 'right' };
+/** `cls: 'hide-sm'` verbergt de kolom op een gsm; `primary` = hoofdtekst van de kaart op een gsm (volle breedte, zonder label). */
+export type Col<T> = { key: string; label: string; render?: (r: T) => Node | string; sort?: (r: T) => string | number; width?: string; align?: 'right'; cls?: string; primary?: boolean };
 
 export function dataTable<T extends { id: string }>(opts: {
   columns: Col<T>[]; rows: T[]; onRow?: (r: T) => void; selectedId?: string | null; search?: (r: T) => string; empty?: string; rowClass?: (r: T) => string;
@@ -175,8 +183,8 @@ export function dataTable<T extends { id: string }>(opts: {
   const sel = opts.selection, visible: T[] = [];
   const selAll = h('input', { type: 'checkbox', title: 'Alles (zichtbaar) selecteren', onChange: (e: Event) => { const on = (e.target as HTMLInputElement).checked; visible.forEach((r) => (on ? sel!.add(r.id) : sel!.delete(r.id))); opts.onSelect?.(); draw(); } }) as HTMLInputElement;
   const thead = h('thead', null, h('tr', null, sel ? h('th', { style: { width: '34px' } }, selAll) : null, opts.columns.map((c) =>
-    h('th', { class: c.align === 'right' ? 'right' : '', style: c.width ? { width: c.width } : undefined, onClick: () => { if (sortKey === c.key) dir = -dir; else { sortKey = c.key; dir = 1; } draw(); } }, c.label))));
-  const table = h('table', { class: 'table' }, thead, tbody);
+    h('th', { class: `${c.align === 'right' ? 'right' : ''} ${c.cls ?? ''}`, style: c.width ? { width: c.width } : undefined, onClick: () => { if (sortKey === c.key) dir = -dir; else { sortKey = c.key; dir = 1; } draw(); } }, c.label))));
+  const table = h('table', { class: 'table cards-sm' }, thead, tbody);
   const root = h('div', { class: 'table-wrap' }, opts.search ? h('div', { class: 'table-tools' }, icon('Search', 16), input) : null, h('div', { class: 'table-scroll' }, table));
   function draw() {
     let rows = opts.rows.slice();
@@ -193,7 +201,7 @@ export function dataTable<T extends { id: string }>(opts: {
     for (const r of rows) {
       tbody.appendChild(h('tr', { class: `${opts.onRow ? 'clickable' : ''} ${opts.selectedId === r.id ? 'selected' : ''} ${opts.rowClass?.(r) ?? ''}`, onClick: () => opts.onRow?.(r) },
         sel ? h('td', { onClick: (e: Event) => e.stopPropagation() }, h('input', { type: 'checkbox', checked: sel.has(r.id), onChange: (e: Event) => { if ((e.target as HTMLInputElement).checked) sel.add(r.id); else sel.delete(r.id); opts.onSelect?.(); draw(); } })) : null,
-        opts.columns.map((c) => h('td', { class: c.align === 'right' ? 'right' : '' }, c.render ? c.render(r) : String((r as any)[c.key] ?? '')))));
+        opts.columns.map((c) => h('td', { class: `${c.align === 'right' ? 'right' : ''} ${c.cls ?? ''} ${c.primary ? 'primary' : ''}`, 'data-label': c.label }, c.render ? c.render(r) : String((r as any)[c.key] ?? '')))));
     }
   }
   draw();
@@ -241,6 +249,41 @@ export function panZoom(svgEl: SVGSVGElement, w: number, h_: number) {
     apply();
   });
   svgEl.addEventListener('pointerup', () => { panning = null; });
+
+  // aanraking: twee vingers = zoomen en verschuiven (één vinger blijft voor tekenen/selecteren)
+  const fingers = new Map<number, { x: number; y: number }>();
+  let pinch: { d0: number; vb0: typeof vb; p0: { x: number; y: number }; s0: number } | null = null, quiet = false;
+  const two = () => { const [a, b] = [...fingers.values()]; return { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 }; };
+  svgEl.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'touch') return;
+    fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (fingers.size === 2) {
+      const t = two(), p = toSvg(t.cx, t.cy);
+      pinch = { d0: t.d, vb0: { ...vb }, p0: { x: p.x, y: p.y }, s0: p.s }; quiet = true;
+      e.stopImmediatePropagation(); e.preventDefault();
+      svgEl.dispatchEvent(new Event('pz-gesture'));   // laat een begonnen kader of verplaatsing vallen
+    } else if (fingers.size > 2) { e.stopImmediatePropagation(); }
+  }, true);
+  svgEl.addEventListener('pointermove', (e) => {
+    if (!fingers.has(e.pointerId)) return;
+    fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (!quiet) return;
+    e.stopImmediatePropagation();
+    if (!pinch || fingers.size !== 2) return;
+    const t = two(), k = Math.min(Math.max(t.d / pinch.d0, 0.05), 20);
+    const nw = Math.min(w * 4, Math.max(w / 20, pinch.vb0.w / k)), f = nw / pinch.vb0.w;
+    vb = { x: vb.x, y: vb.y, w: nw, h: pinch.vb0.h * f };
+    const q = toSvg(t.cx, t.cy);            // houd het punt onder je vingers op dezelfde plaats
+    vb.x += pinch.p0.x - q.x; vb.y += pinch.p0.y - q.y;
+    apply();
+  }, true);
+  const lift = (e: PointerEvent) => {
+    if (!fingers.delete(e.pointerId)) return;
+    if (quiet) e.stopImmediatePropagation();
+    if (fingers.size < 2) pinch = null;
+    if (!fingers.size) quiet = false;       // pas weer tekenen als alle vingers los zijn
+  };
+  svgEl.addEventListener('pointerup', lift, true); svgEl.addEventListener('pointercancel', lift, true);
   return {
     toSvg: (cx: number, cy: number) => toSvg(cx, cy),
     reset: () => { vb = { x: 0, y: 0, w, h: h_ }; apply(); },
